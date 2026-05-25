@@ -1,0 +1,200 @@
+export type MaterialType = "VT Chính" | "VT Phụ" | "VT MEP" | "VT MEP-HVAC";
+export type PaymentStatus = "Chưa TT" | "Đã TT";
+export type AttendanceLockStatus = "OPEN" | "CLOSED";
+
+export interface ProjectRow {
+  code: string;
+  name: string;
+  owner: string;
+  contact: string;
+  referrer: string;
+  startDate: string;
+  status: string;
+  driveUrl: string;
+  failureReason: string;
+}
+
+export interface CatalogItem {
+  id: string;
+  kind: "hangMuc" | "vatTu" | "vatTuPhu" | "thauPhu" | "nhaCungCap";
+  code: string;
+  name: string;
+  unit: string;
+  contact: string;
+  note: string;
+}
+
+export interface StaffRow {
+  id: string;
+  name: string;
+  team: string;
+  position: string;
+  salaryDay: number;
+  resigned: boolean;
+  offDate: string;
+}
+
+export interface MaterialRow {
+  id: number;
+  date: string;
+  week: string;
+  shift: string;
+  projectCode: string;
+  category: string;
+  materialCode: string;
+  materialName: string;
+  quantity: number;
+  unit: string;
+  price: number;
+  debt: string;
+  status: string;
+  paymentStatus: PaymentStatus;
+  paymentInfo: string;
+  materialType: MaterialType;
+  supplier: string;
+}
+
+export interface AttendanceRow {
+  id: number;
+  date: string;
+  week: string;
+  shift: string;
+  projectCode: string;
+  category: string;
+  staffName: string;
+  position: string;
+  halfDaySalary: number;
+  allowance: number;
+  overtimeHours: number;
+  overtimeAmount: number;
+  total: number;
+  status: string;
+  coefficient: number;
+}
+
+export interface SubcontractorRow {
+  id: number;
+  date: string;
+  week: string;
+  projectCode: string;
+  category: string;
+  contractorName: string;
+  note: string;
+  advance: number;
+  fileUrl: string;
+  cumulative: number;
+  status: string;
+}
+
+export interface SubcontractorContractRow {
+  id: number;
+  projectCode: string;
+  contractorName: string;
+  approvedCost: number;
+  note: string;
+  fileUrl: string;
+  fileId: string;
+  status: string;
+  approvedBy: string;
+  approvedAt: string;
+}
+
+export interface OperationRow {
+  id: number;
+  date: string;
+  week: string;
+  projectCode: string;
+  description: string;
+  amount: number;
+  fileUrl: string;
+}
+
+export interface MaterialNormRow {
+  id: number;
+  projectCode: string;
+  category: string;
+  materialName: string;
+  unit: string;
+  dailyNorm: number;
+  weeklyNorm: number;
+  warningPercent: number;
+  materialType: MaterialType;
+}
+
+export interface LaborNormRow {
+  id: number;
+  projectCode: string;
+  category: string;
+  workdays: number;
+  cost: number;
+}
+
+export interface ProgressRow {
+  id: number;
+  projectCode: string;
+  category: string;
+  startDate: string;
+  durationDays: number;
+  workdays: number;
+  planEndDate: string;
+  confirmedEndDate: string;
+  evaluation: string;
+}
+
+export interface PaymentRow {
+  id: number;
+  projectCode: string;
+  date: string;
+  amount: number;
+  note: string;
+}
+
+export interface ContractRow {
+  id: number;
+  projectCode: string;
+  contractNo: string;
+  value: number;
+  signedDate: string;
+  note: string;
+}
+
+export interface AttendanceLockRow {
+  lockKey: string;
+  projectCode: string;
+  week: string;
+  category: string;
+  status: AttendanceLockStatus;
+  closedBy: string;
+  closedAt: string;
+  openedBy: string;
+  openedAt: string;
+  note: string;
+}
+
+export interface CostSummary {
+  materialMain: number;
+  materialSub: number;
+  materialMep: number;
+  labor: number;
+  subcontractor: number;
+  operations: number;
+  total: number;
+}
+
+export interface GiaPhuDashboardData {
+  projects: ProjectRow[];
+  catalogs: Record<CatalogItem["kind"], CatalogItem[]>;
+  staff: StaffRow[];
+  materials: MaterialRow[];
+  attendance: AttendanceRow[];
+  subcontractors: SubcontractorRow[];
+  subcontractorContracts: SubcontractorContractRow[];
+  operations: OperationRow[];
+  materialNorms: MaterialNormRow[];
+  laborNorms: LaborNormRow[];
+  progress: ProgressRow[];
+  payments: PaymentRow[];
+  contracts: ContractRow[];
+  attendanceLocks: AttendanceLockRow[];
+  summaries: Record<string, CostSummary>;
+}

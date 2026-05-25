@@ -1,24 +1,16 @@
 import type { ReactNode } from "react";
 
 import { cookies } from "next/headers";
-import Link from "next/link";
-
-import { siGithub } from "simple-icons";
 
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
-import { SimpleIcon } from "@/components/simple-icon";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { users } from "@/data/users";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
 
-import { AccountSwitcher } from "./_components/sidebar/account-switcher";
-import { LayoutControls } from "./_components/sidebar/layout-controls";
+import { DashboardBreadcrumbs } from "./_components/dashboard-breadcrumbs";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
-import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
@@ -44,41 +36,23 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           "[html[data-content-layout=centered]_&>*]:w-full",
           "[html[data-content-layout=centered]_&>*]:max-w-screen-2xl",
           "peer-data-[variant=inset]:border",
+          "peer-data-[variant=inset]:overflow-hidden",
           "[--dashboard-header-height:--spacing(12)]",
         )}
       >
         <header
           className={cn(
-            "flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12",
-            // Handle sticky navbar style with conditional classes so blur, background, z-index, and rounded corners remain consistent across all SidebarVariant layouts.
-            "[html[data-navbar-style=sticky]_&]:sticky [html[data-navbar-style=sticky]_&]:top-0 [html[data-navbar-style=sticky]_&]:z-50 [html[data-navbar-style=sticky]_&]:overflow-hidden [html[data-navbar-style=sticky]_&]:rounded-t-[inherit] [html[data-navbar-style=sticky]_&]:bg-background/50 [html[data-navbar-style=sticky]_&]:backdrop-blur-md",
+            "sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-2 border-b bg-background/60 backdrop-blur-md md:h-14",
+            "group-has-data-[collapsible=icon]/sidebar-wrapper:h-16 md:group-has-data-[collapsible=icon]/sidebar-wrapper:h-14",
           )}
         >
-          <div className="flex w-full items-center justify-between px-4 lg:px-6">
-            <div className="flex items-center gap-1 lg:gap-2">
-              <SidebarTrigger className="-ml-1" />
-              <Separator
-                orientation="vertical"
-                className="mx-2 data-[orientation=vertical]:h-4 data-[orientation=vertical]:self-center"
-              />
-              <SearchDialog />
-            </div>
-            <div className="flex items-center gap-2">
-              <LayoutControls />
-              <ThemeSwitcher />
-              <Button asChild size="icon">
-                <Link
-                  prefetch={false}
-                  href="https://github.com/arhamkhnz/next-shadcn-admin-dashboard"
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Open GitHub repository"
-                >
-                  <SimpleIcon icon={siGithub} className="fill-primary-foreground" />
-                </Link>
-              </Button>
-              <AccountSwitcher users={users} />
-            </div>
+          <div className="flex min-w-0 items-center gap-2 px-4">
+            <SidebarTrigger variant="outline" className="-ml-1 bg-background shadow-none" />
+            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+            <DashboardBreadcrumbs />
+          </div>
+          <div className="hidden items-center gap-2 px-4 md:flex">
+            <SearchDialog />
           </div>
         </header>
         {/* Pages can set data-content-padding="false" to render full-bleed app layouts. */}

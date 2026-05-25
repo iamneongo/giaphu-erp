@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Ellipsis, Folder, Forward, type LucideIcon, Trash2 } from "lucide-react";
 
 import {
@@ -32,21 +34,21 @@ export function NavDocuments({
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Documents</SidebarGroupLabel>
+      <SidebarGroupLabel>Tài liệu</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.name}>
             <SidebarMenuButton asChild>
-              <a href={item.url}>
+              <Link href={item.url}>
                 <item.icon />
                 <span>{item.name}</span>
-              </a>
+              </Link>
             </SidebarMenuButton>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuAction showOnHover className="rounded-sm data-[state=open]:bg-accent">
                   <Ellipsis />
-                  <span className="sr-only">More</span>
+                  <span className="sr-only">Thêm</span>
                 </SidebarMenuAction>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -56,16 +58,16 @@ export function NavDocuments({
               >
                 <DropdownMenuItem>
                   <Folder />
-                  <span>Open</span>
+                  <span>Mở</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Forward />
-                  <span>Share</span>
+                  <span>Chia sẻ</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive">
                   <Trash2 />
-                  <span>Delete</span>
+                  <span>Xóa</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -74,7 +76,7 @@ export function NavDocuments({
         <SidebarMenuItem>
           <SidebarMenuButton className="text-sidebar-foreground/70">
             <Ellipsis className="text-sidebar-foreground/70" />
-            <span>More</span>
+            <span>Thêm</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>

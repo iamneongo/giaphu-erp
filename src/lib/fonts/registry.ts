@@ -6,6 +6,7 @@ import {
   Inter,
   JetBrains_Mono,
   Lora,
+  Manrope,
   Merriweather,
   Noto_Sans,
   Noto_Serif,
@@ -28,6 +29,11 @@ const inter = Inter({
 const notoSans = Noto_Sans({
   subsets: ["latin"],
   variable: "--font-noto-sans",
+});
+
+const manrope = Manrope({
+  subsets: ["latin", "vietnamese"],
+  variable: "--font-manrope",
 });
 
 const roboto = Roboto({
@@ -108,6 +114,10 @@ const playfairDisplay = Playfair_Display({
 });
 
 export const fontRegistry = {
+  manrope: {
+    label: "Manrope",
+    font: manrope,
+  },
   geist: {
     label: "Geist",
     font: geist,

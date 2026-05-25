@@ -29,6 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -143,7 +144,7 @@ function ProposalSectionDetailViewer({ item }: { item: ProposalSectionsRow }) {
               <Separator />
             </>
           )}
-          <form className="flex flex-col gap-4">
+          <Form className="flex flex-col gap-4">
             <div className="flex flex-col gap-3">
               <Label htmlFor="header">Header</Label>
               <Input id="header" defaultValue={item.header} />
@@ -210,7 +211,7 @@ function ProposalSectionDetailViewer({ item }: { item: ProposalSectionsRow }) {
                 </SelectContent>
               </Select>
             </div>
-          </form>
+          </Form>
         </div>
         <DrawerFooter>
           <Button>Submit</Button>
@@ -300,7 +301,7 @@ export const proposalSectionsColumns: ColumnDef<ProposalSectionsRow>[] = [
     accessorKey: "target",
     header: () => <div className="w-full text-right">Target</div>,
     cell: ({ row }) => (
-      <form onSubmit={createInlineSaveHandler(row.original.header)}>
+      <Form onSubmit={createInlineSaveHandler(row.original.header)}>
         <Label htmlFor={`${row.original.id}-target`} className="sr-only">
           Target
         </Label>
@@ -309,14 +310,14 @@ export const proposalSectionsColumns: ColumnDef<ProposalSectionsRow>[] = [
           defaultValue={row.original.target}
           className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:focus-visible:bg-input/30 dark:hover:bg-input/30"
         />
-      </form>
+      </Form>
     ),
   },
   {
     accessorKey: "limit",
     header: () => <div className="w-full text-right">Limit</div>,
     cell: ({ row }) => (
-      <form onSubmit={createInlineSaveHandler(row.original.header)}>
+      <Form onSubmit={createInlineSaveHandler(row.original.header)}>
         <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
           Limit
         </Label>
@@ -325,7 +326,7 @@ export const proposalSectionsColumns: ColumnDef<ProposalSectionsRow>[] = [
           defaultValue={row.original.limit}
           className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:focus-visible:bg-input/30 dark:hover:bg-input/30"
         />
-      </form>
+      </Form>
     ),
   },
   {

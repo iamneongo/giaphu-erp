@@ -1,6 +1,6 @@
-# Contributing to Studio Admin
+# Contributing to Gia Phú ERP
 
-Thanks for showing interest in improving **Studio Admin** (repo: `next-shadcn-admin-dashboard`).  
+Thanks for showing interest in improving **Gia Phú ERP**.
 This guide will help you set up your environment and understand how to contribute.
 
 ---

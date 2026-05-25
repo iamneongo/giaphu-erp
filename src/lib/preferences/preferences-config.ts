@@ -68,7 +68,7 @@ type PreferencePersistenceConfig = {
 export const PREFERENCE_DEFAULTS: PreferenceValueMap = {
   theme_mode: "light",
   theme_preset: "default",
-  font: "geist",
+  font: "manrope",
   content_layout: "centered",
   navbar_style: "sticky",
   sidebar_variant: "inset",
@@ -82,7 +82,7 @@ export const PREFERENCE_DEFAULTS: PreferenceValueMap = {
 export const PREFERENCE_PERSISTENCE: PreferencePersistenceConfig = {
   theme_mode: "client-cookie",
   theme_preset: "client-cookie",
-  font: "client-cookie",
+  font: "none",
   content_layout: "client-cookie",
   navbar_style: "client-cookie",
   sidebar_variant: "client-cookie", // layout-critical → cannot be "localStorage"

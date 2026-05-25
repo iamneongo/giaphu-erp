@@ -68,21 +68,21 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuItem>
                 <CircleUser />
-                Account
+                Tài khoản
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <CreditCard />
-                Billing
+                Thanh toán
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <MessageSquareDot />
-                Notifications
+                Thông báo
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
               <LogOut />
-              Log out
+              Đăng xuất
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -1,65 +1,15 @@
 "use client";
 
-import Link from "next/link";
-
-import { CircleHelp, ClipboardList, Command, Database, File, Search, Settings } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
-import { APP_CONFIG } from "@/config/app-config";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar";
 import { rootUser } from "@/data/users";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
 import { NavUser } from "./nav-user";
-import { SidebarSupportCard } from "./sidebar-support-card";
-
-const _data = {
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings,
-    },
-    {
-      title: "Get Help",
-      url: "#",
-      icon: CircleHelp,
-    },
-    {
-      title: "Search",
-      url: "#",
-      icon: Search,
-    },
-  ],
-  documents: [
-    {
-      name: "Data Library",
-      url: "#",
-      icon: Database,
-    },
-    {
-      name: "Reports",
-      url: "#",
-      icon: ClipboardList,
-    },
-    {
-      name: "Word Assistant",
-      url: "#",
-      icon: File,
-    },
-  ],
-};
-
+import { OrganizationSwitcher } from "./organization-switcher";
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
     useShallow((s) => ({
@@ -74,27 +24,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Link prefetch={false} href="/dashboard/default">
-                <Command />
-                <span className="font-semibold text-base">{APP_CONFIG.name}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      <SidebarHeader className="group-data-[collapsible=icon]:pt-4">
+        <OrganizationSwitcher />
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="overflow-x-hidden">
         <NavMain items={sidebarItems} />
-        {/* <NavDocuments items={data.documents} /> */}
-        {/* <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
       <SidebarFooter>
-        <SidebarSupportCard />
         <NavUser user={rootUser} />
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

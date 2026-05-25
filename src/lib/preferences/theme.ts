@@ -1,7 +1,7 @@
 export const THEME_MODE_OPTIONS = [
-  { label: "Light", value: "light" },
-  { label: "Dark", value: "dark" },
-  { label: "System", value: "system" },
+  { label: "Sáng", value: "light" },
+  { label: "Tối", value: "dark" },
+  { label: "Hệ thống", value: "system" },
 ] as const;
 
 export const THEME_MODE_VALUES = THEME_MODE_OPTIONS.map((o) => o.value);
@@ -12,7 +12,7 @@ export type ResolvedThemeMode = "light" | "dark";
 
 export const THEME_PRESET_OPTIONS = [
   {
-    label: "Default",
+    label: "Mặc định",
     value: "default",
     primary: {
       light: "oklch(0.205 0 0)",

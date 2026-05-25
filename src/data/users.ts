@@ -1,19 +1,19 @@
 export const users = [
   {
     id: "1",
-    name: "Arham Khan",
-    username: "Aarhamkhnz",
-    email: "hello@arhamkhnz.com",
-    avatar: "https://avatars.githubusercontent.com/u/43849669",
-    role: "administrator",
+    name: "Quản trị Gia Phú",
+    username: "giaphu-admin",
+    email: "admin@giaphu.local",
+    avatar: "",
+    role: "Quản trị viên",
   },
   {
     id: "2",
-    name: "Ammar Khan",
-    username: "ammarkhnz",
-    email: "hello@ammarkhnz.com",
+    name: "Điều hành công trình",
+    username: "site-manager",
+    email: "congtruong@giaphu.local",
     avatar: "",
-    role: "admin",
+    role: "Điều hành",
   },
 ];
 

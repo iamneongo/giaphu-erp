@@ -33,7 +33,7 @@ type SearchItem = {
 const sidebarGroupLabels = new Set(sidebarItems.flatMap((group) => (group.label ? [group.label] : [])));
 
 function getSubItemGroup(groupLabel: string | undefined, itemTitle: string) {
-  return sidebarGroupLabels.has(itemTitle) ? (groupLabel ?? "Other") : itemTitle;
+  return sidebarGroupLabels.has(itemTitle) ? (groupLabel ?? "Khác") : itemTitle;
 }
 
 const searchItems: SearchItem[] = sidebarItems.flatMap((group) =>
@@ -48,9 +48,10 @@ const searchItems: SearchItem[] = sidebarItems.flatMap((group) =>
         newTab: sub.newTab,
       }));
     }
+
     return [
       {
-        group: group.label ?? "Other",
+        group: group.label ?? "Khác",
         label: item.title,
         url: item.url,
         icon: item.icon,
@@ -123,7 +124,7 @@ export function SearchDialog() {
 
               {item.disabled && (
                 <Badge variant="outline" className="text-xs">
-                  Soon
+                  Sắp có
                 </Badge>
               )}
             </CommandItem>
@@ -136,20 +137,26 @@ export function SearchDialog() {
     <>
       <Button
         onClick={() => handleOpenChange(true)}
-        variant="link"
-        className="px-0! font-normal text-muted-foreground hover:no-underline"
+        type="button"
+        variant="outline"
+        className="relative h-9 w-full justify-start rounded-lg bg-background pr-12 font-normal text-muted-foreground shadow-none md:w-48 lg:w-64"
       >
         <Search data-icon="inline-start" />
-        Search
-        <kbd className="inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-medium text-[10px]">
+        Tìm kiếm
+        <kbd className="pointer-events-none absolute top-1/2 right-1.5 inline-flex h-6 -translate-y-1/2 select-none items-center gap-1 rounded-md border bg-muted px-1.5 font-medium font-mono text-[10px]">
           <span className="text-xs">⌘</span>J
         </kbd>
       </Button>
-      <CommandDialog open={open} onOpenChange={handleOpenChange}>
+      <CommandDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        title="Tìm kiếm module"
+        description="Tìm module, hồ sơ và báo cáo trong hệ thống Gia Phú ERP."
+      >
         <Command>
-          <CommandInput placeholder="Search dashboards, users, and more…" value={query} onValueChange={setQuery} />
+          <CommandInput placeholder="Tìm module, hồ sơ, báo cáo..." value={query} onValueChange={setQuery} />
           <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandEmpty>Không tìm thấy kết quả.</CommandEmpty>
             {query ? renderGroups(searchItems) : renderGroups(recommendations)}
           </CommandList>
         </Command>

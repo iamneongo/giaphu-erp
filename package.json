@@ -1,5 +1,5 @@
 {
-  "name": "studio-admin",
+  "name": "giaphu-erp",
   "version": "2.2.0",
   "private": true,
   "scripts": {
@@ -11,17 +11,20 @@
     "check": "biome check",
     "check:fix": "biome check --write",
     "prepare": "husky",
-    "generate:presets": "ts-node -P tsconfig.scripts.json src/scripts/generate-theme-presets.ts"
+    "generate:presets": "ts-node -P tsconfig.scripts.json src/scripts/generate-theme-presets.ts",
+    "setup:giaphu": "ts-node -P tsconfig.scripts.json src/scripts/setup-giaphu-erp.ts"
   },
   "lint-staged": {
     "*.{js,ts,jsx,tsx}": ["biome check --write --no-errors-on-unmatched"]
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
+    "@clerk/nextjs": "^7.4.1",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@hookform/resolvers": "^5.2.2",
+    "@neondatabase/serverless": "^1.1.0",
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

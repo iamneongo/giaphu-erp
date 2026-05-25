@@ -49,7 +49,7 @@ function ShipmentCard({ shipment, active, onSelectShipment }: ShipmentCardProps)
   const Icon = modeIcons[shipment.mode];
 
   return (
-    <button
+    <Button
       type="button"
       aria-pressed={active}
       onClick={(event) => {
@@ -57,7 +57,7 @@ function ShipmentCard({ shipment, active, onSelectShipment }: ShipmentCardProps)
         onSelectShipment(shipment.id);
       }}
       className={cn(
-        "flex w-full flex-col gap-5 rounded-xl border p-3 text-left transition-colors",
+        "flex h-auto w-full flex-col gap-5 whitespace-normal rounded-xl border p-3 text-left transition-colors",
         "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
         active && "border-primary bg-muted/50",
       )}
@@ -125,7 +125,7 @@ function ShipmentCard({ shipment, active, onSelectShipment }: ShipmentCardProps)
           </div>
         </div>
       </div>
-    </button>
+    </Button>
   );
 }
 

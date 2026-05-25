@@ -87,7 +87,7 @@ These serve as the fallback; there is no separate default.css file. */
   --sidebar-ring: oklch(0.708 0 0);
 
   /* fonts */
-  --font-sans: var(--font-geist);
+  --font-sans: var(--font-manrope);
   --font-mono: var(--font-geist-mono);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -176,6 +176,9 @@ These serve as the fallback; there is no separate default.css file. */
 
   html[data-font="inter"] body {
     --font-sans: var(--font-inter);
+  }
+  html[data-font="manrope"] body {
+    --font-sans: var(--font-manrope);
   }
   html[data-font="notoSans"] body {
     --font-sans: var(--font-noto-sans);
