@@ -18,8 +18,10 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+
+import { DatePickerField } from "./date-picker-field";
 
 export interface FormFieldDefinition {
   name: string;
@@ -56,6 +58,7 @@ export function ActionDialog({
   button,
   fields,
   onAction,
+  initialOpen = false,
 }: {
   title: string;
   description?: string;
@@ -64,9 +67,16 @@ export function ActionDialog({
   button: string;
   fields: FormFieldDefinition[];
   onAction: (action: string, payload: FormPayload) => Promise<void>;
+  initialOpen?: boolean;
 }) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(initialOpen);
   const [pending, startTransition] = React.useTransition();
+
+  React.useEffect(() => {
+    if (initialOpen) {
+      setOpen(true);
+    }
+  }, [initialOpen]);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -118,19 +128,30 @@ export function ActionDialog({
                       placeholder={field.placeholder}
                       required={field.required}
                     />
+                  ) : field.type === "date" ? (
+                    <DatePickerField
+                      name={field.name}
+                      value={field.value}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                    />
                   ) : field.type === "select" ? (
-                    <NativeSelect
-                      id={field.name}
+                    <Select
                       name={field.name}
                       defaultValue={String(field.value ?? "")}
                       required={field.required}
                     >
+                      <SelectTrigger id={field.name} className="w-full">
+                        <SelectValue placeholder={field.placeholder ?? `Chọn ${field.label.toLowerCase()}`} />
+                      </SelectTrigger>
+                      <SelectContent>
                       {(field.options ?? []).map((option) => (
-                        <NativeSelectOption key={option.value} value={option.value}>
+                        <SelectItem key={option.value} value={option.value}>
                           {option.label}
-                        </NativeSelectOption>
+                        </SelectItem>
                       ))}
-                    </NativeSelect>
+                      </SelectContent>
+                    </Select>
                   ) : (
                     <Input
                       id={field.name}

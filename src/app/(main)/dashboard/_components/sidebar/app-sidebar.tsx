@@ -3,13 +3,12 @@
 import { useShallow } from "zustand/react/shallow";
 
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar";
-import { rootUser } from "@/data/users";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
-import { NavUser } from "./nav-user";
-import { OrganizationSwitcher } from "./organization-switcher";
+import { ProjectSwitcher } from "./project-switcher";
+import { SidebarUserInfo } from "./sidebar-user-info";
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
     useShallow((s) => ({
@@ -25,13 +24,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>
       <SidebarHeader className="group-data-[collapsible=icon]:pt-4">
-        <OrganizationSwitcher />
+        <ProjectSwitcher />
       </SidebarHeader>
       <SidebarContent className="overflow-x-hidden">
         <NavMain items={sidebarItems} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={rootUser} />
+        <SidebarUserInfo />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

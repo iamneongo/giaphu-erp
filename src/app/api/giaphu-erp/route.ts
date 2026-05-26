@@ -6,6 +6,7 @@ import {
   createGiaPhuSchema,
   deleteStaff,
   getGiaPhuDashboardData,
+  getGiaPhuProjectList,
   manageCatalog,
   manageStaff,
   markMaterialPaid,
@@ -25,6 +26,7 @@ import {
   saveWeeklyAttendance,
   updateMaterialPrice,
 } from "@/lib/giaphu-erp/db";
+import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
 
 export const runtime = "nodejs";
 
@@ -33,10 +35,38 @@ type ActionBody = {
   payload?: Record<string, unknown>;
 };
 
-export async function GET() {
+function readActiveProjectCode(request: Request, payload?: Record<string, unknown>) {
+  const projectCode =
+    typeof payload?.projectCode === "string"
+      ? payload.projectCode
+      : typeof payload?.code === "string"
+        ? payload.code
+        : undefined;
+  if (projectCode) return projectCode;
+
+  const cookieValue = request.headers
+    .get("cookie")
+    ?.split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${ACTIVE_PROJECT_COOKIE_NAME}=`))
+    ?.split("=")[1];
+
+  return cookieValue ? decodeURIComponent(cookieValue) : undefined;
+}
+
+export async function GET(request: Request) {
   try {
     await createGiaPhuSchema();
-    const data = await getGiaPhuDashboardData();
+    const { searchParams } = new URL(request.url);
+
+    if (searchParams.get("view") === "projects") {
+      const projects = await getGiaPhuProjectList();
+      return NextResponse.json({ status: "success", projects });
+    }
+
+    const data = await getGiaPhuDashboardData({
+      activeProjectCode: readActiveProjectCode(request),
+    });
     return NextResponse.json({ status: "success", data });
   } catch (error) {
     return NextResponse.json(
@@ -121,7 +151,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ status: "error", message: "Unknown GiaPhu ERP action." }, { status: 400 });
     }
 
-    const data = await getGiaPhuDashboardData();
+    const data = await getGiaPhuDashboardData({
+      activeProjectCode: readActiveProjectCode(request, payload),
+    });
     return NextResponse.json({ status: "success", data });
   } catch (error) {
     return NextResponse.json(

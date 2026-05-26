@@ -38,9 +38,9 @@ export function AuthShell({ children, mode }: AuthShellProps) {
         <div className="relative z-20 mt-auto text-sidebar-foreground">
           <blockquote className="space-y-2">
             <p className="text-lg">
-              Quản lý công trình, vật tư, nhân công và hồ sơ theo từng tổ chức làm việc riêng biệt.
+              Quản lý nhiều công trình khác nhau, theo dõi vật tư, nhân công, hồ sơ và báo cáo trên cùng một tài khoản.
             </p>
-            <footer className="text-sidebar-foreground/70 text-sm">Gia Phú ERP Workspace</footer>
+            <footer className="text-sidebar-foreground/70 text-sm">Gia Phú ERP Project Hub</footer>
           </blockquote>
         </div>
       </section>
@@ -53,13 +53,13 @@ export function AuthShell({ children, mode }: AuthShellProps) {
             <h1 className="font-semibold text-2xl tracking-tight">{isSignIn ? "Đăng nhập" : "Tạo tài khoản"}</h1>
             <p className="text-muted-foreground text-sm">
               {isSignIn
-                ? "Sau khi đăng nhập, hệ thống sẽ yêu cầu chọn hoặc tạo tổ chức."
-                : "Tạo tài khoản rồi thiết lập tổ chức để bắt đầu dùng dashboard."}
+                ? "Sau khi đăng nhập, nếu chưa có công trình hệ thống sẽ đưa bạn vào màn tạo công trình đầu tiên."
+                : "Tạo tài khoản để bắt đầu quản lý các công trình trên dashboard."}
             </p>
           </div>
           {children}
           <p className="px-8 text-center text-muted-foreground text-sm">
-            Tài khoản và tổ chức được quản lý bảo mật bằng Clerk. Dữ liệu ERP chỉ mở sau khi có tổ chức đang hoạt động.
+            Tài khoản được bảo vệ bằng Clerk. Dữ liệu ERP sẽ bắt đầu ngay khi bạn tạo công trình đầu tiên.
           </p>
         </div>
       </section>

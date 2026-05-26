@@ -1,6 +1,8 @@
 "use client";
 
-import { CircleUser, CreditCard, EllipsisVertical, LogOut, MessageSquareDot } from "lucide-react";
+import Link from "next/link";
+
+import { CircleUser, EllipsisVertical, LogOut, ShieldCheck, UsersRound } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -17,12 +19,14 @@ import { getInitials } from "@/lib/utils";
 
 export function NavUser({
   user,
+  onSignOut,
 }: {
   readonly user: {
     readonly name: string;
     readonly email: string;
     readonly avatar: string;
   };
+  readonly onSignOut?: () => void | Promise<void>;
 }) {
   const { isMobile } = useSidebar();
 
@@ -35,7 +39,7 @@ export function NavUser({
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg grayscale">
+              <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.avatar || undefined} alt={user.name} />
                 <AvatarFallback className="rounded-lg">{getInitials(user.name)}</AvatarFallback>
               </Avatar>
@@ -66,21 +70,33 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <CircleUser />
-                Tài khoản
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/profile">
+                  <CircleUser />
+                  Tài khoản
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard />
-                Thanh toán
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/workspaces">
+                  <UsersRound />
+                  Tổ chức
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <MessageSquareDot />
-                Thông báo
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/workspaces/team">
+                  <ShieldCheck />
+                  Phân quyền
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/workspaces/roles">
+                  <ShieldCheck />
+                  Vai trò & quyền
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={onSignOut}>
               <LogOut />
               Đăng xuất
             </DropdownMenuItem>

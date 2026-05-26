@@ -4,6 +4,12 @@ export function optionsFrom(values: string[]) {
   return values.map((value) => ({ label: value, value }));
 }
 
+export function uniqueOptions(values: Array<string | number | null | undefined>) {
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)))
+    .sort((left, right) => left.localeCompare(right, "vi"))
+    .map((value) => ({ label: value, value }));
+}
+
 export function projectOptions(projects: ProjectRow[]) {
   return projects.map((project) => ({ label: `${project.code} - ${project.name}`, value: project.code }));
 }

@@ -32,8 +32,8 @@ function ClerkMissingConfig({ title }: { title: string }) {
         <Alert>
           <AlertTitle>Chưa cấu hình Clerk</AlertTitle>
           <AlertDescription>
-            Thêm `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` và `CLERK_SECRET_KEY` vào `.env.local` để bật đăng nhập, tổ chức,
-            hồ sơ người dùng và quản lý đội nhóm.
+            Thêm `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` và `CLERK_SECRET_KEY` vào `.env.local` để bật đăng nhập, hồ sơ
+            người dùng và quản lý truy cập.
           </AlertDescription>
         </Alert>
       </CardContent>
@@ -49,7 +49,7 @@ export function ClerkSignInPage() {
       routing="path"
       path="/auth/sign-in"
       signUpUrl="/auth/sign-up"
-      fallbackRedirectUrl="/dashboard/giaphu-erp/overview"
+      fallbackRedirectUrl="/dashboard"
       appearance={clerkCardAppearance}
     />
   );
@@ -63,7 +63,7 @@ export function ClerkSignUpPage() {
       routing="path"
       path="/auth/sign-up"
       signInUrl="/auth/sign-in"
-      fallbackRedirectUrl="/dashboard/workspaces"
+      fallbackRedirectUrl="/dashboard"
       appearance={clerkCardAppearance}
     />
   );
@@ -81,8 +81,8 @@ export function ClerkWorkspacesPage() {
   return (
     <OrganizationList
       hidePersonal
-      afterCreateOrganizationUrl="/dashboard/giaphu-erp/overview"
-      afterSelectOrganizationUrl="/dashboard/giaphu-erp/overview"
+      afterCreateOrganizationUrl="/dashboard/workspaces/team"
+      afterSelectOrganizationUrl="/dashboard/workspaces/team"
       appearance={{
         elements: {
           ...clerkCardAppearance.elements,

@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 import { type StoreApi, useStore } from "zustand";
 
-import { type FontKey, fontRegistry } from "@/lib/fonts/registry";
+import { FONT_KEYS, type FontKey } from "@/lib/fonts/meta";
 import {
   CONTENT_LAYOUT_VALUES,
   NAVBAR_STYLE_VALUES,
@@ -18,7 +18,7 @@ import { createPreferencesStore, type PreferencesState } from "./preferences-sto
 
 const PreferencesStoreContext = createContext<StoreApi<PreferencesState> | null>(null);
 
-const FONT_VALUES = Object.keys(fontRegistry) as FontKey[];
+const FONT_VALUES = FONT_KEYS;
 
 function getSafeValue<T extends string>(raw: string | null, allowed: readonly T[]): T | undefined {
   if (!raw) return undefined;

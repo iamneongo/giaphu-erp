@@ -11,7 +11,7 @@
  * Others are flexible and can use any persistence.
  */
 
-import type { FontKey } from "@/lib/fonts/registry";
+import type { FontKey } from "@/lib/fonts/meta";
 
 import type { ContentLayout, NavbarStyle, SidebarCollapsible, SidebarVariant } from "./layout";
 import type { ThemeMode, ThemePreset } from "./theme";
@@ -68,7 +68,7 @@ type PreferencePersistenceConfig = {
 export const PREFERENCE_DEFAULTS: PreferenceValueMap = {
   theme_mode: "light",
   theme_preset: "default",
-  font: "manrope",
+  font: "arimo",
   content_layout: "centered",
   navbar_style: "sticky",
   sidebar_variant: "inset",
@@ -80,7 +80,7 @@ export const PREFERENCE_DEFAULTS: PreferenceValueMap = {
  * You can change these per-key.
  */
 export const PREFERENCE_PERSISTENCE: PreferencePersistenceConfig = {
-  theme_mode: "client-cookie",
+  theme_mode: "none",
   theme_preset: "client-cookie",
   font: "none",
   content_layout: "client-cookie",

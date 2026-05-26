@@ -1,7 +1,10 @@
-import { Building2 } from "lucide-react";
+import Link from "next/link";
 
-import { ClerkWorkspacesPage } from "@/components/clerk/clerk-embedded";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ShieldCheck } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+
+import { OrganizationManager } from "./_components/organization-manager";
 
 export const metadata = {
   title: "Tổ chức | Gia Phú ERP",
@@ -9,21 +12,22 @@ export const metadata = {
 
 export default function Page() {
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
-      <div className="space-y-1">
-        <h1 className="font-semibold text-2xl">Tổ chức làm việc</h1>
-        <p className="text-muted-foreground text-sm">
-          Gia Phú ERP chạy theo workspace tổ chức. Hãy tạo hoặc chọn tổ chức trước khi vào dashboard.
-        </p>
+    <div className="flex flex-col gap-4 md:gap-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight">Quản lý tổ chức</h1>
+        </div>
+        <Button asChild variant="outline">
+          <Link href="/dashboard/workspaces/roles">
+            <ShieldCheck />
+            Vai trò & quyền
+          </Link>
+        </Button>
       </div>
-      <Alert>
-        <Building2 className="size-4" />
-        <AlertTitle>Bắt buộc có tổ chức</AlertTitle>
-        <AlertDescription>
-          Mỗi tài khoản cần một tổ chức đang hoạt động để quản lý dữ liệu công trình, thành viên và phân quyền.
-        </AlertDescription>
-      </Alert>
-      <ClerkWorkspacesPage />
+
+      <div className="grid gap-4">
+        <OrganizationManager />
+      </div>
     </div>
   );
 }

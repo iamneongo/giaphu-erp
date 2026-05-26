@@ -22,24 +22,24 @@ import {
   readActiveProjectCode,
   writeActiveProjectCode,
 } from "@/lib/giaphu-erp/project-context";
-import type { GiaPhuDashboardData, ProjectRow } from "@/lib/giaphu-erp/types";
+import type { ProjectRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
 type GiaPhuResponse = {
   status: "success" | "error";
   message?: string;
-  data?: GiaPhuDashboardData;
+  projects?: ProjectRow[];
 };
 
 async function fetchProjects() {
-  const response = await fetch("/api/giaphu-erp", { cache: "no-store" });
+  const response = await fetch("/api/giaphu-erp?view=projects", { cache: "no-store" });
   const result = (await response.json()) as GiaPhuResponse;
 
-  if (!response.ok || result.status !== "success" || !result.data) {
+  if (!response.ok || result.status !== "success" || !result.projects) {
     throw new Error(result.message || "Không thể tải danh sách công trình.");
   }
 
-  return result.data.projects;
+  return result.projects;
 }
 
 export function ProjectSwitcher() {
@@ -92,6 +92,31 @@ export function ProjectSwitcher() {
   function selectProject(project: ProjectRow) {
     setActiveProjectCode(project.code);
     writeActiveProjectCode(project.code);
+  }
+
+  if (!projects.length && !pending) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="lg"
+            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            tooltip="Tạo công trình đầu tiên"
+            asChild
+          >
+            <Link prefetch={false} href="/create-project">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-background">
+                <PlusCircle className="size-4" />
+              </div>
+              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">Tạo công trình</span>
+                <span className="truncate text-muted-foreground text-xs">Chưa có dữ liệu dự án</span>
+              </div>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    );
   }
 
   return (

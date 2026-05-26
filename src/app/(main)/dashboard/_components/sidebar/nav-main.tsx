@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useAuth } from "@clerk/nextjs";
 import { ChevronRight } from "lucide-react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -24,6 +25,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { canAccessClerkPermission } from "@/lib/clerk/erp-rbac-shared";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
 interface NavMainProps {
@@ -143,6 +145,54 @@ const NavItemCollapsed = ({
 export function NavMain({ items }: NavMainProps) {
   const path = usePathname();
   const { state, isMobile } = useSidebar();
+  const { has, orgRole } = useAuth();
+
+  const visibleGroups = items
+    .map((group) => {
+      const visibleItems = group.items
+        .map((item) => {
+          const visibleSubItems = item.subItems?.filter(
+            (subItem) =>
+              !subItem.permission ||
+              canAccessClerkPermission(
+                {
+                  orgRole,
+                  hasRole: (role) => has?.({ role }) ?? false,
+                  hasPermission: (permission) => has?.({ permission }) ?? false,
+                },
+                subItem.permission,
+              ),
+          );
+
+          if (item.subItems?.length) {
+            if (!visibleSubItems?.length) {
+              return null;
+            }
+
+            return { ...item, subItems: visibleSubItems };
+          }
+
+          if (
+            item.permission &&
+            !canAccessClerkPermission(
+              {
+                orgRole,
+                hasRole: (role) => has?.({ role }) ?? false,
+                hasPermission: (permission) => has?.({ permission }) ?? false,
+              },
+              item.permission,
+            )
+          ) {
+            return null;
+          }
+
+          return item;
+        })
+        .filter(Boolean) as NavMainItem[];
+
+      return { ...group, items: visibleItems };
+    })
+    .filter((group) => group.items.length > 0);
 
   const isItemActive = (url: string, subItems?: NavMainItem["subItems"]) => {
     if (subItems?.length) {
@@ -157,7 +207,7 @@ export function NavMain({ items }: NavMainProps) {
 
   return (
     <>
-      {items.map((group) => (
+      {visibleGroups.map((group) => (
         <SidebarGroup key={group.id}>
           {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
           <SidebarGroupContent className="flex flex-col gap-2">

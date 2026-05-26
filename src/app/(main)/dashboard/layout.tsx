@@ -56,7 +56,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           </div>
         </header>
         {/* Pages can set data-content-padding="false" to render full-bleed app layouts. */}
-        <div className="h-full p-4 has-data-[content-padding=false]:p-0 md:p-6 md:has-data-[content-padding=false]:p-0">
+        <div className="h-full px-4 pt-2 pb-4 has-data-[content-padding=false]:p-0 md:px-6 md:pt-4 md:pb-6 md:has-data-[content-padding=false]:p-0">
           {children}
         </div>
       </SidebarInset>

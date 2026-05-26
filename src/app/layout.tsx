@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { viVN } from "@clerk/localizations";
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 
@@ -19,8 +20,11 @@ export const metadata: Metadata = {
 };
 
 const clerkLocalization = {
+  ...viVN,
   signIn: {
+    ...viVN.signIn,
     start: {
+      ...viVN.signIn?.start,
       title: "Đăng nhập",
       subtitle: "Tiếp tục vào Gia Phú ERP",
       actionText: "Chưa có tài khoản?",
@@ -28,14 +32,17 @@ const clerkLocalization = {
     },
   },
   signUp: {
+    ...viVN.signUp,
     start: {
+      ...viVN.signUp?.start,
       title: "Tạo tài khoản",
-      subtitle: "Tạo tài khoản để thiết lập tổ chức",
+      subtitle: "Tạo tài khoản để bắt đầu quản lý công trình",
       actionText: "Đã có tài khoản?",
       actionLink: "Đăng nhập",
     },
   },
   organizationList: {
+    ...viVN.organizationList,
     titleWithoutPersonal: "Chọn tổ chức",
     title: "Chọn tổ chức",
     subtitle: "để tiếp tục vào Gia Phú ERP",
@@ -43,6 +50,7 @@ const clerkLocalization = {
     createOrganization: "Tạo tổ chức",
   },
   createOrganization: {
+    ...viVN.createOrganization,
     title: "Tạo tổ chức",
     formButtonSubmit: "Tạo tổ chức",
   },

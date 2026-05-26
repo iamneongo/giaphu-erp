@@ -1,5 +1,5 @@
-import { MaterialsWorkspace } from "../_components/materials-workspace";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <MaterialsWorkspace />;
+  redirect("/dashboard/giaphu-erp/materials/entries");
 }

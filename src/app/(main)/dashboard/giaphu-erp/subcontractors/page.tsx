@@ -1,5 +1,5 @@
-import { SubcontractorsWorkspace } from "../_components/subcontractors-workspace";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <SubcontractorsWorkspace />;
+  redirect("/dashboard/giaphu-erp/subcontractors/advances");
 }

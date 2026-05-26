@@ -1,5 +1,5 @@
-import { WorkforceWorkspace } from "../_components/workforce-workspace";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <WorkforceWorkspace />;
+  redirect("/dashboard/giaphu-erp/workforce/attendance");
 }

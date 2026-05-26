@@ -20,7 +20,7 @@ async function parseResponse(response: Response): Promise<GiaPhuResponse> {
 }
 
 export async function fetchGiaPhuData() {
-  const result = await parseResponse(await fetch("/api/giaphu-erp"));
+  const result = await parseResponse(await fetch("/api/giaphu-erp", { cache: "no-store" }));
   if (!result.data) throw new Error("API không trả về dữ liệu ERP.");
   return result.data;
 }

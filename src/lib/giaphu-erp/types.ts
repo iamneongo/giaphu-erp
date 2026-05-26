@@ -10,7 +10,6 @@ export interface ProjectRow {
   referrer: string;
   startDate: string;
   status: string;
-  driveUrl: string;
   failureReason: string;
 }
 

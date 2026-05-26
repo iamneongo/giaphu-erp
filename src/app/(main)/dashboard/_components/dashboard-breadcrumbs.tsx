@@ -15,7 +15,7 @@ import {
 
 const segmentLabels: Record<string, string> = {
   dashboard: "Bảng điều khiển",
-  "giaphu-erp": "Gia Phú ERP",
+  "giaphu-erp": "Công trình",
   overview: "Tổng quan",
   crm: "CRM công trình",
   materials: "Vật tư",
@@ -25,9 +25,23 @@ const segmentLabels: Record<string, string> = {
   documents: "Hồ sơ",
   reports: "Báo cáo",
   profile: "Hồ sơ tài khoản",
-  workspaces: "Không gian làm việc",
-  team: "Đội nhóm",
-  billing: "Thanh toán",
+  workspaces: "Tổ chức",
+  team: "Phân quyền",
+  roles: "Vai trò & quyền",
+  create: "Tạo vai trò",
+  edit: "Sửa vai trò",
+  billing: "Thanh toán tổ chức",
+  projects: "Công trình",
+  contracts: "Hợp đồng",
+  payments: "Thu tiền",
+  entries: "Phát sinh",
+  norms: "Định mức",
+  attendance: "Chấm công",
+  staff: "Nhân sự",
+  "labor-norms": "Định mức nhân công",
+  progress: "Tiến độ",
+  advances: "Tạm ứng",
+  operations: "Vận hành",
   "hang-muc": "Hạng mục",
   "vat-tu": "Vật tư",
   "vat-tu-phu": "Vật tư phụ",
@@ -59,9 +73,9 @@ export function DashboardBreadcrumbs() {
               <BreadcrumbSeparator />
               <BreadcrumbItem>
                 {isLast ? (
-                  <BreadcrumbPage>{segmentLabels[segment] ?? segment}</BreadcrumbPage>
+                  <BreadcrumbPage>{segment.startsWith("role_") ? "Chi tiết vai trò" : (segmentLabels[segment] ?? segment)}</BreadcrumbPage>
                 ) : (
-                  <BreadcrumbLink href={href}>{segmentLabels[segment] ?? segment}</BreadcrumbLink>
+                  <BreadcrumbLink href={href}>{segment.startsWith("role_") ? "Chi tiết vai trò" : (segmentLabels[segment] ?? segment)}</BreadcrumbLink>
                 )}
               </BreadcrumbItem>
             </React.Fragment>

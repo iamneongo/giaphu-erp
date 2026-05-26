@@ -19,6 +19,13 @@ import type {
 } from "./types";
 
 type Row = Record<string, unknown>;
+type DashboardDataOptions = {
+  activeProjectCode?: string;
+};
+
+type GlobalSchemaState = typeof globalThis & {
+  __giaPhuSchemaPromise?: Promise<void>;
+};
 
 const catalogPrefixes: Record<CatalogItem["kind"], string> = {
   hangMuc: "HM",
@@ -93,7 +100,6 @@ function projectFromRow(row: Row): ProjectRow {
     referrer: text(row.referrer),
     startDate: dateOnly(row.start_date),
     status: text(row.status),
-    driveUrl: text(row.drive_url),
     failureReason: text(row.failure_reason),
   };
 }
@@ -331,7 +337,7 @@ function buildSummaries(data: {
   return summaries;
 }
 
-export async function createGiaPhuSchema() {
+async function createGiaPhuSchemaInternal() {
   const sql = getSql();
 
   await sql`create table if not exists gp_projects (
@@ -548,10 +554,29 @@ export async function createGiaPhuSchema() {
   )`;
 }
 
-export async function getGiaPhuDashboardData(): Promise<GiaPhuDashboardData> {
+export async function createGiaPhuSchema() {
+  const state = globalThis as GlobalSchemaState;
+  state.__giaPhuSchemaPromise ??= createGiaPhuSchemaInternal().catch((error) => {
+    state.__giaPhuSchemaPromise = undefined;
+    throw error;
+  });
+  return state.__giaPhuSchemaPromise;
+}
+
+export async function getGiaPhuProjectList(): Promise<ProjectRow[]> {
   const sql = getSql();
+  const projectRows = await sql`select * from gp_projects order by updated_at desc, code asc`;
+  return (projectRows as Row[]).map(projectFromRow);
+}
+
+export async function getGiaPhuDashboardData(options: DashboardDataOptions = {}): Promise<GiaPhuDashboardData> {
+  const sql = getSql();
+  const projects = await getGiaPhuProjectList();
+  const activeProjectCode = projects.some((project) => project.code === options.activeProjectCode)
+    ? options.activeProjectCode ?? ""
+    : (projects[0]?.code ?? "");
+
   const [
-    projectRows,
     catalogRows,
     staffRows,
     materialRows,
@@ -566,20 +591,41 @@ export async function getGiaPhuDashboardData(): Promise<GiaPhuDashboardData> {
     contractRows,
     lockRows,
   ] = await Promise.all([
-    sql`select * from gp_projects order by updated_at desc, code asc`,
     sql`select * from gp_catalog_items order by kind asc, name asc`,
     sql`select * from gp_staff order by id asc, name asc`,
-    sql`select * from gp_materials order by coalesce(work_date, created_at::date) desc, id desc limit 500`,
-    sql`select * from gp_attendance order by coalesce(work_date, created_at::date) desc, id desc limit 800`,
-    sql`select * from gp_subcontractors order by coalesce(work_date, created_at::date) desc, id desc limit 500`,
-    sql`select * from gp_subcontractor_contracts order by updated_at desc, id desc`,
-    sql`select * from gp_operations order by coalesce(work_date, created_at::date) desc, id desc limit 300`,
-    sql`select * from gp_material_norms order by category asc, material_name asc`,
-    sql`select * from gp_labor_norms order by category asc`,
-    sql`select * from gp_progress order by category asc`,
-    sql`select * from gp_payments order by payment_date desc, id desc`,
-    sql`select * from gp_contracts order by signed_date desc, id desc`,
-    sql`select * from gp_attendance_locks order by updated_at desc`,
+    activeProjectCode
+      ? sql`select * from gp_materials where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 300`
+      : sql`select * from gp_materials order by coalesce(work_date, created_at::date) desc, id desc limit 100`,
+    activeProjectCode
+      ? sql`select * from gp_attendance where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 400`
+      : sql`select * from gp_attendance order by coalesce(work_date, created_at::date) desc, id desc limit 100`,
+    activeProjectCode
+      ? sql`select * from gp_subcontractors where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 300`
+      : sql`select * from gp_subcontractors order by coalesce(work_date, created_at::date) desc, id desc limit 100`,
+    activeProjectCode
+      ? sql`select * from gp_subcontractor_contracts where project_code = ${activeProjectCode} order by updated_at desc, id desc`
+      : sql`select * from gp_subcontractor_contracts order by updated_at desc, id desc limit 50`,
+    activeProjectCode
+      ? sql`select * from gp_operations where project_code = ${activeProjectCode} or project_code = 'CHUNG DOANH NGHIỆP' order by coalesce(work_date, created_at::date) desc, id desc limit 200`
+      : sql`select * from gp_operations order by coalesce(work_date, created_at::date) desc, id desc limit 80`,
+    activeProjectCode
+      ? sql`select * from gp_material_norms where project_code = ${activeProjectCode} order by category asc, material_name asc`
+      : sql`select * from gp_material_norms order by category asc, material_name asc limit 80`,
+    activeProjectCode
+      ? sql`select * from gp_labor_norms where project_code = ${activeProjectCode} order by category asc`
+      : sql`select * from gp_labor_norms order by category asc limit 80`,
+    activeProjectCode
+      ? sql`select * from gp_progress where project_code = ${activeProjectCode} order by category asc`
+      : sql`select * from gp_progress order by category asc limit 80`,
+    activeProjectCode
+      ? sql`select * from gp_payments where project_code = ${activeProjectCode} order by payment_date desc, id desc`
+      : sql`select * from gp_payments order by payment_date desc, id desc limit 80`,
+    activeProjectCode
+      ? sql`select * from gp_contracts where project_code = ${activeProjectCode} order by signed_date desc, id desc`
+      : sql`select * from gp_contracts order by signed_date desc, id desc limit 80`,
+    activeProjectCode
+      ? sql`select * from gp_attendance_locks where project_code = ${activeProjectCode} order by updated_at desc`
+      : sql`select * from gp_attendance_locks order by updated_at desc limit 80`,
   ]);
 
   const catalogs = {
@@ -600,7 +646,7 @@ export async function getGiaPhuDashboardData(): Promise<GiaPhuDashboardData> {
   const operations = (operationRows as Row[]).map(operationFromRow);
 
   return {
-    projects: (projectRows as Row[]).map(projectFromRow),
+    projects,
     catalogs,
     staff: (staffRows as Row[]).map(staffFromRow),
     materials,
@@ -625,8 +671,8 @@ export async function saveProject(payload: Record<string, unknown>) {
   if (!code || !name) throw new Error("Thiếu mã hoặc tên công trình.");
 
   await sql`
-    insert into gp_projects (code, name, owner, contact, referrer, start_date, status, drive_url, failure_reason, updated_at)
-    values (${code}, ${name}, ${text(payload.owner)}, ${text(payload.contact)}, ${text(payload.referrer)}, ${dateOnly(payload.startDate) || null}, ${text(payload.status) || "Đang thi công"}, ${text(payload.driveUrl)}, ${text(payload.failureReason)}, now())
+    insert into gp_projects (code, name, owner, contact, referrer, start_date, status, failure_reason, updated_at)
+    values (${code}, ${name}, ${text(payload.owner)}, ${text(payload.contact)}, ${text(payload.referrer)}, ${dateOnly(payload.startDate) || null}, ${text(payload.status) || "Đang thi công"}, ${text(payload.failureReason)}, now())
     on conflict (code) do update set
       name = excluded.name,
       owner = excluded.owner,
@@ -634,7 +680,6 @@ export async function saveProject(payload: Record<string, unknown>) {
       referrer = excluded.referrer,
       start_date = excluded.start_date,
       status = excluded.status,
-      drive_url = excluded.drive_url,
       failure_reason = excluded.failure_reason,
       updated_at = now()
   `;

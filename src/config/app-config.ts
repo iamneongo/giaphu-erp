@@ -8,6 +8,6 @@ export const APP_CONFIG = {
   copyright: `© ${currentYear}, Gia Phú ERP.`,
   meta: {
     title: "Gia Phú ERP",
-    description: "Hệ thống quản trị công trình, vật tư, nhân sự và báo cáo cho Gia Phú.",
+    description: "Hệ thống quản lý nhiều công trình, vật tư, nhân sự, hồ sơ và báo cáo trên cùng một tài khoản.",
   },
 };

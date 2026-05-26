@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { usePathname, useRouter } from "next/navigation";
+
 import { toast } from "sonner";
 
 import {
@@ -70,6 +72,8 @@ export function GiaPhuErpProvider({
   initialData: GiaPhuDashboardData;
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [data, setData] = React.useState(initialData);
   const [activeProjectCode, setActiveProjectCode] = React.useState(initialData.projects[0]?.code ?? "");
 
@@ -88,6 +92,18 @@ export function GiaPhuErpProvider({
       setActiveProject(fallbackProjectCode);
     }
   }, [initialData.projects, setActiveProject]);
+
+  React.useEffect(() => {
+    if (!data.projects.length && pathname !== "/create-project") {
+      router.replace("/create-project");
+    }
+  }, [data.projects.length, pathname, router]);
+
+  React.useEffect(() => {
+    if (!data.projects.length) return;
+    if (activeProjectCode && data.projects.some((project) => project.code === activeProjectCode)) return;
+    setActiveProject(data.projects[0].code);
+  }, [activeProjectCode, data.projects, setActiveProject]);
 
   React.useEffect(() => {
     function handleProjectChange(event: Event) {
