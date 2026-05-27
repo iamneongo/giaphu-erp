@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 
 import { createGiaPhuSchema, getGiaPhuProjectList } from "@/lib/giaphu-erp/db";
 
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   await createGiaPhuSchema();
   const projects = await getGiaPhuProjectList();

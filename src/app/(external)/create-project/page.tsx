@@ -7,6 +7,7 @@ import { createGiaPhuSchema, getGiaPhuDashboardData, getGiaPhuProjectList } from
 export const metadata = {
   title: "Tạo công trình | Gia Phú ERP",
 };
+export const dynamic = "force-dynamic";
 
 export default async function Page() {
   await createGiaPhuSchema();
