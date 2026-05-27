@@ -3,13 +3,17 @@
 import { useShallow } from "zustand/react/shallow";
 
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar";
+import type { ProjectRow } from "@/lib/giaphu-erp/types";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
 import { ProjectSwitcher } from "./project-switcher";
 import { SidebarUserInfo } from "./sidebar-user-info";
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({
+  initialProjects = [],
+  ...props
+}: React.ComponentProps<typeof Sidebar> & { initialProjects?: ProjectRow[] }) {
   const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
     useShallow((s) => ({
       sidebarVariant: s.sidebarVariant,
@@ -24,7 +28,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>
       <SidebarHeader className="group-data-[collapsible=icon]:pt-4">
-        <ProjectSwitcher />
+        <ProjectSwitcher initialProjects={initialProjects} />
       </SidebarHeader>
       <SidebarContent className="overflow-x-hidden">
         <NavMain items={sidebarItems} />

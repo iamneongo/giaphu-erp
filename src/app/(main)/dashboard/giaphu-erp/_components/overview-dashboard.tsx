@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { formatCount } from "../_lib/formatters";
 import { formatPercent, formatVnd, getOverviewInsights } from "../_lib/dashboard-insights";
+import { DashboardContentSkeleton } from "../../_components/loading-skeletons";
 
 const monthlyChartConfig = {
   totalCost: {
@@ -82,7 +83,7 @@ const pieChartConfig = {
 } satisfies ChartConfig;
 
 export function OverviewDashboard() {
-  const { activeProject, scoped } = useGiaPhuErp();
+  const { activeProject, isSwitchingProject, scoped } = useGiaPhuErp();
   const insights = React.useMemo(() => getOverviewInsights(scoped), [scoped]);
 
   const monthlyData = insights.monthly.map((row) => ({
@@ -96,6 +97,10 @@ export function OverviewDashboard() {
     visitors: row.value,
     fill: `var(--color-${row.key})`,
   }));
+
+  if (isSwitchingProject) {
+    return <DashboardContentSkeleton />;
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-4 md:gap-6">

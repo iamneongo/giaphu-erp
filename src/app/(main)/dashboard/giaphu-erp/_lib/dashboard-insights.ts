@@ -8,6 +8,8 @@ import type {
   SubcontractorRow,
 } from "@/lib/giaphu-erp/types";
 
+import { formatMoney } from "./formatters";
+
 type ScopeData = {
   materials: MaterialRow[];
   attendance: AttendanceRow[];
@@ -60,7 +62,7 @@ export type RecentActivityPoint = {
 };
 
 export function formatVnd(value: number) {
-  return `${new Intl.NumberFormat("vi-VN").format(Math.round(value || 0))} đ`;
+  return formatMoney(value);
 }
 
 export function formatPercent(value: number) {

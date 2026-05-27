@@ -42,8 +42,8 @@ async function fetchProjects() {
   return result.projects;
 }
 
-export function ProjectSwitcher() {
-  const [projects, setProjects] = React.useState<ProjectRow[]>([]);
+export function ProjectSwitcher({ initialProjects = [] }: { initialProjects?: ProjectRow[] }) {
+  const [projects, setProjects] = React.useState<ProjectRow[]>(initialProjects);
   const [activeProjectCode, setActiveProjectCode] = React.useState("");
   const [pending, startTransition] = React.useTransition();
 
@@ -69,8 +69,20 @@ export function ProjectSwitcher() {
   }, []);
 
   React.useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+    const storedProjectCode = readActiveProjectCode();
+    const nextActiveProject = initialProjects.find((project) => project.code === storedProjectCode) ?? initialProjects[0];
+
+    if (nextActiveProject) {
+      setActiveProjectCode(nextActiveProject.code);
+      writeActiveProjectCode(nextActiveProject.code);
+    }
+  }, [initialProjects]);
+
+  React.useEffect(() => {
+    if (!initialProjects.length) {
+      loadProjects();
+    }
+  }, [initialProjects.length, loadProjects]);
 
   React.useEffect(() => {
     function handleProjectChange(event: Event) {

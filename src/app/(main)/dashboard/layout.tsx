@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { createGiaPhuSchema, getGiaPhuProjectList } from "@/lib/giaphu-erp/db";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
@@ -15,9 +16,11 @@ import { SearchDialog } from "./_components/sidebar/search-dialog";
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
-  const [variant, collapsible] = await Promise.all([
+  await createGiaPhuSchema();
+  const [variant, collapsible, initialProjects] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
+    getGiaPhuProjectList(),
   ]);
 
   return (
@@ -29,7 +32,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant={variant} collapsible={collapsible} />
+      <AppSidebar variant={variant} collapsible={collapsible} initialProjects={initialProjects} />
       <SidebarInset
         className={cn(
           "[html[data-content-layout=centered]_&>*]:mx-auto",

@@ -4,7 +4,20 @@ import {
   approveSubcontractorContract,
   closeAttendance,
   createGiaPhuSchema,
+  deleteAttendanceRow,
+  deleteCatalog,
+  deleteContract,
+  deleteDocument,
+  deleteLaborNorm,
+  deleteMaterial,
+  deleteMaterialNorm,
+  deleteOperation,
+  deletePayment,
+  deleteProgress,
+  deleteProject,
   deleteStaff,
+  deleteSubcontractor,
+  deleteSubcontractorContract,
   getGiaPhuDashboardData,
   getGiaPhuProjectList,
   manageCatalog,
@@ -86,14 +99,26 @@ export async function POST(request: Request) {
       case "saveProject":
         await saveProject(payload);
         break;
+      case "deleteProject":
+        await deleteProject(payload);
+        break;
       case "saveContract":
         await saveContract(payload);
+        break;
+      case "deleteContract":
+        await deleteContract(payload);
         break;
       case "savePayment":
         await savePayment(payload);
         break;
+      case "deletePayment":
+        await deletePayment(payload);
+        break;
       case "manageCatalog":
         await manageCatalog(payload);
+        break;
+      case "deleteCatalog":
+        await deleteCatalog(payload);
         break;
       case "manageStaff":
         await manageStaff(payload);
@@ -104,6 +129,9 @@ export async function POST(request: Request) {
       case "saveMaterial":
         await saveMaterial(payload);
         break;
+      case "deleteMaterial":
+        await deleteMaterial(payload);
+        break;
       case "updateMaterialPrice":
         await updateMaterialPrice(payload);
         break;
@@ -112,6 +140,9 @@ export async function POST(request: Request) {
         break;
       case "saveWeeklyAttendance":
         await saveWeeklyAttendance(payload);
+        break;
+      case "deleteAttendanceRow":
+        await deleteAttendanceRow(payload);
         break;
       case "closeAttendance":
         await closeAttendance(payload);
@@ -122,8 +153,14 @@ export async function POST(request: Request) {
       case "saveSubcontractor":
         await saveSubcontractor(payload);
         break;
+      case "deleteSubcontractor":
+        await deleteSubcontractor(payload);
+        break;
       case "saveSubcontractorContract":
         await saveSubcontractorContract(payload);
+        break;
+      case "deleteSubcontractorContract":
+        await deleteSubcontractorContract(payload);
         break;
       case "approveSubcontractorContract":
         await approveSubcontractorContract(payload);
@@ -131,17 +168,32 @@ export async function POST(request: Request) {
       case "saveOperation":
         await saveOperation(payload);
         break;
+      case "deleteOperation":
+        await deleteOperation(payload);
+        break;
       case "saveMaterialNorm":
         await saveMaterialNorm(payload);
+        break;
+      case "deleteMaterialNorm":
+        await deleteMaterialNorm(payload);
         break;
       case "saveLaborNorm":
         await saveLaborNorm(payload);
         break;
+      case "deleteLaborNorm":
+        await deleteLaborNorm(payload);
+        break;
       case "saveProgress":
         await saveProgress(payload);
         break;
+      case "deleteProgress":
+        await deleteProgress(payload);
+        break;
       case "saveDocument":
         await saveDocument(payload);
+        break;
+      case "deleteDocument":
+        await deleteDocument(payload);
         break;
       case "queryDocuments": {
         const rows = await queryDocuments(payload);

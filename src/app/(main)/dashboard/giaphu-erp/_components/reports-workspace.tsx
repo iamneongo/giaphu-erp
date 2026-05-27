@@ -35,6 +35,7 @@ import {
   type CategorySpendPoint,
 } from "../_lib/dashboard-insights";
 import { DataTable } from "./data-table";
+import { ReportsContentSkeleton } from "../../_components/loading-skeletons";
 
 const monthlyCashflowConfig = {
   cost: {
@@ -74,7 +75,7 @@ const mixConfig = {
 } satisfies ChartConfig;
 
 export function ReportsWorkspace() {
-  const { activeProject, scoped } = useGiaPhuErp();
+  const { activeProject, isSwitchingProject, scoped } = useGiaPhuErp();
   const insights = React.useMemo(() => getReportsInsights(scoped), [scoped]);
 
   const monthlyData = insights.monthly.map((row) => ({
@@ -95,6 +96,10 @@ export function ReportsWorkspace() {
     value: row.value,
     fill: `var(--color-${row.key})`,
   }));
+
+  if (isSwitchingProject) {
+    return <ReportsContentSkeleton />;
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-4 md:gap-6">

@@ -25,6 +25,7 @@ type DashboardDataOptions = {
 
 type GlobalSchemaState = typeof globalThis & {
   __giaPhuSchemaPromise?: Promise<void>;
+  __giaPhuSchemaReady?: boolean;
 };
 
 const catalogPrefixes: Record<CatalogItem["kind"], string> = {
@@ -80,13 +81,45 @@ function weekFromDate(value: string) {
 }
 
 function money(value: unknown) {
+  return parseLocalizedNumber(value);
+}
+
+function decimal(value: unknown) {
+  return parseLocalizedNumber(value);
+}
+
+function parseLocalizedNumber(value: unknown) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   const raw = text(value).trim();
   if (!raw) return 0;
-  const normalized = raw
-    .replace(/[.,](?=\d{3}(?:\D|$))/g, "")
-    .replace(",", ".")
-    .replace(/[^0-9.-]/g, "");
+
+  const sanitized = raw.replace(/[^\d,.\-]/g, "");
+  const sign = sanitized.startsWith("-") ? "-" : "";
+  const digits = sanitized.replace(/-/g, "");
+  const lastComma = digits.lastIndexOf(",");
+  const lastDot = digits.lastIndexOf(".");
+
+  let normalized = digits;
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decimalSeparator = lastComma > lastDot ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+    normalized = digits.replaceAll(thousandsSeparator, "").replace(decimalSeparator, ".");
+  } else if (lastComma >= 0) {
+    const commaCount = (digits.match(/,/g) ?? []).length;
+    normalized =
+      commaCount === 1 && digits.length - lastComma - 1 !== 3
+        ? digits.replace(",", ".")
+        : digits.replaceAll(",", "");
+  } else if (lastDot >= 0) {
+    const dotCount = (digits.match(/\./g) ?? []).length;
+    normalized =
+      dotCount === 1 && digits.length - lastDot - 1 !== 3
+        ? digits
+        : digits.replaceAll(".", "");
+  }
+
+  normalized = `${sign}${normalized}`.replace(/[^0-9.-]/g, "");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }
@@ -556,11 +589,30 @@ async function createGiaPhuSchemaInternal() {
 
 export async function createGiaPhuSchema() {
   const state = globalThis as GlobalSchemaState;
+  if (state.__giaPhuSchemaReady) {
+    return;
+  }
+
+  const sql = getSql();
+  const readinessRows = await sql`
+    select
+      to_regclass('public.gp_projects') as projects_table,
+      to_regclass('public.gp_material_norms') as material_norms_table,
+      to_regclass('public.gp_progress') as progress_table
+  `;
+  const readiness = (readinessRows as Row[])[0] ?? {};
+
+  if (readiness.projects_table && readiness.material_norms_table && readiness.progress_table) {
+    state.__giaPhuSchemaReady = true;
+    return;
+  }
+
   state.__giaPhuSchemaPromise ??= createGiaPhuSchemaInternal().catch((error) => {
     state.__giaPhuSchemaPromise = undefined;
     throw error;
   });
-  return state.__giaPhuSchemaPromise;
+  await state.__giaPhuSchemaPromise;
+  state.__giaPhuSchemaReady = true;
 }
 
 export async function getGiaPhuProjectList(): Promise<ProjectRow[]> {
@@ -571,14 +623,16 @@ export async function getGiaPhuProjectList(): Promise<ProjectRow[]> {
 
 export async function getGiaPhuDashboardData(options: DashboardDataOptions = {}): Promise<GiaPhuDashboardData> {
   const sql = getSql();
-  const projects = await getGiaPhuProjectList();
+  const [projects, catalogRows, staffRows] = await Promise.all([
+    getGiaPhuProjectList(),
+    sql`select * from gp_catalog_items order by kind asc, name asc`,
+    sql`select * from gp_staff order by id asc, name asc`,
+  ]);
   const activeProjectCode = projects.some((project) => project.code === options.activeProjectCode)
     ? options.activeProjectCode ?? ""
     : (projects[0]?.code ?? "");
 
   const [
-    catalogRows,
-    staffRows,
     materialRows,
     attendanceRows,
     subcontractorRows,
@@ -591,41 +645,39 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     contractRows,
     lockRows,
   ] = await Promise.all([
-    sql`select * from gp_catalog_items order by kind asc, name asc`,
-    sql`select * from gp_staff order by id asc, name asc`,
     activeProjectCode
-      ? sql`select * from gp_materials where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 300`
-      : sql`select * from gp_materials order by coalesce(work_date, created_at::date) desc, id desc limit 100`,
+      ? sql`select * from gp_materials where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 240`
+      : sql`select * from gp_materials order by coalesce(work_date, created_at::date) desc, id desc limit 80`,
     activeProjectCode
-      ? sql`select * from gp_attendance where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 400`
-      : sql`select * from gp_attendance order by coalesce(work_date, created_at::date) desc, id desc limit 100`,
+      ? sql`select * from gp_attendance where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 280`
+      : sql`select * from gp_attendance order by coalesce(work_date, created_at::date) desc, id desc limit 80`,
     activeProjectCode
-      ? sql`select * from gp_subcontractors where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 300`
-      : sql`select * from gp_subcontractors order by coalesce(work_date, created_at::date) desc, id desc limit 100`,
+      ? sql`select * from gp_subcontractors where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 220`
+      : sql`select * from gp_subcontractors order by coalesce(work_date, created_at::date) desc, id desc limit 80`,
     activeProjectCode
       ? sql`select * from gp_subcontractor_contracts where project_code = ${activeProjectCode} order by updated_at desc, id desc`
-      : sql`select * from gp_subcontractor_contracts order by updated_at desc, id desc limit 50`,
+      : sql`select * from gp_subcontractor_contracts order by updated_at desc, id desc limit 40`,
     activeProjectCode
-      ? sql`select * from gp_operations where project_code = ${activeProjectCode} or project_code = 'CHUNG DOANH NGHIỆP' order by coalesce(work_date, created_at::date) desc, id desc limit 200`
-      : sql`select * from gp_operations order by coalesce(work_date, created_at::date) desc, id desc limit 80`,
+      ? sql`select * from gp_operations where project_code = ${activeProjectCode} or project_code = 'CHUNG DOANH NGHIỆP' order by coalesce(work_date, created_at::date) desc, id desc limit 160`
+      : sql`select * from gp_operations order by coalesce(work_date, created_at::date) desc, id desc limit 60`,
     activeProjectCode
       ? sql`select * from gp_material_norms where project_code = ${activeProjectCode} order by category asc, material_name asc`
-      : sql`select * from gp_material_norms order by category asc, material_name asc limit 80`,
+      : sql`select * from gp_material_norms order by category asc, material_name asc limit 60`,
     activeProjectCode
       ? sql`select * from gp_labor_norms where project_code = ${activeProjectCode} order by category asc`
-      : sql`select * from gp_labor_norms order by category asc limit 80`,
+      : sql`select * from gp_labor_norms order by category asc limit 60`,
     activeProjectCode
       ? sql`select * from gp_progress where project_code = ${activeProjectCode} order by category asc`
-      : sql`select * from gp_progress order by category asc limit 80`,
+      : sql`select * from gp_progress order by category asc limit 60`,
     activeProjectCode
       ? sql`select * from gp_payments where project_code = ${activeProjectCode} order by payment_date desc, id desc`
-      : sql`select * from gp_payments order by payment_date desc, id desc limit 80`,
+      : sql`select * from gp_payments order by payment_date desc, id desc limit 60`,
     activeProjectCode
       ? sql`select * from gp_contracts where project_code = ${activeProjectCode} order by signed_date desc, id desc`
-      : sql`select * from gp_contracts order by signed_date desc, id desc limit 80`,
+      : sql`select * from gp_contracts order by signed_date desc, id desc limit 60`,
     activeProjectCode
       ? sql`select * from gp_attendance_locks where project_code = ${activeProjectCode} order by updated_at desc`
-      : sql`select * from gp_attendance_locks order by updated_at desc limit 80`,
+      : sql`select * from gp_attendance_locks order by updated_at desc limit 60`,
   ]);
 
   const catalogs = {
@@ -685,20 +737,64 @@ export async function saveProject(payload: Record<string, unknown>) {
   `;
 }
 
+export async function deleteProject(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const code = text(payload.code).trim();
+  if (!code) throw new Error("Thiếu mã công trình để xóa.");
+  await sql`delete from gp_projects where code = ${code}`;
+}
+
 export async function saveContract(payload: Record<string, unknown>) {
   const sql = getSql();
+  const id = number(payload.id);
+  if (id > 0) {
+    await sql`
+      update gp_contracts
+      set project_code = ${text(payload.projectCode)},
+          contract_no = ${text(payload.contractNo)},
+          value = ${money(payload.value)},
+          signed_date = ${dateOnly(payload.signedDate) || null},
+          note = ${text(payload.note)}
+      where id = ${id}
+    `;
+    return;
+  }
+
   await sql`
     insert into gp_contracts (project_code, contract_no, value, signed_date, note)
     values (${text(payload.projectCode)}, ${text(payload.contractNo)}, ${money(payload.value)}, ${dateOnly(payload.signedDate) || null}, ${text(payload.note)})
   `;
 }
 
+export async function deleteContract(payload: Record<string, unknown>) {
+  const sql = getSql();
+  await sql`delete from gp_contracts where id = ${number(payload.id)}`;
+}
+
 export async function savePayment(payload: Record<string, unknown>) {
   const sql = getSql();
+  const id = number(payload.id);
+  if (id > 0) {
+    await sql`
+      update gp_payments
+      set project_code = ${text(payload.projectCode)},
+          payment_date = ${dateOnly(payload.date) || null},
+          amount = ${money(payload.amount)},
+          note = ${text(payload.note)}
+      where id = ${id}
+    `;
+    return;
+  }
+
   await sql`
     insert into gp_payments (project_code, payment_date, amount, note)
     values (${text(payload.projectCode)}, ${dateOnly(payload.date) || null}, ${money(payload.amount)}, ${text(payload.note)})
   `;
+}
+
+export async function deletePayment(payload: Record<string, unknown>) {
+  const sql = getSql();
+  await sql`delete from gp_payments where id = ${number(payload.id)}`;
 }
 
 export async function manageCatalog(payload: Record<string, unknown>) {
@@ -708,10 +804,28 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   const name = text(payload.name).trim();
   if (!name) throw new Error("Thiếu tên danh mục.");
   const code = text(payload.code).trim() || `${catalogPrefixes[kind]}${Date.now().toString().slice(-6)}`;
+  const nextId = `${kind}:${code}`;
+  const originalId = text(payload.originalId || payload.id);
+
+  if (originalId) {
+    await sql`
+      update gp_catalog_items
+      set id = ${nextId},
+          kind = ${kind},
+          code = ${code},
+          name = ${name},
+          unit = ${text(payload.unit)},
+          contact = ${text(payload.contact)},
+          note = ${text(payload.note)},
+          updated_at = now()
+      where id = ${originalId}
+    `;
+    return;
+  }
 
   await sql`
     insert into gp_catalog_items (id, kind, code, name, unit, contact, note, updated_at)
-    values (${`${kind}:${code}`}, ${kind}, ${code}, ${name}, ${text(payload.unit)}, ${text(payload.contact)}, ${text(payload.note)}, now())
+    values (${nextId}, ${kind}, ${code}, ${name}, ${text(payload.unit)}, ${text(payload.contact)}, ${text(payload.note)}, now())
     on conflict (kind, lower(name)) do update set
       code = excluded.code,
       unit = excluded.unit,
@@ -719,6 +833,11 @@ export async function manageCatalog(payload: Record<string, unknown>) {
       note = excluded.note,
       updated_at = now()
   `;
+}
+
+export async function deleteCatalog(payload: Record<string, unknown>) {
+  const sql = getSql();
+  await sql`delete from gp_catalog_items where id = ${text(payload.id)}`;
 }
 
 export async function manageStaff(payload: Record<string, unknown>) {
@@ -749,8 +868,34 @@ export async function deleteStaff(payload: Record<string, unknown>) {
 export async function saveMaterial(payload: Record<string, unknown>) {
   const sql = getSql();
   const date = dateOnly(payload.date) || dateOnly(new Date());
-  const quantity = money(payload.quantity);
+  const quantity = decimal(payload.quantity);
   const price = money(payload.price);
+  const id = number(payload.id);
+  if (id > 0) {
+    await sql`
+      update gp_materials
+      set work_date = ${date},
+          week = ${text(payload.week) || weekFromDate(date)},
+          shift = ${text(payload.shift)},
+          project_code = ${text(payload.projectCode)},
+          category = ${text(payload.category)},
+          material_code = ${text(payload.materialCode)},
+          material_name = ${text(payload.materialName)},
+          quantity = ${quantity},
+          unit = ${text(payload.unit)},
+          price = ${price},
+          debt = ${text(payload.debt)},
+          status = ${text(payload.status)},
+          payment_status = ${text(payload.paymentStatus) || "Chưa TT"},
+          payment_info = ${text(payload.paymentInfo)},
+          material_type = ${text(payload.materialType) || "VT Chính"},
+          supplier = ${text(payload.supplier)},
+          updated_at = now()
+      where id = ${id}
+    `;
+    return;
+  }
+
   await sql`
     insert into gp_materials (
       work_date, week, shift, project_code, category, material_code, material_name, quantity, unit, price,
@@ -763,6 +908,11 @@ export async function saveMaterial(payload: Record<string, unknown>) {
       ${text(payload.materialType) || "VT Chính"}, ${text(payload.supplier)}
     )
   `;
+}
+
+export async function deleteMaterial(payload: Record<string, unknown>) {
+  const sql = getSql();
+  await sql`delete from gp_materials where id = ${number(payload.id)}`;
 }
 
 export async function updateMaterialPrice(payload: Record<string, unknown>) {
@@ -801,16 +951,42 @@ export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
   const [lock] = (await sql`select status from gp_attendance_locks where lock_key = ${lockKey}`) as Row[];
   if (text(lock?.status) === "CLOSED") throw new Error("Tuần/hạng mục đã kết sổ, không thể sửa chấm công.");
 
-  await sql`delete from gp_attendance where project_code = ${projectCode} and week = ${week} and category = ${category}`;
+  if (Array.isArray(payload.rows)) {
+    await sql`delete from gp_attendance where project_code = ${projectCode} and week = ${week} and category = ${category}`;
+  }
 
   for (const row of rows) {
     const date = dateOnly(row.date) || dateOnly(new Date());
     const halfDaySalary = money(row.halfDaySalary);
-    const coefficient = money(row.coefficient || 1);
+    const coefficient = decimal(row.coefficient || 1);
     const allowance = money(row.allowance);
-    const overtimeHours = money(row.overtimeHours);
+    const overtimeHours = decimal(row.overtimeHours);
     const overtimeAmount = money(row.overtimeAmount);
     const total = money(row.total) || halfDaySalary * coefficient + allowance + overtimeAmount;
+    const id = number(row.id);
+    if (id > 0) {
+      await sql`
+        update gp_attendance
+        set work_date = ${date},
+            week = ${week},
+            shift = ${text(row.shift)},
+            project_code = ${projectCode},
+            category = ${category},
+            staff_name = ${text(row.staffName)},
+            position = ${text(row.position)},
+            half_day_salary = ${halfDaySalary},
+            allowance = ${allowance},
+            overtime_hours = ${overtimeHours},
+            overtime_amount = ${overtimeAmount},
+            total = ${total},
+            status = ${text(row.status)},
+            coefficient = ${coefficient},
+            updated_at = now()
+        where id = ${id}
+      `;
+      continue;
+    }
+
     await sql`
       insert into gp_attendance (
         work_date, week, shift, project_code, category, staff_name, position, half_day_salary,
@@ -822,6 +998,18 @@ export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
       )
     `;
   }
+}
+
+export async function deleteAttendanceRow(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const id = number(payload.id);
+  if (!id) throw new Error("Thiếu dòng chấm công để xóa.");
+  const [row] = (await sql`select project_code, week, category from gp_attendance where id = ${id}`) as Row[];
+  if (!row) return;
+  const lockKey = attendanceLockKey(text(row.project_code), text(row.week), text(row.category));
+  const [lock] = (await sql`select status from gp_attendance_locks where lock_key = ${lockKey}`) as Row[];
+  if (text(lock?.status) === "CLOSED") throw new Error("Tuần/hạng mục đã kết sổ, không thể xóa chấm công.");
+  await sql`delete from gp_attendance where id = ${id}`;
 }
 
 function attendanceLockKey(projectCode: string, week: string, category: string) {
@@ -859,20 +1047,79 @@ export async function saveSubcontractor(payload: Record<string, unknown>) {
   const date = dateOnly(payload.date) || dateOnly(new Date());
   const projectCode = text(payload.projectCode);
   const contractorName = text(payload.contractorName);
-  const previous = (await sql`
-    select coalesce(sum(advance), 0)::numeric as total
-    from gp_subcontractors
-    where project_code = ${projectCode} and lower(contractor_name) = lower(${contractorName})
-  `) as Row[];
   const advance = money(payload.advance);
+  const id = number(payload.id);
+  if (id > 0) {
+    await sql`
+      update gp_subcontractors
+      set work_date = ${date},
+          week = ${text(payload.week) || weekFromDate(date)},
+          project_code = ${projectCode},
+          category = ${text(payload.category)},
+          contractor_name = ${contractorName},
+          note = ${text(payload.note)},
+          advance = ${advance},
+          file_url = ${text(payload.fileUrl)},
+          file_id = ${text(payload.fileId)},
+          status = ${text(payload.status)},
+          updated_at = now()
+      where id = ${id}
+    `;
+    await recomputeSubcontractorCumulative(projectCode, contractorName);
+    return;
+  }
+
   await sql`
     insert into gp_subcontractors (work_date, week, project_code, category, contractor_name, note, advance, file_url, file_id, cumulative, status)
-    values (${date}, ${text(payload.week) || weekFromDate(date)}, ${projectCode}, ${text(payload.category)}, ${contractorName}, ${text(payload.note)}, ${advance}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, ${number(previous[0]?.total) + advance}, ${text(payload.status)})
+    values (${date}, ${text(payload.week) || weekFromDate(date)}, ${projectCode}, ${text(payload.category)}, ${contractorName}, ${text(payload.note)}, ${advance}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, 0, ${text(payload.status)})
   `;
+  await recomputeSubcontractorCumulative(projectCode, contractorName);
+}
+
+async function recomputeSubcontractorCumulative(projectCode: string, contractorName: string) {
+  const sql = getSql();
+  const rows = (await sql`
+    select id, advance
+    from gp_subcontractors
+    where project_code = ${projectCode} and lower(contractor_name) = lower(${contractorName})
+    order by work_date asc nulls last, id asc
+  `) as Row[];
+
+  let cumulative = 0;
+  for (const row of rows) {
+    cumulative += number(row.advance);
+    await sql`update gp_subcontractors set cumulative = ${cumulative}, updated_at = now() where id = ${number(row.id)}`;
+  }
+}
+
+export async function deleteSubcontractor(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const id = number(payload.id);
+  const [row] = (await sql`select project_code, contractor_name from gp_subcontractors where id = ${id}`) as Row[];
+  if (!row) return;
+  await sql`delete from gp_subcontractors where id = ${id}`;
+  await recomputeSubcontractorCumulative(text(row.project_code), text(row.contractor_name));
 }
 
 export async function saveSubcontractorContract(payload: Record<string, unknown>) {
   const sql = getSql();
+  const id = number(payload.id);
+  if (id > 0) {
+    await sql`
+      update gp_subcontractor_contracts
+      set project_code = ${text(payload.projectCode)},
+          contractor_name = ${text(payload.contractorName)},
+          approved_cost = ${money(payload.approvedCost)},
+          note = ${text(payload.note)},
+          file_url = ${text(payload.fileUrl)},
+          file_id = ${text(payload.fileId)},
+          status = ${text(payload.status) || "Chờ duyệt"},
+          updated_at = now()
+      where id = ${id}
+    `;
+    return;
+  }
+
   await sql`
     insert into gp_subcontractor_contracts (project_code, contractor_name, approved_cost, note, file_url, file_id, status, updated_at)
     values (${text(payload.projectCode)}, ${text(payload.contractorName)}, ${money(payload.approvedCost)}, ${text(payload.note)}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, ${text(payload.status) || "Chờ duyệt"}, now())
@@ -884,6 +1131,11 @@ export async function saveSubcontractorContract(payload: Record<string, unknown>
       status = excluded.status,
       updated_at = now()
   `;
+}
+
+export async function deleteSubcontractorContract(payload: Record<string, unknown>) {
+  const sql = getSql();
+  await sql`delete from gp_subcontractor_contracts where id = ${number(payload.id)}`;
 }
 
 export async function approveSubcontractorContract(payload: Record<string, unknown>) {
@@ -898,17 +1150,56 @@ export async function approveSubcontractorContract(payload: Record<string, unkno
 export async function saveOperation(payload: Record<string, unknown>) {
   const sql = getSql();
   const date = dateOnly(payload.date) || dateOnly(new Date());
+  const id = number(payload.id);
+  if (id > 0) {
+    await sql`
+      update gp_operations
+      set work_date = ${date},
+          week = ${text(payload.week) || weekFromDate(date)},
+          project_code = ${text(payload.projectCode)},
+          description = ${text(payload.description)},
+          amount = ${money(payload.amount)},
+          file_url = ${text(payload.fileUrl)},
+          file_id = ${text(payload.fileId)}
+      where id = ${id}
+    `;
+    return;
+  }
+
   await sql`
     insert into gp_operations (work_date, week, project_code, description, amount, file_url, file_id)
     values (${date}, ${text(payload.week) || weekFromDate(date)}, ${text(payload.projectCode)}, ${text(payload.description)}, ${money(payload.amount)}, ${text(payload.fileUrl)}, ${text(payload.fileId)})
   `;
 }
 
+export async function deleteOperation(payload: Record<string, unknown>) {
+  const sql = getSql();
+  await sql`delete from gp_operations where id = ${number(payload.id)}`;
+}
+
 export async function saveMaterialNorm(payload: Record<string, unknown>) {
   const sql = getSql();
+  const id = number(payload.id);
+  if (id > 0) {
+    await sql`
+      update gp_material_norms
+      set project_code = ${text(payload.projectCode)},
+          category = ${text(payload.category)},
+          material_name = ${text(payload.materialName)},
+          unit = ${text(payload.unit)},
+          daily_norm = ${decimal(payload.dailyNorm)},
+          weekly_norm = ${decimal(payload.weeklyNorm)},
+          warning_percent = ${decimal(payload.warningPercent)},
+          material_type = ${text(payload.materialType) || "VT Chính"},
+          updated_at = now()
+      where id = ${id}
+    `;
+    return;
+  }
+
   await sql`
     insert into gp_material_norms (project_code, category, material_name, unit, daily_norm, weekly_norm, warning_percent, material_type, updated_at)
-    values (${text(payload.projectCode)}, ${text(payload.category)}, ${text(payload.materialName)}, ${text(payload.unit)}, ${money(payload.dailyNorm)}, ${money(payload.weeklyNorm)}, ${money(payload.warningPercent)}, ${text(payload.materialType) || "VT Chính"}, now())
+    values (${text(payload.projectCode)}, ${text(payload.category)}, ${text(payload.materialName)}, ${text(payload.unit)}, ${decimal(payload.dailyNorm)}, ${decimal(payload.weeklyNorm)}, ${decimal(payload.warningPercent)}, ${text(payload.materialType) || "VT Chính"}, now())
     on conflict (project_code, category, lower(material_name), material_type) do update set
       unit = excluded.unit,
       daily_norm = excluded.daily_norm,
@@ -918,11 +1209,30 @@ export async function saveMaterialNorm(payload: Record<string, unknown>) {
   `;
 }
 
+export async function deleteMaterialNorm(payload: Record<string, unknown>) {
+  const sql = getSql();
+  await sql`delete from gp_material_norms where id = ${number(payload.id)}`;
+}
+
 export async function saveLaborNorm(payload: Record<string, unknown>) {
   const sql = getSql();
+  const id = number(payload.id);
+  if (id > 0) {
+    await sql`
+      update gp_labor_norms
+      set project_code = ${text(payload.projectCode)},
+          category = ${text(payload.category)},
+          workdays = ${decimal(payload.workdays)},
+          cost = ${money(payload.cost)},
+          updated_at = now()
+      where id = ${id}
+    `;
+    return;
+  }
+
   await sql`
     insert into gp_labor_norms (project_code, category, workdays, cost, updated_at)
-    values (${text(payload.projectCode)}, ${text(payload.category)}, ${money(payload.workdays)}, ${money(payload.cost)}, now())
+    values (${text(payload.projectCode)}, ${text(payload.category)}, ${decimal(payload.workdays)}, ${money(payload.cost)}, now())
     on conflict (project_code, category) do update set
       workdays = excluded.workdays,
       cost = excluded.cost,
@@ -930,11 +1240,34 @@ export async function saveLaborNorm(payload: Record<string, unknown>) {
   `;
 }
 
+export async function deleteLaborNorm(payload: Record<string, unknown>) {
+  const sql = getSql();
+  await sql`delete from gp_labor_norms where id = ${number(payload.id)}`;
+}
+
 export async function saveProgress(payload: Record<string, unknown>) {
   const sql = getSql();
+  const id = number(payload.id);
+  if (id > 0) {
+    await sql`
+      update gp_progress
+      set project_code = ${text(payload.projectCode)},
+          category = ${text(payload.category)},
+          start_date = ${dateOnly(payload.startDate) || null},
+          duration_days = ${Math.round(number(payload.durationDays))},
+          workdays = ${decimal(payload.workdays)},
+          plan_end_date = ${dateOnly(payload.planEndDate) || null},
+          confirmed_end_date = ${dateOnly(payload.confirmedEndDate) || null},
+          evaluation = ${text(payload.evaluation)},
+          updated_at = now()
+      where id = ${id}
+    `;
+    return;
+  }
+
   await sql`
     insert into gp_progress (project_code, category, start_date, duration_days, workdays, plan_end_date, confirmed_end_date, evaluation, updated_at)
-    values (${text(payload.projectCode)}, ${text(payload.category)}, ${dateOnly(payload.startDate) || null}, ${Math.round(number(payload.durationDays))}, ${money(payload.workdays)}, ${dateOnly(payload.planEndDate) || null}, ${dateOnly(payload.confirmedEndDate) || null}, ${text(payload.evaluation)}, now())
+    values (${text(payload.projectCode)}, ${text(payload.category)}, ${dateOnly(payload.startDate) || null}, ${Math.round(number(payload.durationDays))}, ${decimal(payload.workdays)}, ${dateOnly(payload.planEndDate) || null}, ${dateOnly(payload.confirmedEndDate) || null}, ${text(payload.evaluation)}, now())
     on conflict (project_code, category) do update set
       start_date = excluded.start_date,
       duration_days = excluded.duration_days,
@@ -946,12 +1279,39 @@ export async function saveProgress(payload: Record<string, unknown>) {
   `;
 }
 
+export async function deleteProgress(payload: Record<string, unknown>) {
+  const sql = getSql();
+  await sql`delete from gp_progress where id = ${number(payload.id)}`;
+}
+
 export async function saveDocument(payload: Record<string, unknown>) {
   const sql = getSql();
+  const id = number(payload.id);
+  if (id > 0) {
+    await sql`
+      update gp_documents
+      set project_code = ${text(payload.projectCode)},
+          doc_type = ${text(payload.docType)},
+          file_name = ${text(payload.fileName)},
+          mime_type = ${text(payload.mimeType)},
+          file_id = ${text(payload.fileId)},
+          file_url = ${text(payload.fileUrl)},
+          note = ${text(payload.note)},
+          preview_text = ${text(payload.previewText)}
+      where id = ${id}
+    `;
+    return;
+  }
+
   await sql`
     insert into gp_documents (project_code, doc_type, file_name, mime_type, file_id, file_url, note, preview_text)
     values (${text(payload.projectCode)}, ${text(payload.docType)}, ${text(payload.fileName)}, ${text(payload.mimeType)}, ${text(payload.fileId)}, ${text(payload.fileUrl)}, ${text(payload.note)}, ${text(payload.previewText)})
   `;
+}
+
+export async function deleteDocument(payload: Record<string, unknown>) {
+  const sql = getSql();
+  await sql`delete from gp_documents where id = ${number(payload.id)}`;
 }
 
 export async function queryDocuments(payload: Record<string, unknown>) {

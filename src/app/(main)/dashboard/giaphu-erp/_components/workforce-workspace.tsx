@@ -9,16 +9,17 @@ import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { currentIsoWeek, todayIso } from "../_lib/date-utils";
 import { catalogOptions, shiftOptions, staffOptions, uniqueOptions } from "../_lib/form-options";
-import { formatMoney } from "../_lib/formatters";
+import { formatCount, formatMoney } from "../_lib/formatters";
 import { ActionDialog } from "./action-dialog";
 import { DataTable } from "./data-table";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
+import { TableRowActions } from "./table-row-actions";
 
 type WorkforceSection = "attendance" | "staff" | "laborNorms" | "progress";
 
 export function WorkforceWorkspace({ section = "attendance" }: { section?: WorkforceSection }) {
-  const { data, activeProjectCode, runAction, scoped } = useGiaPhuErp();
+  const { data, activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
   const { has, orgRole } = useAuth();
   const categoryOptions = catalogOptions(data.catalogs.hangMuc);
   const workerOptions = staffOptions(data.staff);
@@ -155,6 +156,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
       content: (
         <SectionBlock title="Lịch sử chấm công">
             <DataTable
+              loading={isSwitchingProject}
               columns={[
                 { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
                 { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
@@ -171,10 +173,60 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                     </div>
                   ),
                 },
-                { key: "coefficient", label: "Hệ số", accessor: (row) => row.coefficient, render: (row) => formatMoney(row.coefficient) },
+                { key: "coefficient", label: "Hệ số", accessor: (row) => row.coefficient, render: (row) => formatCount(row.coefficient) },
                 { key: "allowance", label: "Phụ cấp", accessor: (row) => row.allowance, render: (row) => formatMoney(row.allowance) },
                 { key: "overtimeAmount", label: "OT", accessor: (row) => row.overtimeAmount, render: (row) => formatMoney(row.overtimeAmount) },
                 { key: "total", label: "Thành tiền", accessor: (row) => row.total, render: (row) => formatMoney(row.total) },
+                ...(canManage
+                  ? [
+                      {
+                        key: "actions",
+                        label: "Thao tác",
+                        hideable: false,
+                        searchable: false,
+                        sortable: false,
+                        render: (row: (typeof scoped.attendance)[number]) => (
+                          <div className="flex justify-end">
+                            <TableRowActions
+                              edit={{
+                                title: "Sửa chấm công",
+                                action: "saveWeeklyAttendance",
+                                onAction: runAction,
+                                fields: [
+                                  { name: "id", label: "ID", type: "hidden", value: row.id },
+                                  { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+                                  { name: "date", label: "Ngày", type: "date", value: row.date || todayIso() },
+                                  { name: "week", label: "Tuần", value: row.week, required: true },
+                                  { name: "shift", label: "Ca", type: "select", options: shiftOptions, value: row.shift },
+                                  { name: "category", label: "Hạng mục", type: "select", options: categoryOptions, value: row.category, required: true },
+                                  { name: "staffName", label: "Nhân sự", type: "select", options: workerOptions, value: row.staffName },
+                                  { name: "position", label: "Chức vụ", value: row.position },
+                                  { name: "halfDaySalary", label: "Lương 1/2 ngày", type: "number", value: row.halfDaySalary },
+                                  { name: "allowance", label: "Phụ cấp", type: "number", value: row.allowance },
+                                  { name: "overtimeHours", label: "OT giờ", type: "number", value: row.overtimeHours },
+                                  { name: "overtimeAmount", label: "OT tiền", type: "number", value: row.overtimeAmount },
+                                  { name: "coefficient", label: "Hệ số", type: "number", value: row.coefficient },
+                                  { name: "status", label: "Trạng thái", value: row.status },
+                                ],
+                              }}
+                              actions={[
+                                {
+                                  label: "Xóa",
+                                  icon: Trash2,
+                                  destructive: true,
+                                  onSelect: () => {
+                                    if (window.confirm(`Xóa chấm công của "${row.staffName}"?`)) {
+                                      void runAction("deleteAttendanceRow", { id: row.id });
+                                    }
+                                  },
+                                },
+                              ]}
+                            />
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
               ]}
               rows={scoped.attendance}
               getRowId={(row) => row.id}
@@ -198,6 +250,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
       content: (
         <SectionBlock title="Danh sách nhân sự">
             <DataTable
+              loading={isSwitchingProject}
               columns={[
                 { key: "id", label: "Mã", accessor: (row) => row.id, render: (row) => row.id },
                 { key: "name", label: "Họ tên", accessor: (row) => row.name, render: (row) => row.name },
@@ -208,14 +261,41 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                   ? [
                       {
                         key: "actions",
-                        label: "",
+                        label: "Thao tác",
                         hideable: false,
                         searchable: false,
                         sortable: false,
                         render: (row: (typeof data.staff)[number]) => (
-                          <Button size="icon-sm" variant="ghost" onClick={() => runAction("deleteStaff", { id: row.id })}>
-                            <Trash2 />
-                          </Button>
+                          <div className="flex justify-end">
+                            <TableRowActions
+                              edit={{
+                                title: "Sửa nhân sự",
+                                action: "manageStaff",
+                                onAction: runAction,
+                                fields: [
+                                  { name: "id", label: "Mã NS", value: row.id, readOnly: true },
+                                  { name: "name", label: "Họ tên", required: true, value: row.name },
+                                  { name: "team", label: "Đội", value: row.team },
+                                  { name: "position", label: "Chức vụ", value: row.position },
+                                  { name: "salaryDay", label: "Lương/ngày", type: "number", value: row.salaryDay },
+                                  { name: "offDate", label: "Thời gian nghỉ", type: "date", value: row.offDate },
+                                  { name: "resigned", label: "Đã nghỉ việc", type: "checkbox", value: row.resigned },
+                                ],
+                              }}
+                              actions={[
+                                {
+                                  label: "Xóa",
+                                  icon: Trash2,
+                                  destructive: true,
+                                  onSelect: () => {
+                                    if (window.confirm(`Xóa nhân sự "${row.name}"?`)) {
+                                      void runAction("deleteStaff", { id: row.id });
+                                    }
+                                  },
+                                },
+                              ]}
+                            />
+                          </div>
                         ),
                       },
                     ]
@@ -240,10 +320,52 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
       content: (
         <SectionBlock title="Định mức nhân công">
             <DataTable
+              loading={isSwitchingProject}
               columns={[
                 { key: "category", label: "Hạng mục", accessor: (row) => row.category, render: (row) => row.category },
-                { key: "workdays", label: "Số công ĐM", accessor: (row) => row.workdays, render: (row) => formatMoney(row.workdays) },
+                { key: "workdays", label: "Số công ĐM", accessor: (row) => row.workdays, render: (row) => formatCount(row.workdays) },
                 { key: "cost", label: "Chi phí ĐM", accessor: (row) => row.cost, render: (row) => formatMoney(row.cost) },
+                ...(canManage
+                  ? [
+                      {
+                        key: "actions",
+                        label: "Thao tác",
+                        hideable: false,
+                        searchable: false,
+                        sortable: false,
+                        render: (row: (typeof scoped.laborNorms)[number]) => (
+                          <div className="flex justify-end">
+                            <TableRowActions
+                              edit={{
+                                title: "Sửa định mức nhân công",
+                                action: "saveLaborNorm",
+                                onAction: runAction,
+                                fields: [
+                                  { name: "id", label: "ID", type: "hidden", value: row.id },
+                                  { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+                                  { name: "category", label: "Hạng mục", type: "select", options: categoryOptions, value: row.category },
+                                  { name: "workdays", label: "Số công định mức", type: "number", value: row.workdays },
+                                  { name: "cost", label: "Chi phí định mức", type: "number", value: row.cost },
+                                ],
+                              }}
+                              actions={[
+                                {
+                                  label: "Xóa",
+                                  icon: Trash2,
+                                  destructive: true,
+                                  onSelect: () => {
+                                    if (window.confirm(`Xóa định mức nhân công của "${row.category}"?`)) {
+                                      void runAction("deleteLaborNorm", { id: row.id });
+                                    }
+                                  },
+                                },
+                              ]}
+                            />
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
               ]}
               rows={scoped.laborNorms}
               getRowId={(row) => row.id}
@@ -262,12 +384,58 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
       content: (
         <SectionBlock title="Tiến độ">
             <DataTable
+              loading={isSwitchingProject}
               columns={[
                 { key: "category", label: "Hạng mục", accessor: (row) => row.category, render: (row) => row.category },
                 { key: "startDate", label: "Bắt đầu", accessor: (row) => row.startDate, render: (row) => row.startDate || "-" },
                 { key: "planEndDate", label: "Dự kiến", accessor: (row) => row.planEndDate, render: (row) => row.planEndDate || "-" },
                 { key: "confirmedEndDate", label: "Xác nhận", accessor: (row) => row.confirmedEndDate, render: (row) => row.confirmedEndDate || "-" },
                 { key: "evaluation", label: "Đánh giá", accessor: (row) => row.evaluation, render: (row) => row.evaluation || "-" },
+                ...(canManage
+                  ? [
+                      {
+                        key: "actions",
+                        label: "Thao tác",
+                        hideable: false,
+                        searchable: false,
+                        sortable: false,
+                        render: (row: (typeof scoped.progress)[number]) => (
+                          <div className="flex justify-end">
+                            <TableRowActions
+                              edit={{
+                                title: "Sửa tiến độ",
+                                action: "saveProgress",
+                                onAction: runAction,
+                                fields: [
+                                  { name: "id", label: "ID", type: "hidden", value: row.id },
+                                  { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+                                  { name: "category", label: "Hạng mục", type: "select", options: categoryOptions, value: row.category },
+                                  { name: "startDate", label: "Ngày bắt đầu", type: "date", value: row.startDate || todayIso() },
+                                  { name: "durationDays", label: "Số ngày", type: "number", value: row.durationDays },
+                                  { name: "workdays", label: "Số công", type: "number", value: row.workdays },
+                                  { name: "planEndDate", label: "Ngày HT dự kiến", type: "date", value: row.planEndDate },
+                                  { name: "confirmedEndDate", label: "Ngày HT xác nhận", type: "date", value: row.confirmedEndDate },
+                                  { name: "evaluation", label: "Đánh giá", value: row.evaluation },
+                                ],
+                              }}
+                              actions={[
+                                {
+                                  label: "Xóa",
+                                  icon: Trash2,
+                                  destructive: true,
+                                  onSelect: () => {
+                                    if (window.confirm(`Xóa tiến độ của "${row.category}"?`)) {
+                                      void runAction("deleteProgress", { id: row.id });
+                                    }
+                                  },
+                                },
+                              ]}
+                            />
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
               ]}
               rows={scoped.progress}
               getRowId={(row) => row.id}

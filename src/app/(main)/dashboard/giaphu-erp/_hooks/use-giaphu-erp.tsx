@@ -34,6 +34,7 @@ interface GiaPhuErpContextValue {
   data: GiaPhuDashboardData;
   activeProjectCode: string;
   activeProject?: ProjectRow;
+  isSwitchingProject: boolean;
   summary: CostSummary;
   setActiveProjectCode: (code: string) => void;
   refresh: () => Promise<void>;
@@ -76,11 +77,31 @@ export function GiaPhuErpProvider({
   const router = useRouter();
   const [data, setData] = React.useState(initialData);
   const [activeProjectCode, setActiveProjectCode] = React.useState(initialData.projects[0]?.code ?? "");
+  const [isSwitchingProject, setIsSwitchingProject] = React.useState(false);
+  const loadProjectData = React.useCallback(async (nextCode: string) => {
+    setIsSwitchingProject(true);
+    setActiveProjectCode(nextCode);
 
-  const setActiveProject = React.useCallback((code: string) => {
-    setActiveProjectCode(code);
-    writeActiveProjectCode(code);
+    try {
+      const nextData = await fetchGiaPhuData();
+      setData(nextData);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSwitchingProject(false);
+    }
   }, []);
+
+  const setActiveProject = React.useCallback(
+    (code: string) => {
+      if (!code || code === activeProjectCode) {
+        return;
+      }
+
+      writeActiveProjectCode(code);
+    },
+    [activeProjectCode],
+  );
 
   React.useEffect(() => {
     const storedProjectCode = readActiveProjectCode();
@@ -89,9 +110,10 @@ export function GiaPhuErpProvider({
     if (storedProjectCode && initialData.projects.some((project) => project.code === storedProjectCode)) {
       setActiveProjectCode(storedProjectCode);
     } else if (fallbackProjectCode) {
-      setActiveProject(fallbackProjectCode);
+      writeActiveProjectCode(fallbackProjectCode);
+      setActiveProjectCode(fallbackProjectCode);
     }
-  }, [initialData.projects, setActiveProject]);
+  }, [initialData.projects]);
 
   React.useEffect(() => {
     if (!data.projects.length && pathname !== "/create-project") {
@@ -109,14 +131,14 @@ export function GiaPhuErpProvider({
     function handleProjectChange(event: Event) {
       const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
 
-      if (nextCode) {
-        setActiveProjectCode(nextCode);
+      if (nextCode && nextCode !== activeProjectCode) {
+        void loadProjectData(nextCode);
       }
     }
 
     function handleStorage(event: StorageEvent) {
-      if (event.key === ACTIVE_PROJECT_STORAGE_KEY && event.newValue) {
-        setActiveProjectCode(event.newValue);
+      if (event.key === ACTIVE_PROJECT_STORAGE_KEY && event.newValue && event.newValue !== activeProjectCode) {
+        void loadProjectData(event.newValue);
       }
     }
 
@@ -127,7 +149,7 @@ export function GiaPhuErpProvider({
       window.removeEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
       window.removeEventListener("storage", handleStorage);
     };
-  }, []);
+  }, [activeProjectCode, loadProjectData]);
 
   const activeProject = data.projects.find((project) => project.code === activeProjectCode) ?? data.projects[0];
   const normalizedProjectCode = activeProject?.code ?? "";
@@ -194,6 +216,7 @@ export function GiaPhuErpProvider({
       data,
       activeProjectCode: normalizedProjectCode,
       activeProject,
+      isSwitchingProject,
       summary: data.summaries[normalizedProjectCode] ?? emptySummary,
       setActiveProjectCode: setActiveProject,
       refresh,
@@ -201,7 +224,7 @@ export function GiaPhuErpProvider({
       searchDocuments,
       scoped,
     }),
-    [activeProject, data, normalizedProjectCode, refresh, runAction, scoped, searchDocuments, setActiveProject],
+    [activeProject, data, isSwitchingProject, normalizedProjectCode, refresh, runAction, scoped, searchDocuments, setActiveProject],
   );
 
   return <GiaPhuErpContext.Provider value={value}>{children}</GiaPhuErpContext.Provider>;

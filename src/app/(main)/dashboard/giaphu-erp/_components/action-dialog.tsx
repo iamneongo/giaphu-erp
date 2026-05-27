@@ -31,6 +31,8 @@ export interface FormFieldDefinition {
   placeholder?: string;
   options?: Array<{ label: string; value: string }>;
   required?: boolean;
+  disabled?: boolean;
+  readOnly?: boolean;
 }
 
 export type FormPayload = Record<string, unknown>;
@@ -59,6 +61,10 @@ export function ActionDialog({
   fields,
   onAction,
   initialOpen = false,
+  trigger,
+  open,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   title: string;
   description?: string;
@@ -68,15 +74,31 @@ export function ActionDialog({
   fields: FormFieldDefinition[];
   onAction: (action: string, payload: FormPayload) => Promise<void>;
   initialOpen?: boolean;
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
-  const [open, setOpen] = React.useState(initialOpen);
+  const [internalOpen, setInternalOpen] = React.useState(initialOpen);
   const [pending, startTransition] = React.useTransition();
 
+  const resolvedOpen = open ?? internalOpen;
+
+  const setResolvedOpen = React.useCallback(
+    (nextOpen: boolean) => {
+      if (open === undefined) {
+        setInternalOpen(nextOpen);
+      }
+      onOpenChange?.(nextOpen);
+    },
+    [onOpenChange, open],
+  );
+
   React.useEffect(() => {
-    if (initialOpen) {
-      setOpen(true);
+    if (initialOpen && open === undefined) {
+      setInternalOpen(true);
     }
-  }, [initialOpen]);
+  }, [initialOpen, open]);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -84,18 +106,22 @@ export function ActionDialog({
 
     startTransition(async () => {
       await onAction(action, payload);
-      setOpen(false);
+      setResolvedOpen(false);
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Icon />
-          {button}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={resolvedOpen} onOpenChange={setResolvedOpen}>
+      {hideTrigger ? null : (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button size="sm">
+              <Icon />
+              {button}
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -111,7 +137,7 @@ export function ActionDialog({
               if (field.type === "checkbox") {
                 return (
                   <Field key={field.name} orientation="horizontal" className="rounded-lg border p-3">
-                    <Checkbox name={field.name} defaultChecked={Boolean(field.value)} />
+                    <Checkbox name={field.name} defaultChecked={Boolean(field.value)} disabled={field.disabled} />
                     <FieldLabel>{field.label}</FieldLabel>
                   </Field>
                 );
@@ -127,6 +153,8 @@ export function ActionDialog({
                       defaultValue={String(field.value ?? "")}
                       placeholder={field.placeholder}
                       required={field.required}
+                      disabled={field.disabled}
+                      readOnly={field.readOnly}
                     />
                   ) : field.type === "date" ? (
                     <DatePickerField
@@ -140,6 +168,7 @@ export function ActionDialog({
                       name={field.name}
                       defaultValue={String(field.value ?? "")}
                       required={field.required}
+                      disabled={field.disabled}
                     >
                       <SelectTrigger id={field.name} className="w-full">
                         <SelectValue placeholder={field.placeholder ?? `Chọn ${field.label.toLowerCase()}`} />
@@ -160,6 +189,8 @@ export function ActionDialog({
                       defaultValue={String(field.value ?? "")}
                       placeholder={field.placeholder}
                       required={field.required}
+                      disabled={field.disabled}
+                      readOnly={field.readOnly}
                     />
                   )}
                 </Field>

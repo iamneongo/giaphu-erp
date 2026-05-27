@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { Banknote, BriefcaseBusiness, FileText, Plus } from "lucide-react";
+import { Banknote, BriefcaseBusiness, FileText, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,13 @@ import { ActionDialog } from "./action-dialog";
 import { DataTable } from "./data-table";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
+import { TableRowActions } from "./table-row-actions";
 
 type CrmSection = "projects" | "contracts" | "payments";
 
 export function CrmWorkspace({ section = "projects" }: { section?: CrmSection }) {
-  const { data, activeProject, activeProjectCode, setActiveProjectCode, runAction, scoped } = useGiaPhuErp();
+  const { data, activeProject, activeProjectCode, isSwitchingProject, setActiveProjectCode, runAction, scoped } =
+    useGiaPhuErp();
   const { has, orgRole } = useAuth();
   const projectStatusOptions = uniqueOptions(data.projects.map((project) => project.status));
   const projectOwnerOptions = uniqueOptions(data.projects.map((project) => project.owner));
@@ -80,6 +82,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
       content: (
         <SectionBlock title="Danh sách công trình">
             <DataTable
+              loading={isSwitchingProject}
               columns={[
                 {
                   key: "code",
@@ -101,6 +104,50 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                   accessor: (project) => project.status,
                   render: (project) => <Badge variant="outline">{project.status || "-"}</Badge>,
                 },
+                ...(canManage
+                  ? [
+                      {
+                        key: "actions",
+                        label: "Thao tác",
+                        hideable: false,
+                        searchable: false,
+                        sortable: false,
+                        render: (project: (typeof data.projects)[number]) => (
+                          <div className="flex justify-end">
+                            <TableRowActions
+                              edit={{
+                                title: "Sửa công trình",
+                                action: "saveProject",
+                                onAction: runAction,
+                                fields: [
+                                  { name: "code", label: "Mã công trình", value: project.code, required: true, readOnly: true },
+                                  { name: "name", label: "Tên công trình", value: project.name, required: true },
+                                  { name: "owner", label: "Chủ đầu tư", value: project.owner },
+                                  { name: "contact", label: "Liên hệ", value: project.contact },
+                                  { name: "referrer", label: "Người giới thiệu", value: project.referrer },
+                                  { name: "startDate", label: "Ngày bắt đầu", type: "date", value: project.startDate || todayIso() },
+                                  { name: "status", label: "Trạng thái", value: project.status || "Đang thi công" },
+                                  { name: "failureReason", label: "Lý do thất bại", type: "textarea", value: project.failureReason },
+                                ],
+                              }}
+                              actions={[
+                                {
+                                  label: "Xóa",
+                                  icon: Trash2,
+                                  destructive: true,
+                                  onSelect: () => {
+                                    if (window.confirm(`Xóa công trình "${project.name}"? Toàn bộ dữ liệu liên quan sẽ bị xóa.`)) {
+                                      void runAction("deleteProject", { code: project.code });
+                                    }
+                                  },
+                                },
+                              ]}
+                            />
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
               ]}
               rows={data.projects}
               getRowId={(project) => project.code}
@@ -138,6 +185,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
       content: (
         <SectionBlock title="Hợp đồng">
             <DataTable
+              loading={isSwitchingProject}
               columns={[
                 { key: "contractNo", label: "Số HĐ", accessor: (row) => row.contractNo, render: (row) => row.contractNo || "-" },
                 { key: "signedDate", label: "Ngày ký", accessor: (row) => row.signedDate, render: (row) => row.signedDate || "-" },
@@ -149,6 +197,48 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                   render: (row) => formatMoney(row.value),
                 },
                 { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" },
+                ...(canManage
+                  ? [
+                      {
+                        key: "actions",
+                        label: "Thao tác",
+                        hideable: false,
+                        searchable: false,
+                        sortable: false,
+                        render: (row: (typeof scoped.contracts)[number]) => (
+                          <div className="flex justify-end">
+                            <TableRowActions
+                              edit={{
+                                title: "Sửa hợp đồng",
+                                action: "saveContract",
+                                onAction: runAction,
+                                fields: [
+                                  { name: "id", label: "ID", type: "hidden", value: row.id },
+                                  { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+                                  { name: "contractNo", label: "Số hợp đồng", required: true, value: row.contractNo },
+                                  { name: "value", label: "Giá trị", type: "number", value: row.value },
+                                  { name: "signedDate", label: "Ngày ký", type: "date", value: row.signedDate || todayIso() },
+                                  { name: "note", label: "Ghi chú", type: "textarea", value: row.note },
+                                ],
+                              }}
+                              actions={[
+                                {
+                                  label: "Xóa",
+                                  icon: Trash2,
+                                  destructive: true,
+                                  onSelect: () => {
+                                    if (window.confirm(`Xóa hợp đồng "${row.contractNo || row.id}"?`)) {
+                                      void runAction("deleteContract", { id: row.id });
+                                    }
+                                  },
+                                },
+                              ]}
+                            />
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
               ]}
               rows={scoped.contracts}
               getRowId={(row) => row.id}
@@ -181,6 +271,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
       content: (
         <SectionBlock title="Thu tiền">
             <DataTable
+              loading={isSwitchingProject}
               columns={[
                 { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
                 {
@@ -191,6 +282,47 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                   render: (row) => formatMoney(row.amount),
                 },
                 { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" },
+                ...(canManage
+                  ? [
+                      {
+                        key: "actions",
+                        label: "Thao tác",
+                        hideable: false,
+                        searchable: false,
+                        sortable: false,
+                        render: (row: (typeof scoped.payments)[number]) => (
+                          <div className="flex justify-end">
+                            <TableRowActions
+                              edit={{
+                                title: "Sửa thu tiền",
+                                action: "savePayment",
+                                onAction: runAction,
+                                fields: [
+                                  { name: "id", label: "ID", type: "hidden", value: row.id },
+                                  { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+                                  { name: "date", label: "Ngày thu", type: "date", value: row.date || todayIso() },
+                                  { name: "amount", label: "Số tiền", type: "number", value: row.amount },
+                                  { name: "note", label: "Ghi chú", type: "textarea", value: row.note },
+                                ],
+                              }}
+                              actions={[
+                                {
+                                  label: "Xóa",
+                                  icon: Trash2,
+                                  destructive: true,
+                                  onSelect: () => {
+                                    if (window.confirm("Xóa phiếu thu này?")) {
+                                      void runAction("deletePayment", { id: row.id });
+                                    }
+                                  },
+                                },
+                              ]}
+                            />
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
               ]}
               rows={scoped.payments}
               getRowId={(row) => row.id}

@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
@@ -87,6 +88,7 @@ export function DataTable<T>({
   rows,
   getRowId,
   empty = "Chưa có dữ liệu.",
+  loading = false,
   pageSize = 10,
   searchable = true,
   searchPlaceholder = "Tìm kiếm trong bảng...",
@@ -99,6 +101,7 @@ export function DataTable<T>({
   rows: T[];
   getRowId: (row: T) => string | number;
   empty?: string;
+  loading?: boolean;
   pageSize?: number;
   searchable?: boolean;
   searchPlaceholder?: string;
@@ -271,6 +274,7 @@ export function DataTable<T>({
   const pageCount = table.getPageCount();
   const visibleRows = table.getRowModel().rows;
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+  const skeletonColumnCount = (selectionColumn ? 1 : 0) + columns.length;
 
   function exportCsv() {
     const exportColumns = normalizedColumns.filter((column) => table.getColumn(column.key)?.getIsVisible() !== false);
@@ -360,7 +364,17 @@ export function DataTable<T>({
             ))}
           </TableHeader>
           <TableBody>
-            {visibleRows.length ? (
+            {loading ? (
+              Array.from({ length: Math.min(pageSize, 6) }, (_, rowIndex) => (
+                <TableRow key={`skeleton-${rowIndex}`}>
+                  {Array.from({ length: skeletonColumnCount }, (_, columnIndex) => (
+                    <TableCell key={`skeleton-${rowIndex}-${columnIndex}`}>
+                      <Skeleton className={cn("h-4", columnIndex === 0 ? "w-24" : "w-full max-w-28")} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : visibleRows.length ? (
               visibleRows.map((row) => (
                 <TableRow key={row.id} data-state={row.getIsSelected() ? "selected" : undefined}>
                   {row.getVisibleCells().map((cell) => (
@@ -372,7 +386,7 @@ export function DataTable<T>({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={(selectionColumn ? 1 : 0) + columns.length} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={skeletonColumnCount} className="h-24 text-center text-muted-foreground">
                   {empty}
                 </TableCell>
               </TableRow>
@@ -383,10 +397,9 @@ export function DataTable<T>({
 
       <div className="flex flex-col gap-4 p-1 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-muted-foreground text-sm">
-          {filteredRows.length.toLocaleString("vi-VN")} dòng
+          {loading ? "Đang tải dữ liệu..." : `${filteredRows.length.toLocaleString("vi-VN")} dòng`}
           {selectable ? ` • ${selectedCount.toLocaleString("vi-VN")} đã chọn` : ""}
-          {" • "}
-          Trang {pageCount ? table.getState().pagination.pageIndex + 1 : 0} / {pageCount || 1}
+          {loading ? "" : ` • Trang ${pageCount ? table.getState().pagination.pageIndex + 1 : 0} / ${pageCount || 1}`}
         </div>
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
