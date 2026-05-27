@@ -59,6 +59,14 @@ const clerkLocalization = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const { theme_mode, theme_preset, content_layout, navbar_style, sidebar_variant, sidebar_collapsible, font } =
     PREFERENCE_DEFAULTS;
+  const signInUrl = process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL ?? "/auth/sign-in";
+  const signUpUrl = process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL ?? "/auth/sign-up";
+  const signInFallbackRedirectUrl =
+    process.env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL ?? "/dashboard";
+  const signUpFallbackRedirectUrl =
+    process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL ?? "/dashboard";
+  const signInForceRedirectUrl = process.env.NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL;
+  const signUpForceRedirectUrl = process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL;
   const app = (
     <TooltipProvider>
       <PreferencesStoreProvider
@@ -95,6 +103,12 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           <ClerkProvider
             publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
             localization={clerkLocalization}
+            signInUrl={signInUrl}
+            signUpUrl={signUpUrl}
+            signInFallbackRedirectUrl={signInFallbackRedirectUrl}
+            signUpFallbackRedirectUrl={signUpFallbackRedirectUrl}
+            signInForceRedirectUrl={signInForceRedirectUrl}
+            signUpForceRedirectUrl={signUpForceRedirectUrl}
           >
             {app}
           </ClerkProvider>
