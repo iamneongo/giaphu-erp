@@ -38,7 +38,7 @@ interface GiaPhuErpContextValue {
   summary: CostSummary;
   setActiveProjectCode: (code: string) => void;
   refresh: () => Promise<void>;
-  runAction: (action: string, payload: GiaPhuActionPayload) => Promise<void>;
+  runAction: (action: string, payload: GiaPhuActionPayload) => Promise<boolean>;
   searchDocuments: (payload: GiaPhuActionPayload) => Promise<Record<string, unknown>[]>;
   scoped: {
     materials: MaterialRow[];
@@ -195,8 +195,10 @@ export function GiaPhuErpProvider({
         }
 
         toast.success("Đã lưu dữ liệu.");
+        return true;
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
+        return false;
       }
     },
     [refresh],
@@ -224,7 +226,17 @@ export function GiaPhuErpProvider({
       searchDocuments,
       scoped,
     }),
-    [activeProject, data, isSwitchingProject, normalizedProjectCode, refresh, runAction, scoped, searchDocuments, setActiveProject],
+    [
+      activeProject,
+      data,
+      isSwitchingProject,
+      normalizedProjectCode,
+      refresh,
+      runAction,
+      scoped,
+      searchDocuments,
+      setActiveProject,
+    ],
   );
 
   return <GiaPhuErpContext.Provider value={value}>{children}</GiaPhuErpContext.Provider>;

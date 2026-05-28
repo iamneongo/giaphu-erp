@@ -41,3 +41,14 @@ export async function queryGiaPhuDocuments(payload: GiaPhuActionPayload) {
   const result = await runGiaPhuAction("queryDocuments", payload);
   return result.rows ?? [];
 }
+
+export async function uploadGiaPhuDocument(formData: FormData) {
+  const result = await parseResponse(
+    await fetch("/api/giaphu-erp/documents", {
+      method: "POST",
+      body: formData,
+    }),
+  );
+
+  return result;
+}

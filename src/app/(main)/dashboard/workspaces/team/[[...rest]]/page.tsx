@@ -1,4 +1,5 @@
 import Link from "next/link";
+
 import { auth } from "@clerk/nextjs/server";
 import { ShieldCheck, UsersRound } from "lucide-react";
 
@@ -87,7 +88,7 @@ export default async function Page() {
       </div>
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline">
-          <Link href="/dashboard/workspaces/roles">Mở vai trò & quyền động</Link>
+          <Link href="/dashboard/workspaces/roles">Mở vai trò & quyền</Link>
         </Button>
       </div>
       <TeamManager />

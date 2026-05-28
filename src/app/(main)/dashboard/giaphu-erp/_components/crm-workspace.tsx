@@ -81,85 +81,125 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
       ),
       content: (
         <SectionBlock title="Danh sách công trình">
-            <DataTable
-              loading={isSwitchingProject}
-              columns={[
-                {
-                  key: "code",
-                  label: "Mã CT",
-                  accessor: (project) => project.code,
-                  render: (project) => (
-                    <Button variant="link" className="px-0" onClick={() => setActiveProjectCode(project.code)}>
-                      {project.code}
-                    </Button>
-                  ),
-                },
-                { key: "name", label: "Tên công trình", accessor: (project) => project.name, render: (project) => project.name },
-                { key: "owner", label: "Chủ đầu tư", accessor: (project) => project.owner, render: (project) => project.owner || "-" },
-                { key: "contact", label: "Liên hệ", accessor: (project) => project.contact, render: (project) => project.contact || "-" },
-                { key: "startDate", label: "Ngày bắt đầu", accessor: (project) => project.startDate, render: (project) => project.startDate || "-" },
-                {
-                  key: "status",
-                  label: "Trạng thái",
-                  accessor: (project) => project.status,
-                  render: (project) => <Badge variant="outline">{project.status || "-"}</Badge>,
-                },
-                ...(canManage
-                  ? [
-                      {
-                        key: "actions",
-                        label: "Thao tác",
-                        hideable: false,
-                        searchable: false,
-                        sortable: false,
-                        render: (project: (typeof data.projects)[number]) => (
-                          <div className="flex justify-end">
-                            <TableRowActions
-                              edit={{
-                                title: "Sửa công trình",
-                                action: "saveProject",
-                                onAction: runAction,
-                                fields: [
-                                  { name: "code", label: "Mã công trình", value: project.code, required: true, readOnly: true },
-                                  { name: "name", label: "Tên công trình", value: project.name, required: true },
-                                  { name: "owner", label: "Chủ đầu tư", value: project.owner },
-                                  { name: "contact", label: "Liên hệ", value: project.contact },
-                                  { name: "referrer", label: "Người giới thiệu", value: project.referrer },
-                                  { name: "startDate", label: "Ngày bắt đầu", type: "date", value: project.startDate || todayIso() },
-                                  { name: "status", label: "Trạng thái", value: project.status || "Đang thi công" },
-                                  { name: "failureReason", label: "Lý do thất bại", type: "textarea", value: project.failureReason },
-                                ],
-                              }}
-                              actions={[
+          <DataTable
+            loading={isSwitchingProject}
+            columns={[
+              {
+                key: "code",
+                label: "Mã CT",
+                accessor: (project) => project.code,
+                render: (project) => (
+                  <Button variant="link" className="px-0" onClick={() => setActiveProjectCode(project.code)}>
+                    {project.code}
+                  </Button>
+                ),
+              },
+              {
+                key: "name",
+                label: "Tên công trình",
+                accessor: (project) => project.name,
+                render: (project) => project.name,
+              },
+              {
+                key: "owner",
+                label: "Chủ đầu tư",
+                accessor: (project) => project.owner,
+                render: (project) => project.owner || "-",
+              },
+              {
+                key: "contact",
+                label: "Liên hệ",
+                accessor: (project) => project.contact,
+                render: (project) => project.contact || "-",
+              },
+              {
+                key: "startDate",
+                label: "Ngày bắt đầu",
+                accessor: (project) => project.startDate,
+                render: (project) => project.startDate || "-",
+              },
+              {
+                key: "status",
+                label: "Trạng thái",
+                accessor: (project) => project.status,
+                render: (project) => <Badge variant="outline">{project.status || "-"}</Badge>,
+              },
+              ...(canManage
+                ? [
+                    {
+                      key: "actions",
+                      label: "Thao tác",
+                      hideable: false,
+                      searchable: false,
+                      sortable: false,
+                      render: (project: (typeof data.projects)[number]) => (
+                        <div className="flex justify-end">
+                          <TableRowActions
+                            edit={{
+                              title: "Sửa công trình",
+                              action: "saveProject",
+                              onAction: runAction,
+                              fields: [
                                 {
-                                  label: "Xóa",
-                                  icon: Trash2,
-                                  destructive: true,
-                                  onSelect: () => {
-                                    if (window.confirm(`Xóa công trình "${project.name}"? Toàn bộ dữ liệu liên quan sẽ bị xóa.`)) {
-                                      void runAction("deleteProject", { code: project.code });
-                                    }
-                                  },
+                                  name: "code",
+                                  label: "Mã công trình",
+                                  value: project.code,
+                                  required: true,
+                                  readOnly: true,
                                 },
-                              ]}
-                            />
-                          </div>
-                        ),
-                      },
-                    ]
-                  : []),
-              ]}
-              rows={data.projects}
-              getRowId={(project) => project.code}
-              selectable
-              exportFileName="crm-cong-trinh"
-              searchPlaceholder="Tìm theo mã, tên, chủ đầu tư..."
-              filters={[
-                { key: "status", label: "Trạng thái", options: projectStatusOptions },
-                { key: "owner", label: "Chủ đầu tư", options: projectOwnerOptions },
-              ]}
-              initialSorting={[{ id: "startDate", desc: true }]}
-            />
+                                { name: "name", label: "Tên công trình", value: project.name, required: true },
+                                { name: "owner", label: "Chủ đầu tư", value: project.owner },
+                                { name: "contact", label: "Liên hệ", value: project.contact },
+                                { name: "referrer", label: "Người giới thiệu", value: project.referrer },
+                                {
+                                  name: "startDate",
+                                  label: "Ngày bắt đầu",
+                                  type: "date",
+                                  value: project.startDate || todayIso(),
+                                },
+                                { name: "status", label: "Trạng thái", value: project.status || "Đang thi công" },
+                                {
+                                  name: "failureReason",
+                                  label: "Lý do thất bại",
+                                  type: "textarea",
+                                  value: project.failureReason,
+                                },
+                              ],
+                            }}
+                            actions={[
+                              {
+                                label: "Xóa",
+                                icon: Trash2,
+                                destructive: true,
+                                onSelect: () => {
+                                  if (
+                                    window.confirm(
+                                      `Xóa công trình "${project.name}"? Toàn bộ dữ liệu liên quan sẽ bị xóa.`,
+                                    )
+                                  ) {
+                                    return runAction("deleteProject", { code: project.code });
+                                  }
+                                },
+                              },
+                            ]}
+                          />
+                        </div>
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+            rows={data.projects}
+            getRowId={(project) => project.code}
+            selectable
+            exportFileName="crm-cong-trinh"
+            searchPlaceholder="Tìm theo mã, tên, chủ đầu tư..."
+            filters={[
+              { key: "status", label: "Trạng thái", options: projectStatusOptions },
+              { key: "owner", label: "Chủ đầu tư", options: projectOwnerOptions },
+            ]}
+            initialSorting={[{ id: "startDate", desc: true }]}
+          />
         </SectionBlock>
       ),
     },
@@ -184,69 +224,84 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
       ),
       content: (
         <SectionBlock title="Hợp đồng">
-            <DataTable
-              loading={isSwitchingProject}
-              columns={[
-                { key: "contractNo", label: "Số HĐ", accessor: (row) => row.contractNo, render: (row) => row.contractNo || "-" },
-                { key: "signedDate", label: "Ngày ký", accessor: (row) => row.signedDate, render: (row) => row.signedDate || "-" },
-                {
-                  key: "value",
-                  label: "Giá trị",
-                  accessor: (row) => row.value,
-                  exportValue: (row) => formatMoney(row.value),
-                  render: (row) => formatMoney(row.value),
-                },
-                { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" },
-                ...(canManage
-                  ? [
-                      {
-                        key: "actions",
-                        label: "Thao tác",
-                        hideable: false,
-                        searchable: false,
-                        sortable: false,
-                        render: (row: (typeof scoped.contracts)[number]) => (
-                          <div className="flex justify-end">
-                            <TableRowActions
-                              edit={{
-                                title: "Sửa hợp đồng",
-                                action: "saveContract",
-                                onAction: runAction,
-                                fields: [
-                                  { name: "id", label: "ID", type: "hidden", value: row.id },
-                                  { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-                                  { name: "contractNo", label: "Số hợp đồng", required: true, value: row.contractNo },
-                                  { name: "value", label: "Giá trị", type: "number", value: row.value },
-                                  { name: "signedDate", label: "Ngày ký", type: "date", value: row.signedDate || todayIso() },
-                                  { name: "note", label: "Ghi chú", type: "textarea", value: row.note },
-                                ],
-                              }}
-                              actions={[
+          <DataTable
+            loading={isSwitchingProject}
+            columns={[
+              {
+                key: "contractNo",
+                label: "Số HĐ",
+                accessor: (row) => row.contractNo,
+                render: (row) => row.contractNo || "-",
+              },
+              {
+                key: "signedDate",
+                label: "Ngày ký",
+                accessor: (row) => row.signedDate,
+                render: (row) => row.signedDate || "-",
+              },
+              {
+                key: "value",
+                label: "Giá trị",
+                accessor: (row) => row.value,
+                exportValue: (row) => formatMoney(row.value),
+                render: (row) => formatMoney(row.value),
+              },
+              { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" },
+              ...(canManage
+                ? [
+                    {
+                      key: "actions",
+                      label: "Thao tác",
+                      hideable: false,
+                      searchable: false,
+                      sortable: false,
+                      render: (row: (typeof scoped.contracts)[number]) => (
+                        <div className="flex justify-end">
+                          <TableRowActions
+                            edit={{
+                              title: "Sửa hợp đồng",
+                              action: "saveContract",
+                              onAction: runAction,
+                              fields: [
+                                { name: "id", label: "ID", type: "hidden", value: row.id },
+                                { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+                                { name: "contractNo", label: "Số hợp đồng", required: true, value: row.contractNo },
+                                { name: "value", label: "Giá trị", type: "number", value: row.value },
                                 {
-                                  label: "Xóa",
-                                  icon: Trash2,
-                                  destructive: true,
-                                  onSelect: () => {
-                                    if (window.confirm(`Xóa hợp đồng "${row.contractNo || row.id}"?`)) {
-                                      void runAction("deleteContract", { id: row.id });
-                                    }
-                                  },
+                                  name: "signedDate",
+                                  label: "Ngày ký",
+                                  type: "date",
+                                  value: row.signedDate || todayIso(),
                                 },
-                              ]}
-                            />
-                          </div>
-                        ),
-                      },
-                    ]
-                  : []),
-              ]}
-              rows={scoped.contracts}
-              getRowId={(row) => row.id}
-              selectable
-              exportFileName="crm-hop-dong"
-              searchPlaceholder="Tìm hợp đồng, ghi chú..."
-              initialSorting={[{ id: "signedDate", desc: true }]}
-            />
+                                { name: "note", label: "Ghi chú", type: "textarea", value: row.note },
+                              ],
+                            }}
+                            actions={[
+                              {
+                                label: "Xóa",
+                                icon: Trash2,
+                                destructive: true,
+                                onSelect: () => {
+                                  if (window.confirm(`Xóa hợp đồng "${row.contractNo || row.id}"?`)) {
+                                    return runAction("deleteContract", { id: row.id });
+                                  }
+                                },
+                              },
+                            ]}
+                          />
+                        </div>
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+            rows={scoped.contracts}
+            getRowId={(row) => row.id}
+            selectable
+            exportFileName="crm-hop-dong"
+            searchPlaceholder="Tìm hợp đồng, ghi chú..."
+            initialSorting={[{ id: "signedDate", desc: true }]}
+          />
         </SectionBlock>
       ),
     },
@@ -270,67 +325,67 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
       ),
       content: (
         <SectionBlock title="Thu tiền">
-            <DataTable
-              loading={isSwitchingProject}
-              columns={[
-                { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
-                {
-                  key: "amount",
-                  label: "Số tiền",
-                  accessor: (row) => row.amount,
-                  exportValue: (row) => formatMoney(row.amount),
-                  render: (row) => formatMoney(row.amount),
-                },
-                { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" },
-                ...(canManage
-                  ? [
-                      {
-                        key: "actions",
-                        label: "Thao tác",
-                        hideable: false,
-                        searchable: false,
-                        sortable: false,
-                        render: (row: (typeof scoped.payments)[number]) => (
-                          <div className="flex justify-end">
-                            <TableRowActions
-                              edit={{
-                                title: "Sửa thu tiền",
-                                action: "savePayment",
-                                onAction: runAction,
-                                fields: [
-                                  { name: "id", label: "ID", type: "hidden", value: row.id },
-                                  { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-                                  { name: "date", label: "Ngày thu", type: "date", value: row.date || todayIso() },
-                                  { name: "amount", label: "Số tiền", type: "number", value: row.amount },
-                                  { name: "note", label: "Ghi chú", type: "textarea", value: row.note },
-                                ],
-                              }}
-                              actions={[
-                                {
-                                  label: "Xóa",
-                                  icon: Trash2,
-                                  destructive: true,
-                                  onSelect: () => {
-                                    if (window.confirm("Xóa phiếu thu này?")) {
-                                      void runAction("deletePayment", { id: row.id });
-                                    }
-                                  },
+          <DataTable
+            loading={isSwitchingProject}
+            columns={[
+              { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+              {
+                key: "amount",
+                label: "Số tiền",
+                accessor: (row) => row.amount,
+                exportValue: (row) => formatMoney(row.amount),
+                render: (row) => formatMoney(row.amount),
+              },
+              { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" },
+              ...(canManage
+                ? [
+                    {
+                      key: "actions",
+                      label: "Thao tác",
+                      hideable: false,
+                      searchable: false,
+                      sortable: false,
+                      render: (row: (typeof scoped.payments)[number]) => (
+                        <div className="flex justify-end">
+                          <TableRowActions
+                            edit={{
+                              title: "Sửa thu tiền",
+                              action: "savePayment",
+                              onAction: runAction,
+                              fields: [
+                                { name: "id", label: "ID", type: "hidden", value: row.id },
+                                { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+                                { name: "date", label: "Ngày thu", type: "date", value: row.date || todayIso() },
+                                { name: "amount", label: "Số tiền", type: "number", value: row.amount },
+                                { name: "note", label: "Ghi chú", type: "textarea", value: row.note },
+                              ],
+                            }}
+                            actions={[
+                              {
+                                label: "Xóa",
+                                icon: Trash2,
+                                destructive: true,
+                                onSelect: () => {
+                                  if (window.confirm("Xóa phiếu thu này?")) {
+                                    return runAction("deletePayment", { id: row.id });
+                                  }
                                 },
-                              ]}
-                            />
-                          </div>
-                        ),
-                      },
-                    ]
-                  : []),
-              ]}
-              rows={scoped.payments}
-              getRowId={(row) => row.id}
-              selectable
-              exportFileName="crm-thu-tien"
-              searchPlaceholder="Tìm ghi chú thanh toán..."
-              initialSorting={[{ id: "date", desc: true }]}
-            />
+                              },
+                            ]}
+                          />
+                        </div>
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+            rows={scoped.payments}
+            getRowId={(row) => row.id}
+            selectable
+            exportFileName="crm-thu-tien"
+            searchPlaceholder="Tìm ghi chú thanh toán..."
+            initialSorting={[{ id: "date", desc: true }]}
+          />
         </SectionBlock>
       ),
     },

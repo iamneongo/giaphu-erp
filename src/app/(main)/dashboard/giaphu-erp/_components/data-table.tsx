@@ -75,12 +75,234 @@ function getDefaultAccessor<T>(row: T, key: string) {
   return undefined;
 }
 
-function toCsvSafe(value: unknown) {
-  const text = String(value ?? "");
-  if (/[",\n]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`;
+function escapeXml(value: unknown) {
+  const cleanedText = Array.from(String(value ?? ""))
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return code === 0x09 || code === 0x0a || code === 0x0d || code >= 0x20;
+    })
+    .join("");
+
+  return cleanedText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function getExcelColumnName(index: number) {
+  let columnName = "";
+  let nextIndex = index + 1;
+
+  while (nextIndex > 0) {
+    const remainder = (nextIndex - 1) % 26;
+    columnName = String.fromCharCode(65 + remainder) + columnName;
+    nextIndex = Math.floor((nextIndex - 1) / 26);
   }
-  return text;
+
+  return columnName;
+}
+
+function buildWorksheetXml(headers: string[], rows: Array<Array<unknown>>) {
+  const tableRows = [headers, ...rows];
+  const columnWidths = headers
+    .map((header, index) => {
+      const maxLength = tableRows.reduce((currentMax, row) => {
+        return Math.max(currentMax, String(row[index] ?? "").length);
+      }, String(header).length);
+
+      return `<col min="${index + 1}" max="${index + 1}" width="${Math.min(Math.max(maxLength + 2, 12), 45)}" customWidth="1"/>`;
+    })
+    .join("");
+  const sheetRows = tableRows
+    .map((row, rowIndex) => {
+      const rowNumber = rowIndex + 1;
+      const cells = row
+        .map((cell, columnIndex) => {
+          const cellRef = `${getExcelColumnName(columnIndex)}${rowNumber}`;
+          const styleId = rowIndex === 0 ? 1 : 0;
+
+          return `<c r="${cellRef}" t="inlineStr" s="${styleId}"><is><t>${escapeXml(cell)}</t></is></c>`;
+        })
+        .join("");
+
+      return `<row r="${rowNumber}">${cells}</row>`;
+    })
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  <cols>${columnWidths}</cols>
+  <sheetData>${sheetRows}</sheetData>
+</worksheet>`;
+}
+
+const crcTable = Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  }
+
+  return value >>> 0;
+});
+
+function getCrc32(bytes: Uint8Array) {
+  let crc = 0xffffffff;
+
+  for (const byte of bytes) {
+    crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function writeUint16(output: number[], value: number) {
+  output.push(value & 0xff, (value >>> 8) & 0xff);
+}
+
+function writeUint32(output: number[], value: number) {
+  output.push(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff);
+}
+
+function appendBytes(output: number[], bytes: Uint8Array) {
+  for (const byte of bytes) output.push(byte);
+}
+
+function buildZipFile(files: Array<{ name: string; content: string }>) {
+  const encoder = new TextEncoder();
+  const output: number[] = [];
+  const centralDirectory: number[] = [];
+  const now = new Date();
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
+  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+
+  for (const file of files) {
+    const nameBytes = encoder.encode(file.name);
+    const contentBytes = encoder.encode(file.content);
+    const localHeaderOffset = output.length;
+    const crc32 = getCrc32(contentBytes);
+
+    writeUint32(output, 0x04034b50);
+    writeUint16(output, 20);
+    writeUint16(output, 0x0800);
+    writeUint16(output, 0);
+    writeUint16(output, dosTime);
+    writeUint16(output, dosDate);
+    writeUint32(output, crc32);
+    writeUint32(output, contentBytes.length);
+    writeUint32(output, contentBytes.length);
+    writeUint16(output, nameBytes.length);
+    writeUint16(output, 0);
+    appendBytes(output, nameBytes);
+    appendBytes(output, contentBytes);
+
+    writeUint32(centralDirectory, 0x02014b50);
+    writeUint16(centralDirectory, 20);
+    writeUint16(centralDirectory, 20);
+    writeUint16(centralDirectory, 0x0800);
+    writeUint16(centralDirectory, 0);
+    writeUint16(centralDirectory, dosTime);
+    writeUint16(centralDirectory, dosDate);
+    writeUint32(centralDirectory, crc32);
+    writeUint32(centralDirectory, contentBytes.length);
+    writeUint32(centralDirectory, contentBytes.length);
+    writeUint16(centralDirectory, nameBytes.length);
+    writeUint16(centralDirectory, 0);
+    writeUint16(centralDirectory, 0);
+    writeUint16(centralDirectory, 0);
+    writeUint16(centralDirectory, 0);
+    writeUint32(centralDirectory, 0);
+    writeUint32(centralDirectory, localHeaderOffset);
+    appendBytes(centralDirectory, nameBytes);
+  }
+
+  const centralDirectoryOffset = output.length;
+  appendBytes(output, new Uint8Array(centralDirectory));
+  writeUint32(output, 0x06054b50);
+  writeUint16(output, 0);
+  writeUint16(output, 0);
+  writeUint16(output, files.length);
+  writeUint16(output, files.length);
+  writeUint32(output, centralDirectory.length);
+  writeUint32(output, centralDirectoryOffset);
+  writeUint16(output, 0);
+
+  return new Uint8Array(output);
+}
+
+function buildXlsxBlob(headers: string[], rows: Array<Array<unknown>>) {
+  const files = [
+    {
+      name: "[Content_Types].xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>`,
+    },
+    {
+      name: "_rels/.rels",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`,
+    },
+    {
+      name: "docProps/app.xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>Gia Phú ERP</Application>
+</Properties>`,
+    },
+    {
+      name: "docProps/core.xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:creator>Gia Phú ERP</dc:creator>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created>
+</cp:coreProperties>`,
+    },
+    {
+      name: "xl/workbook.xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Dữ liệu" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`,
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`,
+    },
+    {
+      name: "xl/styles.xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2"><font><sz val="11"/><name val="Manrope"/></font><font><b/><sz val="11"/><name val="Manrope"/></font></fonts>
+  <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="2"><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="49" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>
+</styleSheet>`,
+    },
+    {
+      name: "xl/worksheets/sheet1.xml",
+      content: buildWorksheetXml(headers, rows),
+    },
+  ];
+
+  return new Blob([buildZipFile(files)], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
 }
 
 export function DataTable<T>({
@@ -118,7 +340,7 @@ export function DataTable<T>({
   const [query, setQuery] = React.useState("");
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] = React.useState<Record<string, boolean>>({});
-  const [filterValues, setFilterValues] = React.useState<Record<string, string>>({});
+  const [filterValues, _setFilterValues] = React.useState<Record<string, string>>({});
 
   const normalizedColumns = React.useMemo(
     () =>
@@ -267,6 +489,7 @@ export function DataTable<T>({
     autoResetPageIndex: false,
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset pagination when search/filter criteria changes.
   React.useEffect(() => {
     table.setPageIndex(0);
   }, [filterValues, query, table]);
@@ -276,29 +499,25 @@ export function DataTable<T>({
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
   const skeletonColumnCount = (selectionColumn ? 1 : 0) + columns.length;
 
-  function exportCsv() {
-    const exportColumns = normalizedColumns.filter((column) => table.getColumn(column.key)?.getIsVisible() !== false);
-    const header = exportColumns.map((column) => toCsvSafe(column.label)).join(",");
-    const body = filteredRows
-      .map((row) =>
-        exportColumns
-          .map((column) => {
-            const value = column.exportValue
-              ? column.exportValue(row)
-              : column.accessor
-                ? column.accessor(row)
-                : getDefaultAccessor(row, column.key);
-            return toCsvSafe(value);
-          })
-          .join(","),
-      )
-      .join("\n");
-
-    const blob = new Blob([`${header}\n${body}`], { type: "text/csv;charset=utf-8;" });
+  function exportExcel() {
+    const exportColumns = normalizedColumns.filter(
+      (column) => column.key !== "actions" && table.getColumn(column.key)?.getIsVisible() !== false,
+    );
+    const header = exportColumns.map((column) => column.label);
+    const body = filteredRows.map((row) =>
+      exportColumns.map((column) =>
+        column.exportValue
+          ? column.exportValue(row)
+          : column.accessor
+            ? column.accessor(row)
+            : getDefaultAccessor(row, column.key),
+      ),
+    );
+    const blob = buildXlsxBlob(header, body);
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${exportFileName}.csv`;
+    link.download = `${exportFileName}.xlsx`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -343,9 +562,9 @@ export function DataTable<T>({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="outline" size="sm" className="h-9 rounded-md" onClick={exportCsv}>
+          <Button variant="outline" size="sm" className="h-9 rounded-md" onClick={exportExcel}>
             <Download />
-            Export
+            Xuất Excel
           </Button>
         </div>
       </div>
@@ -378,9 +597,7 @@ export function DataTable<T>({
               visibleRows.map((row) => (
                 <TableRow key={row.id} data-state={row.getIsSelected() ? "selected" : undefined}>
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
                 </TableRow>
               ))

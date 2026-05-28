@@ -1,4 +1,6 @@
 import { getSql } from "../db/neon";
+import { buildNextCatalogCode, catalogKinds, normalizeCatalogCode } from "./catalog-codes";
+import { isValidPhoneNumber } from "./phone";
 import type {
   AttendanceLockRow,
   AttendanceRow,
@@ -28,15 +30,13 @@ type GlobalSchemaState = typeof globalThis & {
   __giaPhuSchemaReady?: boolean;
 };
 
-const catalogPrefixes: Record<CatalogItem["kind"], string> = {
-  hangMuc: "HM",
-  vatTu: "VT",
-  vatTuPhu: "VTP",
-  thauPhu: "TP",
-  nhaCungCap: "NCC",
+const catalogFieldLabels: Record<CatalogItem["kind"], { code: string; name: string }> = {
+  hangMuc: { code: "Mã hạng mục", name: "Tên hạng mục" },
+  vatTu: { code: "Mã vật tư", name: "Tên vật tư" },
+  vatTuPhu: { code: "Mã vật tư phụ", name: "Tên vật tư phụ" },
+  thauPhu: { code: "Mã thầu phụ", name: "Tên thầu phụ" },
+  nhaCungCap: { code: "Mã nhà cung cấp", name: "Tên nhà cung cấp" },
 };
-
-const catalogKinds = Object.keys(catalogPrefixes) as CatalogItem["kind"][];
 
 function text(value: unknown) {
   return value == null ? "" : String(value);
@@ -88,12 +88,87 @@ function decimal(value: unknown) {
   return parseLocalizedNumber(value);
 }
 
+function requireNumericInput(value: unknown, label: string) {
+  const raw = text(value).trim();
+
+  if (!raw) {
+    throw new Error(`Thiếu ${label.toLowerCase()}.`);
+  }
+
+  if (!/\d/.test(raw) || !/^-?[\d\s,.]+$/.test(raw)) {
+    throw new Error(`${label} phải là số hợp lệ.`);
+  }
+
+  return parseLocalizedNumber(raw);
+}
+
+function dateInputTime(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+
+  return date.getTime();
+}
+
+function requireDateInput(value: unknown, label: string) {
+  const date = dateOnly(value).trim();
+
+  if (!date) {
+    throw new Error(`Thiếu ${label.toLowerCase()}.`);
+  }
+
+  if (dateInputTime(date) == null) {
+    throw new Error(`${label} không hợp lệ.`);
+  }
+
+  return date;
+}
+
+function assertProgressDateRules(startDate: string, planEndDate: string, confirmedEndDate: string) {
+  const start = dateInputTime(startDate);
+  const today = dateInputTime(dateOnly(new Date()));
+  const planEnd = dateInputTime(planEndDate);
+  const confirmedEnd = dateInputTime(confirmedEndDate);
+
+  if (start == null || today == null || planEnd == null || confirmedEnd == null) return;
+
+  if (start < today) {
+    throw new Error("Ngày bắt đầu không được nhỏ hơn ngày hiện tại.");
+  }
+
+  if (planEnd < start) {
+    throw new Error("Ngày HT dự kiến không được nhỏ hơn ngày bắt đầu.");
+  }
+
+  if (confirmedEnd < planEnd) {
+    throw new Error("Ngày HT xác nhận không được nhỏ hơn ngày HT dự kiến.");
+  }
+
+  if (confirmedEnd < start) {
+    throw new Error("Ngày HT xác nhận không được nhỏ hơn ngày bắt đầu.");
+  }
+}
+
+function assertDateNotBeforeToday(value: string, label: string) {
+  const date = dateInputTime(value);
+  const today = dateInputTime(dateOnly(new Date()));
+
+  if (date != null && today != null && date < today) {
+    throw new Error(`${label} không được nhỏ hơn ngày hiện tại.`);
+  }
+}
+
 function parseLocalizedNumber(value: unknown) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   const raw = text(value).trim();
   if (!raw) return 0;
 
-  const sanitized = raw.replace(/[^\d,.\-]/g, "");
+  const sanitized = raw.replace(/[^\d,.-]/g, "");
   const sign = sanitized.startsWith("-") ? "-" : "";
   const digits = sanitized.replace(/-/g, "");
   const lastComma = digits.lastIndexOf(",");
@@ -108,15 +183,10 @@ function parseLocalizedNumber(value: unknown) {
   } else if (lastComma >= 0) {
     const commaCount = (digits.match(/,/g) ?? []).length;
     normalized =
-      commaCount === 1 && digits.length - lastComma - 1 !== 3
-        ? digits.replace(",", ".")
-        : digits.replaceAll(",", "");
+      commaCount === 1 && digits.length - lastComma - 1 !== 3 ? digits.replace(",", ".") : digits.replaceAll(",", "");
   } else if (lastDot >= 0) {
     const dotCount = (digits.match(/\./g) ?? []).length;
-    normalized =
-      dotCount === 1 && digits.length - lastDot - 1 !== 3
-        ? digits
-        : digits.replaceAll(".", "");
+    normalized = dotCount === 1 && digits.length - lastDot - 1 !== 3 ? digits : digits.replaceAll(".", "");
   }
 
   normalized = `${sign}${normalized}`.replace(/[^0-9.-]/g, "");
@@ -440,10 +510,13 @@ async function createGiaPhuSchemaInternal() {
     mime_type text not null default '',
     file_id text not null default '',
     file_url text not null default '',
+    file_data text not null default '',
+    file_size bigint not null default 0,
     note text not null default '',
     preview_text text not null default '',
     created_at timestamptz not null default now()
   )`;
+  await ensureDocumentFileColumns();
 
   await sql`create table if not exists gp_materials (
     id bigserial primary key,
@@ -629,7 +702,7 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     sql`select * from gp_staff order by id asc, name asc`,
   ]);
   const activeProjectCode = projects.some((project) => project.code === options.activeProjectCode)
-    ? options.activeProjectCode ?? ""
+    ? (options.activeProjectCode ?? "")
     : (projects[0]?.code ?? "");
 
   const [
@@ -797,15 +870,106 @@ export async function deletePayment(payload: Record<string, unknown>) {
   await sql`delete from gp_payments where id = ${number(payload.id)}`;
 }
 
+async function getNextCatalogCode(kind: CatalogItem["kind"]) {
+  const sql = getSql();
+  const rows = (await sql`
+    select code
+    from gp_catalog_items
+    where kind = ${kind}
+  `) as Row[];
+
+  return buildNextCatalogCode(
+    kind,
+    rows.map((row) => text(row.code)),
+  );
+}
+
+async function assertUniqueCatalogItem({
+  kind,
+  code,
+  name,
+  originalId,
+}: {
+  kind: CatalogItem["kind"];
+  code: string;
+  name: string;
+  originalId: string;
+}) {
+  const sql = getSql();
+  const duplicateRows = (await sql`
+    select id, code, name
+    from gp_catalog_items
+    where kind = ${kind}
+      and id <> ${originalId}
+      and (lower(code) = lower(${code}) or lower(name) = lower(${name}))
+    limit 1
+  `) as Row[];
+  const duplicate = duplicateRows[0];
+
+  if (!duplicate) return;
+
+  const labels = catalogFieldLabels[kind];
+  if (text(duplicate.code).toLowerCase() === code.toLowerCase()) {
+    throw new Error(`${labels.code} "${code}" đã tồn tại. Vui lòng nhập mã khác.`);
+  }
+
+  throw new Error(`${labels.name} "${name}" đã tồn tại. Vui lòng nhập tên khác.`);
+}
+
+async function assertCatalogCanBeDeleted(item: CatalogItem) {
+  if (item.kind !== "hangMuc") return;
+
+  const sql = getSql();
+  const [laborNormUsage, progressUsage] = await Promise.all([
+    sql`
+      select count(*)::int as count
+      from gp_labor_norms
+      where lower(category) = lower(${item.name})
+    `,
+    sql`
+      select count(*)::int as count
+      from gp_progress
+      where lower(category) = lower(${item.name})
+    `,
+  ]);
+  const usedInLaborNorms = number((laborNormUsage as Row[])[0]?.count);
+  const usedInProgress = number((progressUsage as Row[])[0]?.count);
+  const usedIn = [
+    usedInLaborNorms > 0 ? "Nhân công > Định mức" : "",
+    usedInProgress > 0 ? "Nhân công > Tiến độ" : "",
+  ].filter(Boolean);
+
+  if (!usedIn.length) return;
+
+  throw new Error(`Không thể xóa hạng mục "${item.name}" vì đang được sử dụng ở ${usedIn.join(" và ")}.`);
+}
+
 export async function manageCatalog(payload: Record<string, unknown>) {
   const sql = getSql();
   const kind = text(payload.kind) as CatalogItem["kind"];
   if (!catalogKinds.includes(kind)) throw new Error("Loại danh mục không hợp lệ.");
+  const labels = catalogFieldLabels[kind];
   const name = text(payload.name).trim();
-  if (!name) throw new Error("Thiếu tên danh mục.");
-  const code = text(payload.code).trim() || `${catalogPrefixes[kind]}${Date.now().toString().slice(-6)}`;
+  if (!name) throw new Error(`Thiếu ${labels.name.toLowerCase()}.`);
+  const code = normalizeCatalogCode(text(payload.code).trim() || (await getNextCatalogCode(kind)));
+  if (!code) throw new Error(`Thiếu ${labels.code.toLowerCase()}.`);
+  const unit = text(payload.unit).trim();
+  const contact = text(payload.contact).trim();
+  const note = text(payload.note).trim();
+
+  if ((kind === "vatTu" || kind === "vatTuPhu") && !unit) {
+    throw new Error("Thiếu đơn vị.");
+  }
+
+  if (kind === "thauPhu" || kind === "nhaCungCap") {
+    if (!contact) throw new Error("Thiếu liên hệ.");
+    if (!isValidPhoneNumber(contact)) throw new Error("Liên hệ phải là số điện thoại hợp lệ.");
+  }
+
   const nextId = `${kind}:${code}`;
   const originalId = text(payload.originalId || payload.id);
+
+  await assertUniqueCatalogItem({ kind, code, name, originalId });
 
   if (originalId) {
     await sql`
@@ -814,9 +978,9 @@ export async function manageCatalog(payload: Record<string, unknown>) {
           kind = ${kind},
           code = ${code},
           name = ${name},
-          unit = ${text(payload.unit)},
-          contact = ${text(payload.contact)},
-          note = ${text(payload.note)},
+          unit = ${unit},
+          contact = ${contact},
+          note = ${note},
           updated_at = now()
       where id = ${originalId}
     `;
@@ -825,30 +989,40 @@ export async function manageCatalog(payload: Record<string, unknown>) {
 
   await sql`
     insert into gp_catalog_items (id, kind, code, name, unit, contact, note, updated_at)
-    values (${nextId}, ${kind}, ${code}, ${name}, ${text(payload.unit)}, ${text(payload.contact)}, ${text(payload.note)}, now())
-    on conflict (kind, lower(name)) do update set
-      code = excluded.code,
-      unit = excluded.unit,
-      contact = excluded.contact,
-      note = excluded.note,
-      updated_at = now()
+    values (${nextId}, ${kind}, ${code}, ${name}, ${unit}, ${contact}, ${note}, now())
   `;
 }
 
 export async function deleteCatalog(payload: Record<string, unknown>) {
   const sql = getSql();
-  await sql`delete from gp_catalog_items where id = ${text(payload.id)}`;
+  const id = text(payload.id).trim();
+  const rows = (await sql`
+    select *
+    from gp_catalog_items
+    where id = ${id}
+    limit 1
+  `) as Row[];
+  const item = rows[0] ? catalogFromRow(rows[0]) : null;
+
+  if (!item) throw new Error("Không tìm thấy danh mục cần xóa.");
+
+  await assertCatalogCanBeDeleted(item);
+  await sql`delete from gp_catalog_items where id = ${id}`;
 }
 
 export async function manageStaff(payload: Record<string, unknown>) {
   const sql = getSql();
   const id = text(payload.id).trim() || `NV${Date.now().toString().slice(-6)}`;
   const name = text(payload.name).trim();
+  const resigned = bool(payload.resigned);
+  const offDate = dateOnly(payload.offDate);
+
   if (!name) throw new Error("Thiếu tên nhân sự.");
+  if (resigned && !offDate) throw new Error("Vui lòng chọn thời gian nghỉ khi đánh dấu nhân sự đã nghỉ việc.");
 
   await sql`
     insert into gp_staff (id, name, team, position, salary_day, resigned, off_date, updated_at)
-    values (${id}, ${name}, ${text(payload.team)}, ${text(payload.position)}, ${money(payload.salaryDay)}, ${bool(payload.resigned)}, ${dateOnly(payload.offDate) || null}, now())
+    values (${id}, ${name}, ${text(payload.team)}, ${text(payload.position)}, ${money(payload.salaryDay)}, ${resigned}, ${offDate || null}, now())
     on conflict (id) do update set
       name = excluded.name,
       team = excluded.team,
@@ -860,9 +1034,8 @@ export async function manageStaff(payload: Record<string, unknown>) {
   `;
 }
 
-export async function deleteStaff(payload: Record<string, unknown>) {
-  const sql = getSql();
-  await sql`delete from gp_staff where id = ${text(payload.id)}`;
+export async function deleteStaff(_payload: Record<string, unknown>) {
+  throw new Error("Không thể xóa nhân sự. Hãy đánh dấu Đã nghỉ việc và chọn thời gian nghỉ để lưu trữ hồ sơ nhân sự.");
 }
 
 export async function saveMaterial(payload: Record<string, unknown>) {
@@ -943,10 +1116,17 @@ export async function markMaterialPaid(payload: Record<string, unknown>) {
 export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
   const sql = getSql();
   const rows = Array.isArray(payload.rows) ? (payload.rows as Record<string, unknown>[]) : [payload];
-  const projectCode = text(payload.projectCode || rows[0]?.projectCode);
-  const category = text(payload.category || rows[0]?.category);
-  const week = text(payload.week || rows[0]?.week);
-  if (!projectCode || !category || !week) throw new Error("Thiếu công trình, hạng mục hoặc tuần.");
+  const firstDate = requireDateInput(rows[0]?.date ?? payload.date, "Ngày chấm công");
+  const projectCode = text(payload.projectCode || rows[0]?.projectCode).trim();
+  const category = text(payload.category || rows[0]?.category).trim();
+  const week = weekFromDate(firstDate);
+
+  assertDateNotBeforeToday(firstDate, "Ngày chấm công");
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+  if (!week) throw new Error("Tuần chấm công không hợp lệ.");
+
   const lockKey = attendanceLockKey(projectCode, week, category);
   const [lock] = (await sql`select status from gp_attendance_locks where lock_key = ${lockKey}`) as Row[];
   if (text(lock?.status) === "CLOSED") throw new Error("Tuần/hạng mục đã kết sổ, không thể sửa chấm công.");
@@ -956,30 +1136,43 @@ export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
   }
 
   for (const row of rows) {
-    const date = dateOnly(row.date) || dateOnly(new Date());
-    const halfDaySalary = money(row.halfDaySalary);
-    const coefficient = decimal(row.coefficient || 1);
-    const allowance = money(row.allowance);
-    const overtimeHours = decimal(row.overtimeHours);
-    const overtimeAmount = money(row.overtimeAmount);
+    const date = requireDateInput(row.date, "Ngày chấm công");
+    const rowWeek = weekFromDate(date);
+    const shift = text(row.shift).trim();
+    const staffName = text(row.staffName).trim();
+    const position = text(row.position).trim();
+    const status = text(row.status).trim();
+    const halfDaySalary = requireNumericInput(row.halfDaySalary, "Lương 1/2 ngày");
+    const coefficient = requireNumericInput(row.coefficient, "Hệ số");
+    const allowance = requireNumericInput(row.allowance, "Phụ cấp");
+    const overtimeHours = requireNumericInput(row.overtimeHours, "OT giờ");
+    const overtimeAmount = requireNumericInput(row.overtimeAmount, "OT tiền");
     const total = money(row.total) || halfDaySalary * coefficient + allowance + overtimeAmount;
     const id = number(row.id);
+
+    assertDateNotBeforeToday(date, "Ngày chấm công");
+    if (rowWeek !== week) throw new Error("Các dòng chấm công phải cùng tuần.");
+    if (!shift) throw new Error("Thiếu ca.");
+    if (!staffName) throw new Error("Thiếu nhân sự.");
+    if (!position) throw new Error("Thiếu chức vụ.");
+    if (!status) throw new Error("Thiếu trạng thái.");
+
     if (id > 0) {
       await sql`
         update gp_attendance
         set work_date = ${date},
             week = ${week},
-            shift = ${text(row.shift)},
+            shift = ${shift},
             project_code = ${projectCode},
             category = ${category},
-            staff_name = ${text(row.staffName)},
-            position = ${text(row.position)},
+            staff_name = ${staffName},
+            position = ${position},
             half_day_salary = ${halfDaySalary},
             allowance = ${allowance},
             overtime_hours = ${overtimeHours},
             overtime_amount = ${overtimeAmount},
             total = ${total},
-            status = ${text(row.status)},
+            status = ${status},
             coefficient = ${coefficient},
             updated_at = now()
         where id = ${id}
@@ -993,8 +1186,8 @@ export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
         allowance, overtime_hours, overtime_amount, total, status, coefficient
       )
       values (
-        ${date}, ${week}, ${text(row.shift)}, ${projectCode}, ${category}, ${text(row.staffName)}, ${text(row.position)},
-        ${halfDaySalary}, ${allowance}, ${overtimeHours}, ${overtimeAmount}, ${total}, ${text(row.status)}, ${coefficient}
+        ${date}, ${week}, ${shift}, ${projectCode}, ${category}, ${staffName}, ${position},
+        ${halfDaySalary}, ${allowance}, ${overtimeHours}, ${overtimeAmount}, ${total}, ${status}, ${coefficient}
       )
     `;
   }
@@ -1180,17 +1373,31 @@ export async function deleteOperation(payload: Record<string, unknown>) {
 export async function saveMaterialNorm(payload: Record<string, unknown>) {
   const sql = getSql();
   const id = number(payload.id);
+  const projectCode = text(payload.projectCode).trim();
+  const category = text(payload.category).trim();
+  const materialName = text(payload.materialName).trim();
+  const unit = text(payload.unit).trim();
+  const materialType = text(payload.materialType).trim() || "VT Chính";
+  const dailyNorm = requireNumericInput(payload.dailyNorm, "Định mức ngày");
+  const weeklyNorm = requireNumericInput(payload.weeklyNorm, "Định mức tuần");
+  const warningPercent = requireNumericInput(payload.warningPercent, "Cảnh báo %");
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+  if (!materialName) throw new Error("Thiếu vật tư.");
+  if (!unit) throw new Error("Thiếu đơn vị.");
+
   if (id > 0) {
     await sql`
       update gp_material_norms
-      set project_code = ${text(payload.projectCode)},
-          category = ${text(payload.category)},
-          material_name = ${text(payload.materialName)},
-          unit = ${text(payload.unit)},
-          daily_norm = ${decimal(payload.dailyNorm)},
-          weekly_norm = ${decimal(payload.weeklyNorm)},
-          warning_percent = ${decimal(payload.warningPercent)},
-          material_type = ${text(payload.materialType) || "VT Chính"},
+      set project_code = ${projectCode},
+          category = ${category},
+          material_name = ${materialName},
+          unit = ${unit},
+          daily_norm = ${dailyNorm},
+          weekly_norm = ${weeklyNorm},
+          warning_percent = ${warningPercent},
+          material_type = ${materialType},
           updated_at = now()
       where id = ${id}
     `;
@@ -1199,7 +1406,7 @@ export async function saveMaterialNorm(payload: Record<string, unknown>) {
 
   await sql`
     insert into gp_material_norms (project_code, category, material_name, unit, daily_norm, weekly_norm, warning_percent, material_type, updated_at)
-    values (${text(payload.projectCode)}, ${text(payload.category)}, ${text(payload.materialName)}, ${text(payload.unit)}, ${decimal(payload.dailyNorm)}, ${decimal(payload.weeklyNorm)}, ${decimal(payload.warningPercent)}, ${text(payload.materialType) || "VT Chính"}, now())
+    values (${projectCode}, ${category}, ${materialName}, ${unit}, ${dailyNorm}, ${weeklyNorm}, ${warningPercent}, ${materialType}, now())
     on conflict (project_code, category, lower(material_name), material_type) do update set
       unit = excluded.unit,
       daily_norm = excluded.daily_norm,
@@ -1217,13 +1424,21 @@ export async function deleteMaterialNorm(payload: Record<string, unknown>) {
 export async function saveLaborNorm(payload: Record<string, unknown>) {
   const sql = getSql();
   const id = number(payload.id);
+  const projectCode = text(payload.projectCode).trim();
+  const category = text(payload.category).trim();
+  const workdays = requireNumericInput(payload.workdays, "Số công định mức");
+  const cost = requireNumericInput(payload.cost, "Chi phí định mức");
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+
   if (id > 0) {
     await sql`
       update gp_labor_norms
-      set project_code = ${text(payload.projectCode)},
-          category = ${text(payload.category)},
-          workdays = ${decimal(payload.workdays)},
-          cost = ${money(payload.cost)},
+      set project_code = ${projectCode},
+          category = ${category},
+          workdays = ${workdays},
+          cost = ${cost},
           updated_at = now()
       where id = ${id}
     `;
@@ -1232,7 +1447,7 @@ export async function saveLaborNorm(payload: Record<string, unknown>) {
 
   await sql`
     insert into gp_labor_norms (project_code, category, workdays, cost, updated_at)
-    values (${text(payload.projectCode)}, ${text(payload.category)}, ${decimal(payload.workdays)}, ${money(payload.cost)}, now())
+    values (${projectCode}, ${category}, ${workdays}, ${cost}, now())
     on conflict (project_code, category) do update set
       workdays = excluded.workdays,
       cost = excluded.cost,
@@ -1248,17 +1463,33 @@ export async function deleteLaborNorm(payload: Record<string, unknown>) {
 export async function saveProgress(payload: Record<string, unknown>) {
   const sql = getSql();
   const id = number(payload.id);
+  const projectCode = text(payload.projectCode).trim();
+  const category = text(payload.category).trim();
+  const startDate = requireDateInput(payload.startDate, "Ngày bắt đầu");
+  const durationDays = Math.round(requireNumericInput(payload.durationDays, "Số ngày"));
+  const workdays = requireNumericInput(payload.workdays, "Số công");
+  const planEndDate = requireDateInput(payload.planEndDate, "Ngày HT dự kiến");
+  const confirmedEndDate = requireDateInput(payload.confirmedEndDate, "Ngày HT xác nhận");
+  const evaluation = text(payload.evaluation).trim();
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+  if (durationDays <= 0) throw new Error("Số ngày phải lớn hơn 0.");
+  if (workdays <= 0) throw new Error("Số công phải lớn hơn 0.");
+
+  assertProgressDateRules(startDate, planEndDate, confirmedEndDate);
+
   if (id > 0) {
     await sql`
       update gp_progress
-      set project_code = ${text(payload.projectCode)},
-          category = ${text(payload.category)},
-          start_date = ${dateOnly(payload.startDate) || null},
-          duration_days = ${Math.round(number(payload.durationDays))},
-          workdays = ${decimal(payload.workdays)},
-          plan_end_date = ${dateOnly(payload.planEndDate) || null},
-          confirmed_end_date = ${dateOnly(payload.confirmedEndDate) || null},
-          evaluation = ${text(payload.evaluation)},
+      set project_code = ${projectCode},
+          category = ${category},
+          start_date = ${startDate},
+          duration_days = ${durationDays},
+          workdays = ${workdays},
+          plan_end_date = ${planEndDate},
+          confirmed_end_date = ${confirmedEndDate},
+          evaluation = ${evaluation},
           updated_at = now()
       where id = ${id}
     `;
@@ -1267,7 +1498,7 @@ export async function saveProgress(payload: Record<string, unknown>) {
 
   await sql`
     insert into gp_progress (project_code, category, start_date, duration_days, workdays, plan_end_date, confirmed_end_date, evaluation, updated_at)
-    values (${text(payload.projectCode)}, ${text(payload.category)}, ${dateOnly(payload.startDate) || null}, ${Math.round(number(payload.durationDays))}, ${decimal(payload.workdays)}, ${dateOnly(payload.planEndDate) || null}, ${dateOnly(payload.confirmedEndDate) || null}, ${text(payload.evaluation)}, now())
+    values (${projectCode}, ${category}, ${startDate}, ${durationDays}, ${workdays}, ${planEndDate}, ${confirmedEndDate}, ${evaluation}, now())
     on conflict (project_code, category) do update set
       start_date = excluded.start_date,
       duration_days = excluded.duration_days,
@@ -1284,29 +1515,80 @@ export async function deleteProgress(payload: Record<string, unknown>) {
   await sql`delete from gp_progress where id = ${number(payload.id)}`;
 }
 
+async function ensureDocumentFileColumns() {
+  const sql = getSql();
+
+  await sql`alter table gp_documents add column if not exists file_data text not null default ''`;
+  await sql`alter table gp_documents add column if not exists file_size bigint not null default 0`;
+}
+
 export async function saveDocument(payload: Record<string, unknown>) {
+  await ensureDocumentFileColumns();
   const sql = getSql();
   const id = number(payload.id);
+  const projectCode = text(payload.projectCode).trim();
+  const docType = text(payload.docType).trim();
+  const fileName = text(payload.fileName).trim();
+  const fileData = text(payload.fileData);
+  const hasFileData = fileData.length > 0;
+  const mimeType = text(payload.mimeType).trim() || "application/octet-stream";
+  const fileSize = number(payload.fileSize);
+  const fileId = text(payload.fileId).trim();
+  const note = text(payload.note).trim();
+  const previewText = text(payload.previewText).trim();
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!docType) throw new Error("Thiếu loại hồ sơ.");
+  if (!fileName) throw new Error("Thiếu tên file.");
+  if (id <= 0 && !hasFileData) throw new Error("Vui lòng chọn tệp hồ sơ.");
+
   if (id > 0) {
+    if (hasFileData) {
+      await sql`
+        update gp_documents
+        set project_code = ${projectCode},
+            doc_type = ${docType},
+            file_name = ${fileName},
+            mime_type = ${mimeType},
+            file_id = ${fileId},
+            file_url = '',
+            file_data = ${fileData},
+            file_size = ${fileSize},
+            note = ${note},
+            preview_text = ${previewText}
+        where id = ${id}
+      `;
+      return id;
+    }
+
     await sql`
       update gp_documents
-      set project_code = ${text(payload.projectCode)},
-          doc_type = ${text(payload.docType)},
-          file_name = ${text(payload.fileName)},
-          mime_type = ${text(payload.mimeType)},
-          file_id = ${text(payload.fileId)},
-          file_url = ${text(payload.fileUrl)},
-          note = ${text(payload.note)},
-          preview_text = ${text(payload.previewText)}
+      set project_code = ${projectCode},
+          doc_type = ${docType},
+          file_name = ${fileName},
+          note = ${note},
+          preview_text = ${previewText}
       where id = ${id}
     `;
-    return;
+    return id;
   }
 
-  await sql`
+  const rows = (await sql`
     insert into gp_documents (project_code, doc_type, file_name, mime_type, file_id, file_url, note, preview_text)
-    values (${text(payload.projectCode)}, ${text(payload.docType)}, ${text(payload.fileName)}, ${text(payload.mimeType)}, ${text(payload.fileId)}, ${text(payload.fileUrl)}, ${text(payload.note)}, ${text(payload.previewText)})
+    values (${projectCode}, ${docType}, ${fileName}, ${mimeType}, ${fileId}, '', ${note}, ${previewText})
+    returning id
+  `) as Row[];
+  const nextId = number(rows[0]?.id);
+
+  await sql`
+    update gp_documents
+    set file_url = ${`/api/giaphu-erp/documents/${nextId}/file`},
+        file_data = ${fileData},
+        file_size = ${fileSize}
+    where id = ${nextId}
   `;
+
+  return nextId;
 }
 
 export async function deleteDocument(payload: Record<string, unknown>) {
@@ -1315,10 +1597,22 @@ export async function deleteDocument(payload: Record<string, unknown>) {
 }
 
 export async function queryDocuments(payload: Record<string, unknown>) {
+  await ensureDocumentFileColumns();
   const sql = getSql();
   const keyword = `%${text(payload.keyword)}%`;
   const rows = await sql`
-    select *
+    select id,
+           project_code,
+           doc_type,
+           file_name,
+           mime_type,
+           file_id,
+           file_url,
+           file_size,
+           note,
+           preview_text,
+           created_at,
+           file_data <> '' as has_file
     from gp_documents
     where project_code = ${text(payload.projectCode)}
       and (${text(payload.keyword)} = '' or file_name ilike ${keyword} or doc_type ilike ${keyword} or note ilike ${keyword} or preview_text ilike ${keyword})
@@ -1326,4 +1620,28 @@ export async function queryDocuments(payload: Record<string, unknown>) {
     limit 50
   `;
   return rows;
+}
+
+export async function getDocumentFile(payload: Record<string, unknown>) {
+  await ensureDocumentFileColumns();
+  const sql = getSql();
+  const rows = (await sql`
+    select id, file_name, mime_type, file_data, file_size
+    from gp_documents
+    where id = ${number(payload.id)}
+    limit 1
+  `) as Row[];
+  const document = rows[0];
+
+  if (!document) throw new Error("Không tìm thấy hồ sơ.");
+
+  const fileData = text(document.file_data);
+  if (!fileData) throw new Error("Hồ sơ này chưa có tệp đính kèm. Vui lòng tải tệp lên lại.");
+
+  return {
+    fileName: text(document.file_name) || "ho-so",
+    mimeType: text(document.mime_type) || "application/octet-stream",
+    fileData,
+    fileSize: number(document.file_size),
+  };
 }

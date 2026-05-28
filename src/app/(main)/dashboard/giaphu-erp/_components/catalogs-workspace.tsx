@@ -4,8 +4,9 @@ import { useAuth } from "@clerk/nextjs";
 import { BookOpen, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { buildNextCatalogCode } from "@/lib/giaphu-erp/catalog-codes";
+import { isValidPhoneNumber } from "@/lib/giaphu-erp/phone";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import type { CatalogKind } from "../_lib/catalog-config";
@@ -22,6 +23,19 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
   const { has, orgRole } = useAuth();
   const section = getCatalogSectionByKind(kind);
   const rows = data.catalogs[kind];
+  const requiresPhoneContact = kind === "thauPhu" || kind === "nhaCungCap";
+  const contactField: FormFieldDefinition = {
+    name: "contact",
+    label: "Liên hệ",
+    required: requiresPhoneContact,
+    type: "tel",
+    inputMode: "tel",
+    placeholder: "Ví dụ: 0901234567",
+    validate: (value) => {
+      if (!requiresPhoneContact || !value.trim()) return undefined;
+      return isValidPhoneNumber(value) ? undefined : "Liên hệ phải là số điện thoại hợp lệ.";
+    },
+  };
   const canManage = canAccessClerkPermission(
     {
       orgRole,
@@ -32,16 +46,24 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
   );
   const fields: FormFieldDefinition[] = [
     { name: "kind", label: "Loại danh mục", type: "hidden", value: section.kind },
-    { name: "code", label: section.codeLabel },
+    {
+      name: "code",
+      label: section.codeLabel,
+      value: buildNextCatalogCode(
+        kind,
+        rows.map((row) => row.code),
+      ),
+      required: true,
+    },
     { name: "name", label: section.nameLabel, required: true },
   ];
 
   if (section.showUnit) {
-    fields.push({ name: "unit", label: "Đơn vị" });
+    fields.push({ name: "unit", label: "Đơn vị", required: true });
   }
 
   if (section.showContact) {
-    fields.push({ name: "contact", label: "Liên hệ" });
+    fields.push(contactField);
   }
 
   fields.push({ name: "note", label: section.noteLabel, type: "textarea" });
@@ -56,7 +78,12 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
   }
 
   if (section.showContact) {
-    columns.push({ key: "contact", label: "Liên hệ", accessor: (row) => row.contact, render: (row) => row.contact || "-" });
+    columns.push({
+      key: "contact",
+      label: "Liên hệ",
+      accessor: (row) => row.contact,
+      render: (row) => row.contact || "-",
+    });
   }
 
   columns.push({ key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" });
@@ -78,10 +105,10 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
               fields: [
                 { name: "originalId", label: "ID", type: "hidden", value: row.id },
                 { name: "kind", label: "Loại danh mục", type: "hidden", value: section.kind },
-                { name: "code", label: section.codeLabel, value: row.code },
+                { name: "code", label: section.codeLabel, required: true, value: row.code },
                 { name: "name", label: section.nameLabel, required: true, value: row.name },
-                ...(section.showUnit ? [{ name: "unit", label: "Đơn vị", value: row.unit }] : []),
-                ...(section.showContact ? [{ name: "contact", label: "Liên hệ", value: row.contact }] : []),
+                ...(section.showUnit ? [{ name: "unit", label: "Đơn vị", required: true, value: row.unit }] : []),
+                ...(section.showContact ? [{ ...contactField, value: row.contact }] : []),
                 { name: "note", label: section.noteLabel, type: "textarea" as const, value: row.note },
               ],
             }}
@@ -92,7 +119,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
                 destructive: true,
                 onSelect: () => {
                   if (window.confirm(`Xóa "${row.name}" khỏi danh mục?`)) {
-                    void runAction("deleteCatalog", { id: row.id });
+                    return runAction("deleteCatalog", { id: row.id });
                   }
                 },
               },
@@ -109,32 +136,38 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
         title={section.title}
         description={section.description}
         icon={BookOpen}
-        actions={canManage ? (
-          <ActionDialog
-            title={`Thêm ${section.navigationTitle.toLowerCase()}`}
-            button={section.navigationTitle}
-            icon={Plus}
-            action="manageCatalog"
-            onAction={runAction}
-            fields={fields}
-          />
-        ) : undefined}
+        actions={
+          canManage ? (
+            <ActionDialog
+              title={`Thêm ${section.navigationTitle.toLowerCase()}`}
+              button={section.navigationTitle}
+              icon={Plus}
+              action="manageCatalog"
+              onAction={runAction}
+              fields={fields}
+            />
+          ) : undefined
+        }
       />
 
       <SectionBlock title={section.navigationTitle} meta={<Badge variant="outline">{rows.length} mục</Badge>}>
-          <DataTable
-            loading={isSwitchingProject}
-            columns={columns}
-            rows={rows}
-            getRowId={(row) => row.id}
-            selectable
-            exportFileName={`danh-muc-${section.kind}`}
-            searchPlaceholder={`Tìm ${section.navigationTitle.toLowerCase()}...`}
-            filters={[
-              ...(section.showUnit ? [{ key: "unit", label: "Đơn vị", options: uniqueOptions(rows.map((row) => row.unit)) }] : []),
-              ...(section.showContact ? [{ key: "contact", label: "Liên hệ", options: uniqueOptions(rows.map((row) => row.contact)) }] : []),
-            ]}
-          />
+        <DataTable
+          loading={isSwitchingProject}
+          columns={columns}
+          rows={rows}
+          getRowId={(row) => row.id}
+          selectable
+          exportFileName={`danh-muc-${section.kind}`}
+          searchPlaceholder={`Tìm ${section.navigationTitle.toLowerCase()}...`}
+          filters={[
+            ...(section.showUnit
+              ? [{ key: "unit", label: "Đơn vị", options: uniqueOptions(rows.map((row) => row.unit)) }]
+              : []),
+            ...(section.showContact
+              ? [{ key: "contact", label: "Liên hệ", options: uniqueOptions(rows.map((row) => row.contact)) }]
+              : []),
+          ]}
+        />
       </SectionBlock>
     </div>
   );

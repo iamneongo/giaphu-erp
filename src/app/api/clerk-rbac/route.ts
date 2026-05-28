@@ -1,5 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+
+import { auth } from "@clerk/nextjs/server";
 
 import {
   createOrganizationInvitation,
@@ -16,7 +17,13 @@ import {
   updateOrganizationMembershipRole,
   updateRolePermissions,
 } from "@/lib/clerk/clerk-bapi";
-import { canAccessClerkPermission, ERP_PERMISSION_CATALOG, ERP_PERMISSIONS, type ErpPermissionKey } from "@/lib/clerk/erp-rbac-shared";
+import {
+  canAccessClerkPermission,
+  ERP_PERMISSION_CATALOG,
+  ERP_PERMISSIONS,
+  type ErpPermissionKey,
+} from "@/lib/clerk/erp-rbac-shared";
+import { getAppOrigin } from "@/lib/site-url";
 
 function formatClerkApiError(error: unknown) {
   const fallback = error instanceof Error ? error.message : String(error);
@@ -161,17 +168,22 @@ export async function POST(request: Request) {
       const targetMembership = memberships.find((entry) => entry.publicUserData.userId === userId);
 
       if (!targetMembership) {
-        return NextResponse.json({ status: "error", message: "Không tìm thấy thành viên cần cập nhật." }, { status: 404 });
+        return NextResponse.json(
+          { status: "error", message: "Không tìm thấy thành viên cần cập nhật." },
+          { status: 404 },
+        );
       }
 
       const adminMemberships = memberships.filter((entry) => isAdminRole(entry.role));
-      const wouldRemoveLastAdmin = isAdminRole(targetMembership.role) && !isAdminRole(role) && adminMemberships.length <= 1;
+      const wouldRemoveLastAdmin =
+        isAdminRole(targetMembership.role) && !isAdminRole(role) && adminMemberships.length <= 1;
 
       if (wouldRemoveLastAdmin) {
         return NextResponse.json(
           {
             status: "error",
-            message: "Tổ chức phải luôn có ít nhất một admin. Hãy cấp quyền admin cho người khác trước khi hạ quyền này.",
+            message:
+              "Tổ chức phải luôn có ít nhất một admin. Hãy cấp quyền admin cho người khác trước khi hạ quyền này.",
           },
           { status: 400 },
         );
@@ -191,7 +203,10 @@ export async function POST(request: Request) {
       const role = String(payload.role ?? "").trim();
 
       if (!emailAddress || !role) {
-        return NextResponse.json({ status: "error", message: "Thiếu email hoặc vai trò để gửi lời mời." }, { status: 400 });
+        return NextResponse.json(
+          { status: "error", message: "Thiếu email hoặc vai trò để gửi lời mời." },
+          { status: 400 },
+        );
       }
 
       const invitation = await createOrganizationInvitation({
@@ -199,7 +214,7 @@ export async function POST(request: Request) {
         emailAddress,
         role,
         inviterUserId: session.userId,
-        redirectUrl: `${new URL(request.url).origin}/dashboard/workspaces/team`,
+        redirectUrl: `${getAppOrigin(request.headers, request.url)}/dashboard/workspaces/team`,
       });
 
       return NextResponse.json({ status: "success", invitation });
@@ -242,14 +257,18 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             status: "error",
-            message: "Tổ chức phải luôn có ít nhất một admin. Hãy cấp quyền admin cho người khác trước khi xóa thành viên này.",
+            message:
+              "Tổ chức phải luôn có ít nhất một admin. Hãy cấp quyền admin cho người khác trước khi xóa thành viên này.",
           },
           { status: 400 },
         );
       }
 
       if (userId === session.userId) {
-        return NextResponse.json({ status: "error", message: "Không thể tự xóa chính bạn tại màn quản trị này." }, { status: 400 });
+        return NextResponse.json(
+          { status: "error", message: "Không thể tự xóa chính bạn tại màn quản trị này." },
+          { status: 400 },
+        );
       }
 
       const membership = await deleteOrganizationMembership({

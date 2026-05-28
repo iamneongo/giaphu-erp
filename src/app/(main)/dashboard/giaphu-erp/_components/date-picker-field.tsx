@@ -6,11 +6,11 @@ import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 function parseDateValue(value: string | number | boolean | undefined) {
   if (typeof value !== "string" || !value) return undefined;
@@ -31,12 +31,14 @@ export function DatePickerField({
   placeholder,
   required,
   className,
+  onValueChange,
 }: {
   name: string;
   value?: string | number | boolean;
   placeholder?: string;
   required?: boolean;
   className?: string;
+  onValueChange?: (value: string) => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(() => parseDateValue(value));
@@ -54,7 +56,11 @@ export function DatePickerField({
             type="button"
             variant="outline"
             aria-required={required}
-            className={cn("w-full justify-between text-left font-normal", !selectedDate && "text-muted-foreground", className)}
+            className={cn(
+              "w-full justify-between text-left font-normal",
+              !selectedDate && "text-muted-foreground",
+              className,
+            )}
           >
             {selectedDate ? format(selectedDate, "dd/MM/yyyy", { locale: vi }) : (placeholder ?? "Chọn ngày")}
             <CalendarIcon className="size-4 opacity-70" />
@@ -69,6 +75,7 @@ export function DatePickerField({
             defaultMonth={selectedDate}
             onSelect={(date) => {
               setSelectedDate(date);
+              onValueChange?.(date ? formatDateValue(date) : "");
               setOpen(false);
             }}
           />

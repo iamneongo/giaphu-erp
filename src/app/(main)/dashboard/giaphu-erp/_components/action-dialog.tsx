@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { Plus, RefreshCw, Save } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,13 +27,16 @@ import { DatePickerField } from "./date-picker-field";
 export interface FormFieldDefinition {
   name: string;
   label: string;
-  type?: "text" | "number" | "date" | "textarea" | "select" | "checkbox" | "hidden";
+  type?: "text" | "tel" | "number" | "date" | "textarea" | "select" | "checkbox" | "hidden";
   value?: string | number | boolean;
   placeholder?: string;
   options?: Array<{ label: string; value: string }>;
   required?: boolean;
   disabled?: boolean;
   readOnly?: boolean;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  validate?: (value: string, payload: FormPayload) => string | undefined;
+  deriveValue?: (payload: FormPayload) => string | number | boolean | undefined;
 }
 
 export type FormPayload = Record<string, unknown>;
@@ -47,6 +51,31 @@ export function collectFormPayload(form: HTMLFormElement) {
 
   for (const input of Array.from(form.querySelectorAll<HTMLInputElement>("input[type=checkbox]"))) {
     payload[input.name] = input.checked;
+  }
+
+  return payload;
+}
+
+function focusField(form: HTMLFormElement, fieldName: string) {
+  const control = form.elements.namedItem(fieldName);
+
+  if (control instanceof HTMLElement) {
+    control.focus();
+  }
+}
+
+function buildInitialValues(fields: FormFieldDefinition[]) {
+  const payload: FormPayload = {};
+
+  for (const field of fields) {
+    payload[field.name] = field.value ?? "";
+  }
+
+  for (const field of fields) {
+    const derivedValue = field.deriveValue?.(payload);
+    if (derivedValue !== undefined) {
+      payload[field.name] = derivedValue;
+    }
   }
 
   return payload;
@@ -72,7 +101,7 @@ export function ActionDialog({
   action: string;
   button: string;
   fields: FormFieldDefinition[];
-  onAction: (action: string, payload: FormPayload) => Promise<void>;
+  onAction: (action: string, payload: FormPayload) => Promise<boolean | undefined>;
   initialOpen?: boolean;
   trigger?: React.ReactNode;
   open?: boolean;
@@ -80,6 +109,7 @@ export function ActionDialog({
   hideTrigger?: boolean;
 }) {
   const [internalOpen, setInternalOpen] = React.useState(initialOpen);
+  const [fieldValues, setFieldValues] = React.useState<FormPayload>(() => buildInitialValues(fields));
   const [pending, startTransition] = React.useTransition();
 
   const resolvedOpen = open ?? internalOpen;
@@ -100,13 +130,69 @@ export function ActionDialog({
     }
   }, [initialOpen, open]);
 
+  React.useEffect(() => {
+    if (resolvedOpen) {
+      setFieldValues(buildInitialValues(fields));
+    }
+  }, [fields, resolvedOpen]);
+
+  const updateFieldValue = React.useCallback(
+    (name: string, value: string | number | boolean) => {
+      setFieldValues((current) => {
+        const next = { ...current, [name]: value };
+
+        for (const field of fields) {
+          const derivedValue = field.deriveValue?.(next);
+          if (derivedValue !== undefined) {
+            next[field.name] = derivedValue;
+          }
+        }
+
+        return next;
+      });
+    },
+    [fields],
+  );
+
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const payload = collectFormPayload(event.currentTarget);
+    const form = event.currentTarget;
+    const payload = collectFormPayload(form);
+    const missingField = fields.find((field) => {
+      if (!field.required || field.disabled || field.type === "checkbox" || field.type === "hidden") {
+        return false;
+      }
+
+      return !String(payload[field.name] ?? "").trim();
+    });
+
+    if (missingField) {
+      toast.error(`Thiếu ${missingField.label.toLowerCase()}.`);
+      focusField(form, missingField.name);
+      return;
+    }
+
+    const invalidField = fields
+      .map((field) => ({
+        field,
+        message:
+          field.disabled || field.type === "checkbox" || field.type === "hidden"
+            ? undefined
+            : field.validate?.(String(payload[field.name] ?? ""), payload),
+      }))
+      .find((result) => result.message);
+
+    if (invalidField?.message) {
+      toast.error(invalidField.message);
+      focusField(form, invalidField.field.name);
+      return;
+    }
 
     startTransition(async () => {
-      await onAction(action, payload);
-      setResolvedOpen(false);
+      const shouldClose = await onAction(action, payload);
+      if (shouldClose !== false) {
+        setResolvedOpen(false);
+      }
     });
   }
 
@@ -127,7 +213,7 @@ export function ActionDialog({
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
-        <Form onSubmit={submit} className="space-y-4">
+        <Form onSubmit={submit} noValidate className="space-y-4">
           <FieldGroup className="grid gap-4 md:grid-cols-2">
             {fields.map((field) => {
               if (field.type === "hidden") {
@@ -150,35 +236,38 @@ export function ActionDialog({
                     <Textarea
                       id={field.name}
                       name={field.name}
-                      defaultValue={String(field.value ?? "")}
+                      value={String(fieldValues[field.name] ?? "")}
                       placeholder={field.placeholder}
                       required={field.required}
                       disabled={field.disabled}
                       readOnly={field.readOnly}
+                      onChange={(event) => updateFieldValue(field.name, event.target.value)}
                     />
                   ) : field.type === "date" ? (
                     <DatePickerField
                       name={field.name}
-                      value={field.value}
+                      value={fieldValues[field.name] as string | number | boolean | undefined}
                       placeholder={field.placeholder}
                       required={field.required}
+                      onValueChange={(value) => updateFieldValue(field.name, value)}
                     />
                   ) : field.type === "select" ? (
                     <Select
                       name={field.name}
-                      defaultValue={String(field.value ?? "")}
+                      value={String(fieldValues[field.name] ?? "")}
                       required={field.required}
                       disabled={field.disabled}
+                      onValueChange={(value) => updateFieldValue(field.name, value)}
                     >
                       <SelectTrigger id={field.name} className="w-full">
                         <SelectValue placeholder={field.placeholder ?? `Chọn ${field.label.toLowerCase()}`} />
                       </SelectTrigger>
                       <SelectContent>
-                      {(field.options ?? []).map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
+                        {(field.options ?? []).map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   ) : (
@@ -186,11 +275,13 @@ export function ActionDialog({
                       id={field.name}
                       name={field.name}
                       type={field.type ?? "text"}
-                      defaultValue={String(field.value ?? "")}
+                      value={String(fieldValues[field.name] ?? "")}
                       placeholder={field.placeholder}
                       required={field.required}
                       disabled={field.disabled}
                       readOnly={field.readOnly}
+                      inputMode={field.inputMode}
+                      onChange={(event) => updateFieldValue(field.name, event.target.value)}
                     />
                   )}
                 </Field>
