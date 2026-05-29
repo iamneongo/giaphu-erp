@@ -1,16 +1,20 @@
-import type { GiaPhuDashboardData } from "@/lib/giaphu-erp/types";
+import type { AttendanceRow, GiaPhuDashboardData } from "@/lib/giaphu-erp/types";
 
 export type GiaPhuActionPayload = Record<string, unknown>;
 
-interface GiaPhuResponse {
+export interface GiaPhuActionResult {
   status: "success" | "error";
   message?: string;
   data?: GiaPhuDashboardData;
+  patch?: {
+    attendanceUpsert?: AttendanceRow[];
+    attendanceDeleteIds?: number[];
+  };
   rows?: Record<string, unknown>[];
 }
 
-async function parseResponse(response: Response): Promise<GiaPhuResponse> {
-  const result = (await response.json()) as GiaPhuResponse;
+async function parseResponse(response: Response): Promise<GiaPhuActionResult> {
+  const result = (await response.json()) as GiaPhuActionResult;
 
   if (!response.ok || result.status !== "success") {
     throw new Error(result.message || "Thao tác GiaPhu ERP thất bại.");

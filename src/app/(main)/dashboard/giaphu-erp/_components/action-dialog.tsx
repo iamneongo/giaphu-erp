@@ -101,7 +101,7 @@ export function ActionDialog({
   action: string;
   button: string;
   fields: FormFieldDefinition[];
-  onAction: (action: string, payload: FormPayload) => Promise<boolean | undefined>;
+  onAction: (action: string, payload: FormPayload) => Promise<unknown>;
   initialOpen?: boolean;
   trigger?: React.ReactNode;
   open?: boolean;

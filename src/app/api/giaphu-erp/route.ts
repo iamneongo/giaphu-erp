@@ -138,12 +138,14 @@ export async function POST(request: Request) {
       case "markMaterialPaid":
         await markMaterialPaid(payload);
         break;
-      case "saveWeeklyAttendance":
-        await saveWeeklyAttendance(payload);
-        break;
-      case "deleteAttendanceRow":
-        await deleteAttendanceRow(payload);
-        break;
+      case "saveWeeklyAttendance": {
+        const rows = await saveWeeklyAttendance(payload);
+        return NextResponse.json({ status: "success", patch: { attendanceUpsert: rows } });
+      }
+      case "deleteAttendanceRow": {
+        const ids = await deleteAttendanceRow(payload);
+        return NextResponse.json({ status: "success", patch: { attendanceDeleteIds: ids } });
+      }
       case "closeAttendance":
         await closeAttendance(payload);
         break;

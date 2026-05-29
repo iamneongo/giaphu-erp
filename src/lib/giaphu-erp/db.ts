@@ -154,15 +154,6 @@ function assertProgressDateRules(startDate: string, planEndDate: string, confirm
   }
 }
 
-function assertDateNotBeforeToday(value: string, label: string) {
-  const date = dateInputTime(value);
-  const today = dateInputTime(dateOnly(new Date()));
-
-  if (date != null && today != null && date < today) {
-    throw new Error(`${label} không được nhỏ hơn ngày hiện tại.`);
-  }
-}
-
 function parseLocalizedNumber(value: unknown) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   const raw = text(value).trim();
@@ -1116,12 +1107,11 @@ export async function markMaterialPaid(payload: Record<string, unknown>) {
 export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
   const sql = getSql();
   const rows = Array.isArray(payload.rows) ? (payload.rows as Record<string, unknown>[]) : [payload];
+  const savedRows: AttendanceRow[] = [];
   const firstDate = requireDateInput(rows[0]?.date ?? payload.date, "Ngày chấm công");
   const projectCode = text(payload.projectCode || rows[0]?.projectCode).trim();
   const category = text(payload.category || rows[0]?.category).trim();
   const week = weekFromDate(firstDate);
-
-  assertDateNotBeforeToday(firstDate, "Ngày chấm công");
 
   if (!projectCode) throw new Error("Thiếu công trình.");
   if (!category) throw new Error("Thiếu hạng mục.");
@@ -1150,7 +1140,6 @@ export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
     const total = money(row.total) || halfDaySalary * coefficient + allowance + overtimeAmount;
     const id = number(row.id);
 
-    assertDateNotBeforeToday(date, "Ngày chấm công");
     if (rowWeek !== week) throw new Error("Các dòng chấm công phải cùng tuần.");
     if (!shift) throw new Error("Thiếu ca.");
     if (!staffName) throw new Error("Thiếu nhân sự.");
@@ -1158,7 +1147,7 @@ export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
     if (!status) throw new Error("Thiếu trạng thái.");
 
     if (id > 0) {
-      await sql`
+      const [savedRow] = (await sql`
         update gp_attendance
         set work_date = ${date},
             week = ${week},
@@ -1176,11 +1165,13 @@ export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
             coefficient = ${coefficient},
             updated_at = now()
         where id = ${id}
-      `;
+        returning *
+      `) as Row[];
+      if (savedRow) savedRows.push(attendanceFromRow(savedRow));
       continue;
     }
 
-    await sql`
+    const [savedRow] = (await sql`
       insert into gp_attendance (
         work_date, week, shift, project_code, category, staff_name, position, half_day_salary,
         allowance, overtime_hours, overtime_amount, total, status, coefficient
@@ -1189,8 +1180,12 @@ export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
         ${date}, ${week}, ${shift}, ${projectCode}, ${category}, ${staffName}, ${position},
         ${halfDaySalary}, ${allowance}, ${overtimeHours}, ${overtimeAmount}, ${total}, ${status}, ${coefficient}
       )
-    `;
+      returning *
+    `) as Row[];
+    if (savedRow) savedRows.push(attendanceFromRow(savedRow));
   }
+
+  return savedRows;
 }
 
 export async function deleteAttendanceRow(payload: Record<string, unknown>) {
@@ -1203,6 +1198,7 @@ export async function deleteAttendanceRow(payload: Record<string, unknown>) {
   const [lock] = (await sql`select status from gp_attendance_locks where lock_key = ${lockKey}`) as Row[];
   if (text(lock?.status) === "CLOSED") throw new Error("Tuần/hạng mục đã kết sổ, không thể xóa chấm công.");
   await sql`delete from gp_attendance where id = ${id}`;
+  return [id];
 }
 
 function attendanceLockKey(projectCode: string, week: string, category: string) {

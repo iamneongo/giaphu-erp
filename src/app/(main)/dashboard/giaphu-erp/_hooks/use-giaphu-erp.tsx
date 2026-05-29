@@ -15,6 +15,7 @@ import {
   writeActiveProjectCode,
 } from "@/lib/giaphu-erp/project-context";
 import type {
+  AttendanceRow,
   CostSummary,
   GiaPhuDashboardData,
   MaterialRow,
@@ -26,6 +27,7 @@ import type {
 import {
   fetchGiaPhuData,
   type GiaPhuActionPayload,
+  type GiaPhuActionResult,
   queryGiaPhuDocuments,
   runGiaPhuAction,
 } from "../_lib/giaphu-erp-api";
@@ -38,7 +40,7 @@ interface GiaPhuErpContextValue {
   summary: CostSummary;
   setActiveProjectCode: (code: string) => void;
   refresh: () => Promise<void>;
-  runAction: (action: string, payload: GiaPhuActionPayload) => Promise<boolean>;
+  runAction: (action: string, payload: GiaPhuActionPayload) => Promise<GiaPhuActionResult | false>;
   searchDocuments: (payload: GiaPhuActionPayload) => Promise<Record<string, unknown>[]>;
   scoped: {
     materials: MaterialRow[];
@@ -65,6 +67,58 @@ const emptySummary: CostSummary = {
   operations: 0,
   total: 0,
 };
+
+type GiaPhuDataPatch = {
+  attendanceUpsert?: AttendanceRow[];
+  attendanceDeleteIds?: number[];
+};
+
+function applyDataPatch(current: GiaPhuDashboardData, patch: GiaPhuDataPatch) {
+  if (!patch.attendanceUpsert?.length && !patch.attendanceDeleteIds?.length) return current;
+
+  const deleteIds = new Set(patch.attendanceDeleteIds ?? []);
+  const upsertById = new Map((patch.attendanceUpsert ?? []).map((row) => [row.id, row]));
+  const laborDiffByProject = new Map<string, number>();
+  const addLaborDiff = (projectCode: string, value: number) => {
+    laborDiffByProject.set(projectCode, (laborDiffByProject.get(projectCode) ?? 0) + value);
+  };
+
+  const attendance = current.attendance
+    .filter((row) => {
+      if (deleteIds.has(row.id)) {
+        addLaborDiff(row.projectCode, -Number(row.total || 0));
+        return false;
+      }
+
+      const replacement = upsertById.get(row.id);
+      if (replacement) {
+        addLaborDiff(replacement.projectCode, Number(replacement.total || 0) - Number(row.total || 0));
+        upsertById.delete(row.id);
+        return false;
+      }
+
+      return true;
+    })
+    .concat(Array.from(upsertById.values()));
+
+  for (const row of upsertById.values()) {
+    addLaborDiff(row.projectCode, Number(row.total || 0));
+  }
+
+  const summaries = { ...current.summaries };
+  for (const [projectCode, laborDiff] of laborDiffByProject) {
+    const summary = summaries[projectCode];
+    if (!summary) continue;
+
+    summaries[projectCode] = {
+      ...summary,
+      labor: summary.labor + laborDiff,
+      total: summary.total + laborDiff,
+    };
+  }
+
+  return { ...current, attendance, summaries };
+}
 
 export function GiaPhuErpProvider({
   initialData,
@@ -191,11 +245,16 @@ export function GiaPhuErpProvider({
           setData(result.data);
           window.dispatchEvent(new Event(PROJECTS_REFRESH_EVENT));
         } else {
-          await refresh();
+          const patch = result.patch;
+          if (patch) {
+            setData((current) => applyDataPatch(current, patch));
+          } else {
+            await refresh();
+          }
         }
 
         toast.success("Đã lưu dữ liệu.");
-        return true;
+        return result;
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
         return false;

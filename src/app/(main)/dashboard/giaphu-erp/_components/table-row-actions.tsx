@@ -28,7 +28,7 @@ type EditActionConfig = {
   description?: string;
   action: string;
   fields: FormFieldDefinition[];
-  onAction: (action: string, payload: FormPayload) => Promise<boolean | undefined>;
+  onAction: (action: string, payload: FormPayload) => Promise<unknown>;
 };
 
 export function TableRowActions({ edit, actions = [] }: { edit?: EditActionConfig; actions?: RowActionItem[] }) {
