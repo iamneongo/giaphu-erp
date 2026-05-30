@@ -191,6 +191,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
             ]}
             rows={data.projects}
             getRowId={(project) => project.code}
+            detailType="projects"
             selectable
             exportFileName="crm-cong-trinh"
             searchPlaceholder="Tìm theo mã, tên, chủ đầu tư..."
@@ -297,6 +298,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
             ]}
             rows={scoped.contracts}
             getRowId={(row) => row.id}
+            detailType="contracts"
             selectable
             exportFileName="crm-hop-dong"
             searchPlaceholder="Tìm hợp đồng, ghi chú..."
@@ -381,6 +383,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
             ]}
             rows={scoped.payments}
             getRowId={(row) => row.id}
+            detailType="payments"
             selectable
             exportFileName="crm-thu-tien"
             searchPlaceholder="Tìm ghi chú thanh toán..."

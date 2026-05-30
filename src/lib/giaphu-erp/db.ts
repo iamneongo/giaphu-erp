@@ -8,6 +8,9 @@ import type {
   ContractRow,
   CostSummary,
   GiaPhuDashboardData,
+  GiaPhuOverviewInsights,
+  GiaPhuPagedDataset,
+  GiaPhuReportsInsights,
   LaborNormRow,
   MaterialNormRow,
   MaterialRow,
@@ -25,9 +28,25 @@ type DashboardDataOptions = {
   activeProjectCode?: string;
 };
 
+export type GiaPhuPagedRowsOptions = {
+  dataset: GiaPhuPagedDataset;
+  activeProjectCode?: string;
+  pageIndex?: number;
+  pageSize?: number;
+  search?: string;
+  filters?: Record<string, string>;
+};
+
+export type GiaPhuPagedRowsResult =
+  | { dataset: "materials"; rows: MaterialRow[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "subcontractors"; rows: SubcontractorRow[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "operations"; rows: OperationRow[]; total: number; pageIndex: number; pageSize: number };
+
 type GlobalSchemaState = typeof globalThis & {
   __giaPhuSchemaPromise?: Promise<void>;
   __giaPhuSchemaReady?: boolean;
+  __giaPhuPerformanceIndexesPromise?: Promise<void>;
+  __giaPhuPerformanceIndexesReady?: boolean;
 };
 
 const catalogFieldLabels: Record<CatalogItem["kind"], { code: string; name: string }> = {
@@ -649,11 +668,14 @@ async function createGiaPhuSchemaInternal() {
     updated_at timestamptz not null default now(),
     unique(project_code, category)
   )`;
+
+  await ensureGiaPhuPerformanceIndexes();
 }
 
 export async function createGiaPhuSchema() {
   const state = globalThis as GlobalSchemaState;
   if (state.__giaPhuSchemaReady) {
+    await ensureGiaPhuPerformanceIndexes();
     return;
   }
 
@@ -677,6 +699,27 @@ export async function createGiaPhuSchema() {
   });
   await state.__giaPhuSchemaPromise;
   state.__giaPhuSchemaReady = true;
+  await ensureGiaPhuPerformanceIndexes();
+}
+
+async function ensureGiaPhuPerformanceIndexes() {
+  const state = globalThis as GlobalSchemaState;
+  if (state.__giaPhuPerformanceIndexesReady) return;
+
+  const sql = getSql();
+  state.__giaPhuPerformanceIndexesPromise ??= (async () => {
+    await sql`create index if not exists gp_materials_project_date_idx on gp_materials (project_code, work_date desc, id desc)`;
+    await sql`create index if not exists gp_attendance_project_date_idx on gp_attendance (project_code, work_date desc, id desc)`;
+    await sql`create index if not exists gp_subcontractors_project_date_idx on gp_subcontractors (project_code, work_date desc, id desc)`;
+    await sql`create index if not exists gp_operations_project_date_idx on gp_operations (project_code, work_date desc, id desc)`;
+    await sql`create index if not exists gp_documents_project_date_idx on gp_documents (project_code, created_at desc, id desc)`;
+  })().catch((error) => {
+    state.__giaPhuPerformanceIndexesPromise = undefined;
+    throw error;
+  });
+
+  await state.__giaPhuPerformanceIndexesPromise;
+  state.__giaPhuPerformanceIndexesReady = true;
 }
 
 export async function getGiaPhuProjectList(): Promise<ProjectRow[]> {
@@ -777,6 +820,514 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     contracts: (contractRows as Row[]).map(contractFromRow),
     attendanceLocks: (lockRows as Row[]).map(lockFromRow),
     summaries: buildSummaries({ materials, attendance, subcontractors, operations }),
+  };
+}
+
+function normalizePageSize(value: unknown) {
+  const parsed = Number(value ?? 20);
+  if (!Number.isFinite(parsed)) return 20;
+  return Math.min(Math.max(Math.trunc(parsed), 5), 100);
+}
+
+function normalizePageIndex(value: unknown) {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(Math.trunc(parsed), 0);
+}
+
+function totalFromCountRows(rows: unknown) {
+  const [row] = rows as Row[];
+  return number(row?.total);
+}
+
+function monthKey(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function lastMonthKeys(count: number) {
+  const now = new Date();
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (count - index - 1), 1);
+    return monthKey(date);
+  });
+}
+
+function emptyMonthlyPoint(month: string) {
+  return {
+    month,
+    materials: 0,
+    labor: 0,
+    subcontractors: 0,
+    operations: 0,
+    cashIn: 0,
+  };
+}
+
+function buildBreakdownFromRows(rows: Row[]) {
+  const labels: Record<string, string> = {
+    materials: "Vật tư",
+    labor: "Nhân công",
+    subcontractors: "Thầu phụ",
+    operations: "Vận hành",
+  };
+  const total = rows.reduce((sum, row) => sum + number(row.value), 0) || 1;
+
+  return rows.map((row) => ({
+    key: text(row.key),
+    label: labels[text(row.key)] ?? text(row.key),
+    value: number(row.value),
+    rows: number(row.rows),
+    share: (number(row.value) / total) * 100,
+  }));
+}
+
+function percentChange(current: number, previous: number) {
+  if (!previous) return current ? 100 : 0;
+  return ((current - previous) / previous) * 100;
+}
+
+function normalizeWeek(value: unknown) {
+  return text(value) || "Chưa rõ";
+}
+
+function compareWeekDesc(a: string, b: string) {
+  const [aWeek = "0", aYear = "0"] = a.split(".");
+  const [bWeek = "0", bYear = "0"] = b.split(".");
+  return Number(bYear) - Number(aYear) || Number(bWeek) - Number(aWeek);
+}
+
+async function resolveActiveProjectCode(activeProjectCode?: string) {
+  const projects = await getGiaPhuProjectList();
+  return projects.some((project) => project.code === activeProjectCode)
+    ? (activeProjectCode ?? "")
+    : (projects[0]?.code ?? "");
+}
+
+export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = {}): Promise<GiaPhuOverviewInsights> {
+  const sql = getSql();
+  const activeProjectCode = await resolveActiveProjectCode(options.activeProjectCode);
+  const monthlyKeys = lastMonthKeys(6);
+
+  if (!activeProjectCode) {
+    const monthly = monthlyKeys.map(emptyMonthlyPoint);
+    return {
+      monthly,
+      breakdown: buildBreakdownFromRows([]),
+      recentActivities: [],
+      categorySpend: [],
+      headline: {
+        contractValue: 0,
+        collectedCash: 0,
+        totalCost: 0,
+        openMaterialDebt: 0,
+        activeCategories: 0,
+        activeWeeks: 0,
+        costTrend: 0,
+        cashTrend: 0,
+      },
+    };
+  }
+
+  const [
+    materialBreakdown,
+    laborBreakdown,
+    subcontractorBreakdown,
+    operationBreakdown,
+    contractRows,
+    paymentRows,
+    unpaidRows,
+    activeRows,
+    monthlyMaterialRows,
+    monthlyLaborRows,
+    monthlySubcontractorRows,
+    monthlyOperationRows,
+    monthlyPaymentRows,
+    categoryMaterialRows,
+    categoryLaborRows,
+    categorySubcontractorRows,
+    categoryOperationRows,
+    recentMaterialRows,
+    recentPaymentRows,
+    recentSubcontractorRows,
+    recentOperationRows,
+  ] = await Promise.all([
+    sql`select 'materials' as key, count(*)::int as rows, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where project_code = ${activeProjectCode}`,
+    sql`select 'labor' as key, count(*)::int as rows, coalesce(sum(total), 0)::float8 as value from gp_attendance where project_code = ${activeProjectCode}`,
+    sql`select 'subcontractors' as key, count(*)::int as rows, coalesce(sum(advance), 0)::float8 as value from gp_subcontractors where project_code = ${activeProjectCode}`,
+    sql`select 'operations' as key, count(*)::int as rows, coalesce(sum(amount), 0)::float8 as value from gp_operations where project_code = ${activeProjectCode}`,
+    sql`select coalesce(sum(value), 0)::float8 as total from gp_contracts where project_code = ${activeProjectCode}`,
+    sql`select coalesce(sum(amount), 0)::float8 as total from gp_payments where project_code = ${activeProjectCode}`,
+    sql`select coalesce(sum(quantity * price), 0)::float8 as total from gp_materials where project_code = ${activeProjectCode} and payment_status <> 'Đã TT'`,
+    sql`
+      select
+        (
+          select count(distinct category)::int from (
+            select category from gp_materials where project_code = ${activeProjectCode}
+            union all select category from gp_attendance where project_code = ${activeProjectCode}
+            union all select category from gp_subcontractors where project_code = ${activeProjectCode}
+            union all select description as category from gp_operations where project_code = ${activeProjectCode}
+            union all select category from gp_progress where project_code = ${activeProjectCode}
+          ) categories where coalesce(category, '') <> ''
+        ) as active_categories,
+        (
+          select count(distinct week)::int from (
+            select week from gp_materials where project_code = ${activeProjectCode}
+            union all select week from gp_attendance where project_code = ${activeProjectCode}
+            union all select week from gp_subcontractors where project_code = ${activeProjectCode}
+            union all select week from gp_operations where project_code = ${activeProjectCode}
+          ) weeks where coalesce(week, '') <> ''
+        ) as active_weeks
+    `,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(advance), 0)::float8 as value from gp_subcontractors where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_operations where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(payment_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_payments where project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(advance), 0)::float8 as subcontractors from gp_subcontractors where project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(description, 'Khác') as category, coalesce(sum(amount), 0)::float8 as operations from gp_operations where project_code = ${activeProjectCode} group by 1`,
+    sql`select id, material_name, material_code, supplier, category, quantity, price, work_date from gp_materials where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 5`,
+    sql`select id, note, amount, payment_date from gp_payments where project_code = ${activeProjectCode} order by coalesce(payment_date, created_at::date) desc, id desc limit 5`,
+    sql`select id, contractor_name, category, note, advance, work_date from gp_subcontractors where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 5`,
+    sql`select id, description, amount, work_date from gp_operations where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 5`,
+  ]);
+
+  const breakdown = buildBreakdownFromRows([
+    ...(materialBreakdown as Row[]),
+    ...(laborBreakdown as Row[]),
+    ...(subcontractorBreakdown as Row[]),
+    ...(operationBreakdown as Row[]),
+  ]);
+  const monthlyMap = new Map(monthlyKeys.map((month) => [month, emptyMonthlyPoint(month)]));
+  const addMonthly = (rows: unknown, key: "materials" | "labor" | "subcontractors" | "operations" | "cashIn") => {
+    for (const row of rows as Row[]) {
+      const entry = monthlyMap.get(text(row.month));
+      if (entry) entry[key] += number(row.value);
+    }
+  };
+  addMonthly(monthlyMaterialRows, "materials");
+  addMonthly(monthlyLaborRows, "labor");
+  addMonthly(monthlySubcontractorRows, "subcontractors");
+  addMonthly(monthlyOperationRows, "operations");
+  addMonthly(monthlyPaymentRows, "cashIn");
+
+  const categoryMap = new Map<
+    string,
+    { category: string; total: number; materials: number; labor: number; subcontractors: number; operations: number }
+  >();
+  const ensureCategory = (category: string) => {
+    const key = category || "Khác";
+    const current = categoryMap.get(key) ?? {
+      category: key,
+      total: 0,
+      materials: 0,
+      labor: 0,
+      subcontractors: 0,
+      operations: 0,
+    };
+    categoryMap.set(key, current);
+    return current;
+  };
+  for (const row of categoryMaterialRows as Row[]) {
+    const entry = ensureCategory(text(row.category));
+    entry.materials += number(row.materials);
+    entry.total += number(row.materials);
+  }
+  for (const row of categoryLaborRows as Row[]) {
+    const entry = ensureCategory(text(row.category));
+    entry.labor += number(row.labor);
+    entry.total += number(row.labor);
+  }
+  for (const row of categorySubcontractorRows as Row[]) {
+    const entry = ensureCategory(text(row.category));
+    entry.subcontractors += number(row.subcontractors);
+    entry.total += number(row.subcontractors);
+  }
+  for (const row of categoryOperationRows as Row[]) {
+    const entry = ensureCategory(text(row.category));
+    entry.operations += number(row.operations);
+    entry.total += number(row.operations);
+  }
+
+  const recentActivities = [
+    ...(recentMaterialRows as Row[]).map((row) => ({
+      id: `material-${number(row.id)}`,
+      type: "Vật tư",
+      title: text(row.material_name) || text(row.material_code) || "Phiếu vật tư",
+      subtitle: text(row.supplier) || text(row.category) || "Chưa phân loại",
+      amount: number(row.quantity) * number(row.price),
+      date: dateOnly(row.work_date),
+    })),
+    ...(recentPaymentRows as Row[]).map((row) => ({
+      id: `payment-${number(row.id)}`,
+      type: "Thu tiền",
+      title: text(row.note) || "Phiếu thu công trình",
+      subtitle: activeProjectCode,
+      amount: number(row.amount),
+      date: dateOnly(row.payment_date),
+    })),
+    ...(recentSubcontractorRows as Row[]).map((row) => ({
+      id: `subcontractor-${number(row.id)}`,
+      type: "Thầu phụ",
+      title: text(row.contractor_name) || "Tạm ứng thầu phụ",
+      subtitle: text(row.category) || text(row.note) || "Chưa ghi chú",
+      amount: number(row.advance),
+      date: dateOnly(row.work_date),
+    })),
+    ...(recentOperationRows as Row[]).map((row) => ({
+      id: `operation-${number(row.id)}`,
+      type: "Vận hành",
+      title: text(row.description) || "Chi phí vận hành",
+      subtitle: activeProjectCode,
+      amount: number(row.amount),
+      date: dateOnly(row.work_date),
+    })),
+  ]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 5);
+
+  const monthly = monthlyKeys.map((month) => monthlyMap.get(month) ?? emptyMonthlyPoint(month));
+  const latest = monthly.at(-1) ?? emptyMonthlyPoint(monthKey(new Date()));
+  const previous = monthly.at(-2) ?? emptyMonthlyPoint(monthKey(new Date()));
+  const currentCost = latest.materials + latest.labor + latest.subcontractors + latest.operations;
+  const previousCost = previous.materials + previous.labor + previous.subcontractors + previous.operations;
+  const totalCost = breakdown.reduce((sum, row) => sum + row.value, 0);
+  const [contractTotal] = contractRows as Row[];
+  const [paymentTotal] = paymentRows as Row[];
+  const [unpaidTotal] = unpaidRows as Row[];
+  const [activeTotals] = activeRows as Row[];
+
+  return {
+    monthly,
+    breakdown,
+    recentActivities,
+    categorySpend: [...categoryMap.values()].sort((a, b) => b.total - a.total).slice(0, 6),
+    headline: {
+      contractValue: number(contractTotal?.total),
+      collectedCash: number(paymentTotal?.total),
+      totalCost,
+      openMaterialDebt: number(unpaidTotal?.total),
+      activeCategories: number(activeTotals?.active_categories),
+      activeWeeks: number(activeTotals?.active_weeks),
+      costTrend: percentChange(currentCost, previousCost),
+      cashTrend: percentChange(latest.cashIn, previous.cashIn),
+    },
+  };
+}
+
+export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {}): Promise<GiaPhuReportsInsights> {
+  const overview = await getGiaPhuOverviewInsights(options);
+  const sql = getSql();
+  const activeProjectCode = await resolveActiveProjectCode(options.activeProjectCode);
+  const monthlyKeys = lastMonthKeys(8);
+
+  if (!activeProjectCode) {
+    return {
+      breakdown: overview.breakdown,
+      monthly: monthlyKeys.map(emptyMonthlyPoint),
+      weekly: [],
+      categorySpend: [],
+      headline: {
+        totalCost: 0,
+        contractValue: 0,
+        collectedCash: 0,
+        unpaidMaterials: 0,
+        contractCoverage: 0,
+        costCoverage: 0,
+      },
+    };
+  }
+
+  const [
+    monthlyMaterialRows,
+    monthlyLaborRows,
+    monthlySubcontractorRows,
+    monthlyOperationRows,
+    monthlyPaymentRows,
+    weeklyMaterialRows,
+    weeklyLaborRows,
+    weeklySubcontractorRows,
+    weeklyOperationRows,
+  ] = await Promise.all([
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(advance), 0)::float8 as value from gp_subcontractors where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_operations where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(payment_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_payments where project_code = ${activeProjectCode} group by 1`,
+    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where project_code = ${activeProjectCode} group by 1`,
+    sql`select week, coalesce(sum(total), 0)::float8 as labor from gp_attendance where project_code = ${activeProjectCode} group by 1`,
+    sql`select week, coalesce(sum(advance), 0)::float8 as subcontractors from gp_subcontractors where project_code = ${activeProjectCode} group by 1`,
+    sql`select week, coalesce(sum(amount), 0)::float8 as operations from gp_operations where project_code = ${activeProjectCode} group by 1`,
+  ]);
+
+  const monthlyMap = new Map(monthlyKeys.map((month) => [month, emptyMonthlyPoint(month)]));
+  const addMonthly = (rows: unknown, key: "materials" | "labor" | "subcontractors" | "operations" | "cashIn") => {
+    for (const row of rows as Row[]) {
+      const entry = monthlyMap.get(text(row.month));
+      if (entry) entry[key] += number(row.value);
+    }
+  };
+  addMonthly(monthlyMaterialRows, "materials");
+  addMonthly(monthlyLaborRows, "labor");
+  addMonthly(monthlySubcontractorRows, "subcontractors");
+  addMonthly(monthlyOperationRows, "operations");
+  addMonthly(monthlyPaymentRows, "cashIn");
+
+  const weeklyMap = new Map<
+    string,
+    { week: string; materials: number; labor: number; subcontractors: number; operations: number; total: number }
+  >();
+  const ensureWeek = (week: unknown) => {
+    const key = normalizeWeek(week);
+    const current = weeklyMap.get(key) ?? {
+      week: key,
+      materials: 0,
+      labor: 0,
+      subcontractors: 0,
+      operations: 0,
+      total: 0,
+    };
+    weeklyMap.set(key, current);
+    return current;
+  };
+  for (const row of weeklyMaterialRows as Row[]) ensureWeek(row.week).materials += number(row.materials);
+  for (const row of weeklyLaborRows as Row[]) ensureWeek(row.week).labor += number(row.labor);
+  for (const row of weeklySubcontractorRows as Row[]) ensureWeek(row.week).subcontractors += number(row.subcontractors);
+  for (const row of weeklyOperationRows as Row[]) ensureWeek(row.week).operations += number(row.operations);
+  const weekly = [...weeklyMap.values()]
+    .map((row) => ({ ...row, total: row.materials + row.labor + row.subcontractors + row.operations }))
+    .sort((a, b) => compareWeekDesc(a.week, b.week))
+    .slice(0, 8)
+    .reverse();
+  const totalCost = overview.breakdown.reduce((sum, row) => sum + row.value, 0);
+
+  return {
+    breakdown: overview.breakdown,
+    monthly: monthlyKeys.map((month) => monthlyMap.get(month) ?? emptyMonthlyPoint(month)),
+    weekly,
+    categorySpend: overview.categorySpend.slice(0, 8),
+    headline: {
+      totalCost,
+      contractValue: overview.headline.contractValue,
+      collectedCash: overview.headline.collectedCash,
+      unpaidMaterials: overview.headline.openMaterialDebt,
+      contractCoverage: overview.headline.contractValue
+        ? (overview.headline.collectedCash / overview.headline.contractValue) * 100
+        : 0,
+      costCoverage: totalCost ? (overview.headline.collectedCash / totalCost) * 100 : 0,
+    },
+  };
+}
+
+export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promise<GiaPhuPagedRowsResult> {
+  const sql = getSql();
+  const projects = await getGiaPhuProjectList();
+  const activeProjectCode = projects.some((project) => project.code === options.activeProjectCode)
+    ? (options.activeProjectCode ?? "")
+    : (projects[0]?.code ?? "");
+  const pageSize = normalizePageSize(options.pageSize);
+  const pageIndex = normalizePageIndex(options.pageIndex);
+  const offset = pageIndex * pageSize;
+  const search = text(options.search).trim();
+  const pattern = `%${search}%`;
+  const filterValue = (key: string) => text(options.filters?.[key]).trim();
+
+  if (!activeProjectCode) {
+    return { dataset: options.dataset, rows: [], total: 0, pageIndex, pageSize } as GiaPhuPagedRowsResult;
+  }
+
+  if (options.dataset === "materials") {
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', week, shift, category, material_code, material_name, unit, debt, status, payment_status, payment_info, material_type, supplier)) like lower(${pattern})`
+      : sql``;
+    const weekFilter = filterValue("week");
+    const materialTypeFilter = filterValue("materialType");
+    const paymentStatusFilter = filterValue("paymentStatus");
+    const categoryFilter = filterValue("category");
+    const supplierFilter = filterValue("supplier");
+    const whereFilters = sql`
+      ${weekFilter ? sql`and week = ${weekFilter}` : sql``}
+      ${materialTypeFilter ? sql`and material_type = ${materialTypeFilter}` : sql``}
+      ${paymentStatusFilter ? sql`and payment_status = ${paymentStatusFilter}` : sql``}
+      ${categoryFilter ? sql`and category = ${categoryFilter}` : sql``}
+      ${supplierFilter ? sql`and supplier = ${supplierFilter}` : sql``}
+    `;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_materials where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`
+        select *
+        from gp_materials
+        where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        order by coalesce(work_date, created_at::date) desc, id desc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "materials",
+      rows: (rows as Row[]).map(materialFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
+  if (options.dataset === "subcontractors") {
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', week, category, contractor_name, note, status)) like lower(${pattern})`
+      : sql``;
+    const weekFilter = filterValue("week");
+    const categoryFilter = filterValue("category");
+    const contractorNameFilter = filterValue("contractorName");
+    const whereFilters = sql`
+      ${weekFilter ? sql`and week = ${weekFilter}` : sql``}
+      ${categoryFilter ? sql`and category = ${categoryFilter}` : sql``}
+      ${contractorNameFilter ? sql`and contractor_name = ${contractorNameFilter}` : sql``}
+    `;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_subcontractors where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`
+        select *
+        from gp_subcontractors
+        where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        order by coalesce(work_date, created_at::date) desc, id desc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "subcontractors",
+      rows: (rows as Row[]).map(subcontractorFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
+  const whereSearch = search ? sql`and lower(concat_ws(' ', week, description)) like lower(${pattern})` : sql``;
+  const weekFilter = filterValue("week");
+  const whereFilters = sql`${weekFilter ? sql`and week = ${weekFilter}` : sql``}`;
+  const [countRows, rows] = await Promise.all([
+    sql`select count(*)::int as total from gp_operations where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+    sql`
+      select *
+      from gp_operations
+      where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+      order by coalesce(work_date, created_at::date) desc, id desc
+      limit ${pageSize}
+      offset ${offset}
+    `,
+  ]);
+
+  return {
+    dataset: "operations",
+    rows: (rows as Row[]).map(operationFromRow),
+    total: totalFromCountRows(countRows),
+    pageIndex,
+    pageSize,
   };
 }
 
@@ -1616,6 +2167,30 @@ export async function queryDocuments(payload: Record<string, unknown>) {
     limit 50
   `;
   return rows;
+}
+
+export async function getDocumentDetail(payload: Record<string, unknown>) {
+  await ensureDocumentFileColumns();
+  const sql = getSql();
+  const rows = (await sql`
+    select id,
+           project_code,
+           doc_type,
+           file_name,
+           mime_type,
+           file_id,
+           file_url,
+           file_size,
+           note,
+           preview_text,
+           created_at,
+           file_data <> '' as has_file
+    from gp_documents
+    where id = ${number(payload.id)}
+    limit 1
+  `) as Row[];
+
+  return rows[0] ?? null;
 }
 
 export async function getDocumentFile(payload: Record<string, unknown>) {

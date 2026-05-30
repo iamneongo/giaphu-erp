@@ -19,7 +19,10 @@ import {
   deleteSubcontractor,
   deleteSubcontractorContract,
   getGiaPhuDashboardData,
+  getGiaPhuOverviewInsights,
+  getGiaPhuPagedRows,
   getGiaPhuProjectList,
+  getGiaPhuReportsInsights,
   manageCatalog,
   manageStaff,
   markMaterialPaid,
@@ -40,6 +43,7 @@ import {
   updateMaterialPrice,
 } from "@/lib/giaphu-erp/db";
 import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
+import type { GiaPhuPagedDataset } from "@/lib/giaphu-erp/types";
 
 export const runtime = "nodejs";
 
@@ -67,6 +71,22 @@ function readActiveProjectCode(request: Request, payload?: Record<string, unknow
   return cookieValue ? decodeURIComponent(cookieValue) : undefined;
 }
 
+function parseFilters(searchParams: URLSearchParams) {
+  const rawFilters = searchParams.get("filters");
+  if (!rawFilters) return {};
+
+  try {
+    const parsed = JSON.parse(rawFilters) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([, value]) => typeof value === "string" && value.trim() && value !== "__all")
+        .map(([key, value]) => [key, String(value)]),
+    );
+  } catch {
+    return {};
+  }
+}
+
 export async function GET(request: Request) {
   try {
     await createGiaPhuSchema();
@@ -75,6 +95,41 @@ export async function GET(request: Request) {
     if (searchParams.get("view") === "projects") {
       const projects = await getGiaPhuProjectList();
       return NextResponse.json({ status: "success", projects });
+    }
+
+    if (searchParams.get("view") === "rows") {
+      const dataset = searchParams.get("dataset") as GiaPhuPagedDataset | null;
+      if (!dataset || !["materials", "subcontractors", "operations"].includes(dataset)) {
+        return NextResponse.json({ status: "error", message: "Dataset không hợp lệ." }, { status: 400 });
+      }
+
+      const result = await getGiaPhuPagedRows({
+        dataset,
+        activeProjectCode: searchParams.get("projectCode") || readActiveProjectCode(request),
+        pageIndex: Number(searchParams.get("pageIndex") ?? 0),
+        pageSize: Number(searchParams.get("pageSize") ?? 20),
+        search: searchParams.get("search") ?? "",
+        filters: parseFilters(searchParams),
+      });
+
+      return NextResponse.json({ status: "success", ...result });
+    }
+
+    if (searchParams.get("view") === "insights") {
+      const type = searchParams.get("type");
+      const activeProjectCode = searchParams.get("projectCode") || readActiveProjectCode(request);
+
+      if (type === "overview") {
+        const insights = await getGiaPhuOverviewInsights({ activeProjectCode });
+        return NextResponse.json({ status: "success", insights });
+      }
+
+      if (type === "reports") {
+        const insights = await getGiaPhuReportsInsights({ activeProjectCode });
+        return NextResponse.json({ status: "success", insights });
+      }
+
+      return NextResponse.json({ status: "error", message: "Loại báo cáo không hợp lệ." }, { status: 400 });
     }
 
     const data = await getGiaPhuDashboardData({

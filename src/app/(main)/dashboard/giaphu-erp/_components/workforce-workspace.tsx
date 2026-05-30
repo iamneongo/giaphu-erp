@@ -1162,6 +1162,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             ]}
             rows={data.staff}
             getRowId={(row) => row.id}
+            detailType="staff"
             selectable
             exportFileName="nhan-su"
             searchPlaceholder="Tìm theo mã, tên, đội..."
@@ -1252,6 +1253,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             ]}
             rows={scoped.laborNorms}
             getRowId={(row) => row.id}
+            detailType="labor-norms"
             selectable
             exportFileName="dinh-muc-nhan-cong"
             filters={[{ key: "category", label: "Hạng mục", options: laborNormCategoryOptions }]}
@@ -1380,6 +1382,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             ]}
             rows={scoped.progress}
             getRowId={(row) => row.id}
+            detailType="progress"
             selectable
             exportFileName="tien-do-hang-muc"
             filters={[{ key: "category", label: "Hạng mục", options: progressCategoryOptions }]}

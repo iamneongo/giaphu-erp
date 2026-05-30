@@ -5,8 +5,10 @@ import { Banknote, FileText, Hammer, ShieldCheck, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import type { OperationRow, SubcontractorRow } from "@/lib/giaphu-erp/types";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
+import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, todayIso } from "../_lib/date-utils";
 import { catalogOptions, uniqueOptions } from "../_lib/form-options";
 import { formatMoney } from "../_lib/formatters";
@@ -21,6 +23,16 @@ type SubcontractorsSection = "advances" | "contracts" | "operations";
 export function SubcontractorsWorkspace({ section = "advances" }: { section?: SubcontractorsSection }) {
   const { data, activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
   const { has, orgRole } = useAuth();
+  const paginatedSubcontractors = usePaginatedErpRows<SubcontractorRow>({
+    dataset: "subcontractors",
+    projectCode: activeProjectCode,
+    initialRows: scoped.subcontractors,
+  });
+  const paginatedOperations = usePaginatedErpRows<OperationRow>({
+    dataset: "operations",
+    projectCode: activeProjectCode,
+    initialRows: scoped.operations,
+  });
   const categoryOptions = catalogOptions(data.catalogs.hangMuc);
   const contractorOptions = catalogOptions(data.catalogs.thauPhu);
   const subcontractorWeekOptions = uniqueOptions(scoped.subcontractors.map((row) => row.week));
@@ -97,6 +109,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
       content: (
         <SectionBlock title="Tạm ứng thầu phụ">
           <DataTable
+            key={`subcontractors-${activeProjectCode}`}
             loading={isSwitchingProject}
             columns={[
               { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
@@ -134,7 +147,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                       hideable: false,
                       searchable: false,
                       sortable: false,
-                      render: (row: (typeof scoped.subcontractors)[number]) => (
+                      render: (row: SubcontractorRow) => (
                         <div className="flex justify-end">
                           <TableRowActions
                             edit={{
@@ -183,8 +196,10 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                   ]
                 : []),
             ]}
-            rows={scoped.subcontractors}
+            rows={paginatedSubcontractors.rows}
             getRowId={(row) => row.id}
+            serverSide={paginatedSubcontractors.serverSide}
+            detailType="subcontractors"
             selectable
             exportFileName="thau-phu-tam-ung"
             searchPlaceholder="Tìm thầu phụ, hạng mục..."
@@ -204,6 +219,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
       content: (
         <SectionBlock title="Hợp đồng thầu phụ">
           <DataTable
+            key={`operations-${activeProjectCode}`}
             loading={isSwitchingProject}
             columns={[
               {
@@ -291,6 +307,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             ]}
             rows={scoped.subcontractorContracts}
             getRowId={(row) => row.id}
+            detailType="subcontractor-contracts"
             selectable
             exportFileName="hop-dong-thau-phu"
             filters={[{ key: "status", label: "Trạng thái", options: subcontractorStatusOptions }]}
@@ -328,7 +345,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                       hideable: false,
                       searchable: false,
                       sortable: false,
-                      render: (row: (typeof scoped.operations)[number]) => (
+                      render: (row: OperationRow) => (
                         <div className="flex justify-end">
                           <TableRowActions
                             edit={{
@@ -363,8 +380,10 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                   ]
                 : []),
             ]}
-            rows={scoped.operations}
+            rows={paginatedOperations.rows}
             getRowId={(row) => row.id}
+            serverSide={paginatedOperations.serverSide}
+            detailType="operations"
             selectable
             exportFileName="chi-phi-van-hanh"
             filters={[{ key: "week", label: "Tuần", options: operationWeekOptions }]}

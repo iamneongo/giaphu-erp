@@ -1,17 +1,21 @@
 "use client";
 
+import * as React from "react";
+
 import Link from "next/link";
 
 import { Bell, BriefcaseBusiness, ReceiptText, TriangleAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
+import {
+  ACTIVE_PROJECT_CHANGE_EVENT,
+  type ActiveProjectChangeDetail,
+  readActiveProjectCode,
+} from "@/lib/giaphu-erp/project-context";
+import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
 
 const notifications = [
   {
@@ -44,6 +48,25 @@ const notifications = [
 ];
 
 export function UserNotificationsMenu() {
+  const [activeProjectCode, setActiveProjectCode] = React.useState("");
+
+  React.useEffect(() => {
+    setActiveProjectCode(readActiveProjectCode());
+
+    function handleProjectChange(event: Event) {
+      const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
+      if (nextCode) {
+        setActiveProjectCode(nextCode);
+      }
+    }
+
+    window.addEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
+
+    return () => {
+      window.removeEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
+    };
+  }, []);
+
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -77,7 +100,13 @@ export function UserNotificationsMenu() {
                 </ItemContent>
                 <ItemActions>
                   <Button asChild size="xs" variant={notification.tone}>
-                    <Link href={notification.href}>{notification.cta}</Link>
+                    <Link
+                      href={
+                        activeProjectCode ? erpPathForProject(activeProjectCode, notification.href) : notification.href
+                      }
+                    >
+                      {notification.cta}
+                    </Link>
                   </Button>
                 </ItemActions>
               </Item>

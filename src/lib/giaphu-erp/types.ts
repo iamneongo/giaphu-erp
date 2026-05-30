@@ -1,6 +1,83 @@
 export type MaterialType = "VT Chính" | "VT Phụ" | "VT MEP" | "VT MEP-HVAC";
 export type PaymentStatus = "Chưa TT" | "Đã TT";
 export type AttendanceLockStatus = "OPEN" | "CLOSED";
+export type GiaPhuPagedDataset = "materials" | "subcontractors" | "operations";
+
+export type MonthlyCostPoint = {
+  month: string;
+  materials: number;
+  labor: number;
+  subcontractors: number;
+  operations: number;
+  cashIn: number;
+};
+
+export type BreakdownPoint = {
+  key: string;
+  label: string;
+  value: number;
+  rows: number;
+  share: number;
+};
+
+export type WeeklySnapshot = {
+  week: string;
+  materials: number;
+  labor: number;
+  subcontractors: number;
+  operations: number;
+  total: number;
+};
+
+export type CategorySpendPoint = {
+  category: string;
+  total: number;
+  materials: number;
+  labor: number;
+  subcontractors: number;
+  operations: number;
+};
+
+export type RecentActivityPoint = {
+  id: string;
+  type: string;
+  title: string;
+  subtitle: string;
+  amount: number;
+  date: string;
+};
+
+export interface GiaPhuOverviewInsights {
+  monthly: MonthlyCostPoint[];
+  breakdown: BreakdownPoint[];
+  recentActivities: RecentActivityPoint[];
+  categorySpend: CategorySpendPoint[];
+  headline: {
+    contractValue: number;
+    collectedCash: number;
+    totalCost: number;
+    openMaterialDebt: number;
+    activeCategories: number;
+    activeWeeks: number;
+    costTrend: number;
+    cashTrend: number;
+  };
+}
+
+export interface GiaPhuReportsInsights {
+  breakdown: BreakdownPoint[];
+  monthly: MonthlyCostPoint[];
+  weekly: WeeklySnapshot[];
+  categorySpend: CategorySpendPoint[];
+  headline: {
+    totalCost: number;
+    contractValue: number;
+    collectedCash: number;
+    unpaidMaterials: number;
+    contractCoverage: number;
+    costCoverage: number;
+  };
+}
 
 export interface ProjectRow {
   code: string;

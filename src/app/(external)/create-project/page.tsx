@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ProjectOnboarding } from "@/app/(main)/dashboard/giaphu-erp/_components/project-onboarding";
 import { GiaPhuErpProvider } from "@/app/(main)/dashboard/giaphu-erp/_hooks/use-giaphu-erp";
 import { createGiaPhuSchema, getGiaPhuDashboardData, getGiaPhuProjectList } from "@/lib/giaphu-erp/db";
+import { projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 
 export const metadata = {
   title: "Tạo công trình | Gia Phú ERP",
@@ -14,7 +15,7 @@ export default async function Page() {
   const projects = await getGiaPhuProjectList();
 
   if (projects.length > 0) {
-    redirect("/dashboard/giaphu-erp/overview");
+    redirect(projectScopedPath(projects[0].code, "/overview"));
   }
 
   const data = await getGiaPhuDashboardData();

@@ -8,8 +8,10 @@ import { Check, ClipboardList, PackagePlus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import type { MaterialRow } from "@/lib/giaphu-erp/types";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
+import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, todayIso } from "../_lib/date-utils";
 import {
   catalogOptions,
@@ -31,6 +33,11 @@ export function MaterialsWorkspace({ section = "entries" }: { section?: Material
   const { data, activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
   const { has, orgRole } = useAuth();
   const [materialPrices, setMaterialPrices] = React.useState<Record<number, string>>({});
+  const paginatedMaterials = usePaginatedErpRows<MaterialRow>({
+    dataset: "materials",
+    projectCode: activeProjectCode,
+    initialRows: scoped.materials,
+  });
   const canManage = canAccessClerkPermission(
     {
       orgRole,
@@ -102,6 +109,7 @@ export function MaterialsWorkspace({ section = "entries" }: { section?: Material
       content: (
         <SectionBlock title="Lịch sử vật tư">
           <DataTable
+            key={`materials-${activeProjectCode}`}
             loading={isSwitchingProject}
             columns={[
               { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
@@ -177,7 +185,7 @@ export function MaterialsWorkspace({ section = "entries" }: { section?: Material
                       hideable: false,
                       searchable: false,
                       sortable: false,
-                      render: (row: (typeof scoped.materials)[number]) => (
+                      render: (row: MaterialRow) => (
                         <div className="flex justify-end">
                           <TableRowActions
                             edit={{
@@ -282,8 +290,10 @@ export function MaterialsWorkspace({ section = "entries" }: { section?: Material
                   ]
                 : []),
             ]}
-            rows={scoped.materials}
+            rows={paginatedMaterials.rows}
             getRowId={(row) => row.id}
+            serverSide={paginatedMaterials.serverSide}
+            detailType="materials"
             selectable
             exportFileName="vat-tu-phat-sinh"
             searchPlaceholder="Tìm vật tư, NCC, hạng mục..."
@@ -428,6 +438,7 @@ export function MaterialsWorkspace({ section = "entries" }: { section?: Material
             ]}
             rows={scoped.materialNorms}
             getRowId={(row) => row.id}
+            detailType="material-norms"
             selectable
             exportFileName="dinh-muc-vat-tu"
             searchPlaceholder="Tìm vật tư định mức..."

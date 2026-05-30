@@ -18,6 +18,12 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import {
+  ACTIVE_PROJECT_CHANGE_EVENT,
+  type ActiveProjectChangeDetail,
+  readActiveProjectCode,
+} from "@/lib/giaphu-erp/project-context";
+import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
 import type { NavMainItem } from "@/navigation/sidebar/sidebar-items";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 
@@ -79,7 +85,25 @@ function groupBy(items: SearchItem[]) {
 export function SearchDialog() {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+  const [activeProjectCode, setActiveProjectCode] = React.useState("");
   const router = useRouter();
+
+  React.useEffect(() => {
+    setActiveProjectCode(readActiveProjectCode());
+
+    function handleProjectChange(event: Event) {
+      const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
+      if (nextCode) {
+        setActiveProjectCode(nextCode);
+      }
+    }
+
+    window.addEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
+
+    return () => {
+      window.removeEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
+    };
+  }, []);
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -100,10 +124,12 @@ export function SearchDialog() {
   const handleSelect = (item: SearchItem) => {
     if (item.disabled) return;
     handleOpenChange(false);
+    const href = activeProjectCode ? erpPathForProject(activeProjectCode, item.url) : item.url;
+
     if (item.newTab) {
-      window.open(item.url, "_blank", "noopener,noreferrer");
+      window.open(href, "_blank", "noopener,noreferrer");
     } else {
-      router.push(item.url);
+      router.push(href);
     }
   };
 

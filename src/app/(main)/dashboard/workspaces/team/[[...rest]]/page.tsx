@@ -73,7 +73,7 @@ export default async function Page() {
               <Link href="/dashboard/workspaces/roles">Vai trò & quyền</Link>
             </Button>
             <Button asChild>
-              <Link href="/dashboard/giaphu-erp/overview">Về ERP</Link>
+              <Link href="/dashboard">Về ERP</Link>
             </Button>
           </CardContent>
         </Card>

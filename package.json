@@ -16,9 +16,7 @@
     "seed:loadtest": "ts-node -P tsconfig.scripts.json src/scripts/seed-giaphu-load-test.ts"
   },
   "lint-staged": {
-    "*.{js,ts,jsx,tsx}": [
-      "biome check --write --no-errors-on-unmatched"
-    ]
+    "*.{js,ts,jsx,tsx}": ["biome check --write --no-errors-on-unmatched"]
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -35,6 +33,7 @@
     "cmdk": "^1.1.1",
     "d3-geo": "^3.1.1",
     "date-fns": "^4.2.1",
+    "docx-preview": "^0.3.7",
     "embla-carousel-react": "^8.6.0",
     "geist": "^1.7.1",
     "input-otp": "^1.4.2",
@@ -54,6 +53,7 @@
     "tailwind-merge": "^3.6.0",
     "topojson-client": "^3.1.0",
     "vaul": "^1.1.2",
+    "xlsx": "^0.18.5",
     "zod": "^4.4.3",
     "zustand": "^5.0.13"
   },

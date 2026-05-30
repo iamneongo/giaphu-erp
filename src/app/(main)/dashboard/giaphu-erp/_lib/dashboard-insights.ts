@@ -1,11 +1,18 @@
 import type {
   AttendanceRow,
+  BreakdownPoint,
+  CategorySpendPoint,
   ContractRow,
+  GiaPhuOverviewInsights,
+  GiaPhuReportsInsights,
   MaterialRow,
+  MonthlyCostPoint,
   OperationRow,
   PaymentRow,
   ProgressRow,
+  RecentActivityPoint,
   SubcontractorRow,
+  WeeklySnapshot,
 } from "@/lib/giaphu-erp/types";
 
 import { formatMoney } from "./formatters";
@@ -20,46 +27,7 @@ type ScopeData = {
   progress: ProgressRow[];
 };
 
-type MonthlyCostKey = "materials" | "labor" | "subcontractors" | "operations" | "cashIn";
-
-export type MonthlyCostPoint = {
-  month: string;
-} & Record<MonthlyCostKey, number>;
-
-export type BreakdownPoint = {
-  key: string;
-  label: string;
-  value: number;
-  rows: number;
-  share: number;
-};
-
-export type WeeklySnapshot = {
-  week: string;
-  materials: number;
-  labor: number;
-  subcontractors: number;
-  operations: number;
-  total: number;
-};
-
-export type CategorySpendPoint = {
-  category: string;
-  total: number;
-  materials: number;
-  labor: number;
-  subcontractors: number;
-  operations: number;
-};
-
-export type RecentActivityPoint = {
-  id: string;
-  type: string;
-  title: string;
-  subtitle: string;
-  amount: number;
-  date: string;
-};
+export type { BreakdownPoint, CategorySpendPoint, MonthlyCostPoint, RecentActivityPoint, WeeklySnapshot };
 
 export function formatVnd(value: number) {
   return formatMoney(value);
@@ -70,7 +38,7 @@ export function formatPercent(value: number) {
   return `${normalized >= 0 ? "+" : ""}${normalized.toFixed(1)}%`;
 }
 
-export function getOverviewInsights(scope: ScopeData) {
+export function getOverviewInsights(scope: ScopeData): GiaPhuOverviewInsights {
   const monthly = buildMonthlyCostData(scope, 6);
   const breakdown = buildCostBreakdown(scope);
   const recentActivities = buildRecentActivities(scope, 5);
@@ -98,7 +66,10 @@ export function getOverviewInsights(scope: ScopeData) {
 
   const latest = monthly.at(-1) ?? emptyMonthlyPoint(monthKey(new Date()));
   const previous = monthly.at(-2) ?? emptyMonthlyPoint(monthKey(new Date()));
-  const costTrend = percentChange(latest.materials + latest.labor + latest.subcontractors + latest.operations, previous.materials + previous.labor + previous.subcontractors + previous.operations);
+  const costTrend = percentChange(
+    latest.materials + latest.labor + latest.subcontractors + latest.operations,
+    previous.materials + previous.labor + previous.subcontractors + previous.operations,
+  );
   const cashTrend = percentChange(latest.cashIn, previous.cashIn);
 
   return {
@@ -119,7 +90,7 @@ export function getOverviewInsights(scope: ScopeData) {
   };
 }
 
-export function getReportsInsights(scope: ScopeData) {
+export function getReportsInsights(scope: ScopeData): GiaPhuReportsInsights {
   const breakdown = buildCostBreakdown(scope);
   const monthly = buildMonthlyCostData(scope, 8);
   const weekly = buildWeeklySnapshots(scope, 8);
@@ -328,9 +299,7 @@ function buildRecentActivities(scope: ScopeData, limit: number): RecentActivityP
     })),
   ];
 
-  return activities
-    .sort((a, b) => compareIsoDate(b.date, a.date))
-    .slice(0, limit);
+  return activities.sort((a, b) => compareIsoDate(b.date, a.date)).slice(0, limit);
 }
 
 function monthKey(value: string | Date) {

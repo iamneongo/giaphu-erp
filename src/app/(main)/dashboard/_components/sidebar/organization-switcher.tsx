@@ -36,7 +36,7 @@ export function OrganizationSwitcher() {
     if (!setActive || orgId === organizationId) return;
 
     await setActive({ organization: organizationId });
-    router.push("/dashboard/giaphu-erp/overview");
+    router.push("/dashboard");
   }
 
   if (!isLoaded) {

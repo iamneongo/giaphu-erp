@@ -14,6 +14,7 @@ import {
   readActiveProjectCode,
   writeActiveProjectCode,
 } from "@/lib/giaphu-erp/project-context";
+import { getProjectRouteInfo, switchProjectInPath } from "@/lib/giaphu-erp/project-routes";
 import type {
   AttendanceRow,
   CostSummary,
@@ -129,8 +130,15 @@ export function GiaPhuErpProvider({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const routeProjectCode = getProjectRouteInfo(pathname)?.projectCode ?? "";
   const [data, setData] = React.useState(initialData);
-  const [activeProjectCode, setActiveProjectCode] = React.useState(initialData.projects[0]?.code ?? "");
+  const [activeProjectCode, setActiveProjectCode] = React.useState(() => {
+    if (routeProjectCode && initialData.projects.some((project) => project.code === routeProjectCode)) {
+      return routeProjectCode;
+    }
+
+    return initialData.projects[0]?.code ?? "";
+  });
   const [isSwitchingProject, setIsSwitchingProject] = React.useState(false);
   const loadProjectData = React.useCallback(async (nextCode: string) => {
     setIsSwitchingProject(true);
@@ -153,11 +161,18 @@ export function GiaPhuErpProvider({
       }
 
       writeActiveProjectCode(code);
+      router.push(switchProjectInPath(pathname, code));
     },
-    [activeProjectCode],
+    [activeProjectCode, pathname, router],
   );
 
   React.useEffect(() => {
+    if (routeProjectCode && initialData.projects.some((project) => project.code === routeProjectCode)) {
+      writeActiveProjectCode(routeProjectCode);
+      setActiveProjectCode(routeProjectCode);
+      return;
+    }
+
     const storedProjectCode = readActiveProjectCode();
     const fallbackProjectCode = initialData.projects[0]?.code ?? "";
 
@@ -167,7 +182,7 @@ export function GiaPhuErpProvider({
       writeActiveProjectCode(fallbackProjectCode);
       setActiveProjectCode(fallbackProjectCode);
     }
-  }, [initialData.projects]);
+  }, [initialData.projects, routeProjectCode]);
 
   React.useEffect(() => {
     if (!data.projects.length && pathname !== "/create-project") {
@@ -214,9 +229,7 @@ export function GiaPhuErpProvider({
       attendance: data.attendance.filter((row) => row.projectCode === normalizedProjectCode),
       subcontractors: data.subcontractors.filter((row) => row.projectCode === normalizedProjectCode),
       subcontractorContracts: data.subcontractorContracts.filter((row) => row.projectCode === normalizedProjectCode),
-      operations: data.operations.filter(
-        (row) => row.projectCode === normalizedProjectCode || row.projectCode === "CHUNG DOANH NGHIỆP",
-      ),
+      operations: data.operations.filter((row) => row.projectCode === normalizedProjectCode),
       contracts: data.contracts.filter((row) => row.projectCode === normalizedProjectCode),
       payments: data.payments.filter((row) => row.projectCode === normalizedProjectCode),
       progress: data.progress.filter((row) => row.projectCode === normalizedProjectCode),

@@ -12,6 +12,12 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import {
+  ACTIVE_PROJECT_CHANGE_EVENT,
+  type ActiveProjectChangeDetail,
+  readActiveProjectCode,
+} from "@/lib/giaphu-erp/project-context";
+import { projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 
 const segmentLabels: Record<string, string> = {
   dashboard: "Bảng điều khiển",
@@ -32,6 +38,7 @@ const segmentLabels: Record<string, string> = {
   edit: "Sửa vai trò",
   billing: "Thanh toán tổ chức",
   projects: "Công trình",
+  details: "Chi tiết",
   contracts: "Hợp đồng",
   payments: "Thu tiền",
   entries: "Phát sinh",
@@ -51,6 +58,7 @@ const segmentLabels: Record<string, string> = {
 
 export function DashboardBreadcrumbs() {
   const pathname = usePathname();
+  const [activeProjectCode, setActiveProjectCode] = React.useState("");
   const segments = pathname.split("/").filter(Boolean);
   const visibleSegments = segments
     .map((segment, index) => ({
@@ -59,11 +67,30 @@ export function DashboardBreadcrumbs() {
     }))
     .filter((item) => item.segment !== "dashboard");
 
+  React.useEffect(() => {
+    setActiveProjectCode(readActiveProjectCode());
+
+    function handleProjectChange(event: Event) {
+      const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
+      if (nextCode) {
+        setActiveProjectCode(nextCode);
+      }
+    }
+
+    window.addEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
+
+    return () => {
+      window.removeEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
+    };
+  }, []);
+
   return (
     <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbLink href="/dashboard/giaphu-erp/overview">Bảng điều khiển</BreadcrumbLink>
+          <BreadcrumbLink href={activeProjectCode ? projectScopedPath(activeProjectCode, "/overview") : "/dashboard"}>
+            Bảng điều khiển
+          </BreadcrumbLink>
         </BreadcrumbItem>
         {visibleSegments.map(({ href, segment }, index) => {
           const isLast = index === visibleSegments.length - 1;
@@ -73,9 +100,13 @@ export function DashboardBreadcrumbs() {
               <BreadcrumbSeparator />
               <BreadcrumbItem>
                 {isLast ? (
-                  <BreadcrumbPage>{segment.startsWith("role_") ? "Chi tiết vai trò" : (segmentLabels[segment] ?? segment)}</BreadcrumbPage>
+                  <BreadcrumbPage>
+                    {segment.startsWith("role_") ? "Chi tiết vai trò" : (segmentLabels[segment] ?? segment)}
+                  </BreadcrumbPage>
                 ) : (
-                  <BreadcrumbLink href={href}>{segment.startsWith("role_") ? "Chi tiết vai trò" : (segmentLabels[segment] ?? segment)}</BreadcrumbLink>
+                  <BreadcrumbLink href={href}>
+                    {segment.startsWith("role_") ? "Chi tiết vai trò" : (segmentLabels[segment] ?? segment)}
+                  </BreadcrumbLink>
                 )}
               </BreadcrumbItem>
             </React.Fragment>

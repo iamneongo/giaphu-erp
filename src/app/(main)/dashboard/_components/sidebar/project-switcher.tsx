@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 
 import { BriefcaseBusiness, Check, ChevronsUpDown, PlusCircle, RefreshCw } from "lucide-react";
 
@@ -22,6 +23,7 @@ import {
   readActiveProjectCode,
   writeActiveProjectCode,
 } from "@/lib/giaphu-erp/project-context";
+import { getProjectRouteInfo, projectScopedPath, switchProjectInPath } from "@/lib/giaphu-erp/project-routes";
 import type { ProjectRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +45,9 @@ async function fetchProjects() {
 }
 
 export function ProjectSwitcher({ initialProjects = [] }: { initialProjects?: ProjectRow[] }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const routeProjectCode = getProjectRouteInfo(pathname)?.projectCode ?? "";
   const [projects, setProjects] = React.useState<ProjectRow[]>(initialProjects);
   const [activeProjectCode, setActiveProjectCode] = React.useState("");
   const [pending, startTransition] = React.useTransition();
@@ -54,7 +59,10 @@ export function ProjectSwitcher({ initialProjects = [] }: { initialProjects?: Pr
       try {
         const nextProjects = await fetchProjects();
         const storedProjectCode = readActiveProjectCode();
-        const nextActiveProject = nextProjects.find((project) => project.code === storedProjectCode) ?? nextProjects[0];
+        const nextActiveProject =
+          nextProjects.find((project) => project.code === routeProjectCode) ??
+          nextProjects.find((project) => project.code === storedProjectCode) ??
+          nextProjects[0];
 
         setProjects(nextProjects);
 
@@ -66,17 +74,25 @@ export function ProjectSwitcher({ initialProjects = [] }: { initialProjects?: Pr
         setProjects([]);
       }
     });
-  }, []);
+  }, [routeProjectCode]);
 
   React.useEffect(() => {
+    const routeProject = initialProjects.find((project) => project.code === routeProjectCode);
+    if (routeProject) {
+      setActiveProjectCode(routeProject.code);
+      writeActiveProjectCode(routeProject.code);
+      return;
+    }
+
     const storedProjectCode = readActiveProjectCode();
-    const nextActiveProject = initialProjects.find((project) => project.code === storedProjectCode) ?? initialProjects[0];
+    const nextActiveProject =
+      initialProjects.find((project) => project.code === storedProjectCode) ?? initialProjects[0];
 
     if (nextActiveProject) {
       setActiveProjectCode(nextActiveProject.code);
       writeActiveProjectCode(nextActiveProject.code);
     }
-  }, [initialProjects]);
+  }, [initialProjects, routeProjectCode]);
 
   React.useEffect(() => {
     if (!initialProjects.length) {
@@ -104,6 +120,7 @@ export function ProjectSwitcher({ initialProjects = [] }: { initialProjects?: Pr
   function selectProject(project: ProjectRow) {
     setActiveProjectCode(project.code);
     writeActiveProjectCode(project.code);
+    router.push(switchProjectInPath(pathname, project.code));
   }
 
   if (!projects.length && !pending) {
@@ -177,7 +194,13 @@ export function ProjectSwitcher({ initialProjects = [] }: { initialProjects?: Pr
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link prefetch={false} href="/dashboard/giaphu-erp/crm" className="gap-2">
+              <Link
+                prefetch={false}
+                href={
+                  activeProject ? projectScopedPath(activeProject.code, "/crm/projects") : "/dashboard/giaphu-erp/crm"
+                }
+                className="gap-2"
+              >
                 <PlusCircle className="size-4" />
                 Quản lý công trình
               </Link>

@@ -2,8 +2,22 @@
 
 import * as React from "react";
 
+import Image from "next/image";
+
 import { useAuth } from "@clerk/nextjs";
-import { Download, Eye, FileText, Pencil, RefreshCw, Save, Search, Trash2, Upload } from "lucide-react";
+import {
+  AlertCircle,
+  Download,
+  Eye,
+  FileText,
+  Loader2,
+  Pencil,
+  RefreshCw,
+  Save,
+  Search,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +33,8 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 
@@ -43,8 +59,31 @@ type DocumentRow = {
   has_file?: boolean;
 };
 
+type ExcelCell = {
+  id: string;
+  value: string;
+};
+
+type ExcelRow = {
+  id: string;
+  cells: ExcelCell[];
+};
+
+type PreviewState =
+  | { status: "idle" | "loading" }
+  | { status: "error"; message: string }
+  | { status: "excel"; sheetName: string; columns: ExcelCell[]; rows: ExcelRow[] }
+  | { status: "word"; buffer: ArrayBuffer }
+  | { status: "text"; text: string };
+
 function getDocumentFileUrl(row: DocumentRow, download = false) {
   return `/api/giaphu-erp/documents/${row.id}/file${download ? "?download=1" : ""}`;
+}
+
+function getFileExtension(row: DocumentRow) {
+  const fileName = String(row.file_name ?? "").toLowerCase();
+  const match = /\.([a-z0-9]+)$/.exec(fileName);
+  return match?.[1] ?? "";
 }
 
 function formatFileSize(value: unknown) {
@@ -55,9 +94,160 @@ function formatFileSize(value: unknown) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function isPreviewable(row: DocumentRow) {
+function TruncatedCell({
+  value,
+  className = "max-w-64",
+  lines = 1,
+}: {
+  value: unknown;
+  className?: string;
+  lines?: 1 | 2;
+}) {
+  const text = String(value ?? "").trim() || "-";
+  const lineClass = lines === 2 ? "line-clamp-2 whitespace-normal" : "truncate";
+
+  return (
+    <span className={`block ${className} ${lineClass}`} title={text}>
+      {text}
+    </span>
+  );
+}
+
+function isPdfDocument(row: DocumentRow) {
   const mimeType = String(row.mime_type ?? "");
-  return mimeType.startsWith("image/") || mimeType === "application/pdf" || mimeType.startsWith("text/");
+  return mimeType === "application/pdf" || getFileExtension(row) === "pdf";
+}
+
+function isImageDocument(row: DocumentRow) {
+  return String(row.mime_type ?? "").startsWith("image/");
+}
+
+function isTextDocument(row: DocumentRow) {
+  const mimeType = String(row.mime_type ?? "");
+  return mimeType.startsWith("text/") || ["txt", "csv", "log"].includes(getFileExtension(row));
+}
+
+function isExcelDocument(row: DocumentRow) {
+  const mimeType = String(row.mime_type ?? "");
+  const extension = getFileExtension(row);
+
+  return (
+    ["xls", "xlsx", "xlsm", "csv"].includes(extension) ||
+    mimeType === "application/vnd.ms-excel" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mimeType === "text/csv"
+  );
+}
+
+function isWordDocument(row: DocumentRow) {
+  const mimeType = String(row.mime_type ?? "");
+  const extension = getFileExtension(row);
+
+  return extension === "docx" || mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+}
+
+function isLegacyWordDocument(row: DocumentRow) {
+  const mimeType = String(row.mime_type ?? "");
+  return getFileExtension(row) === "doc" || mimeType === "application/msword";
+}
+
+function buildExcelPreview(rows: unknown[][]) {
+  const limitedRows = rows.slice(0, 120).map((row) => row.slice(0, 40).map((cell) => String(cell ?? "")));
+  const headerValues = limitedRows[0] ?? [];
+  const columnCount = Math.max(...limitedRows.map((row) => row.length), 0);
+  const columns = Array.from({ length: columnCount }, (_, columnIndex) => {
+    const value = headerValues[columnIndex] ?? "";
+
+    return {
+      id: `column-${columnIndex}-${value || "empty"}`,
+      value: value || `Cột ${columnIndex + 1}`,
+    };
+  });
+  const bodyRows = limitedRows.slice(1).map((row, rowIndex) => ({
+    id: `row-${rowIndex}-${row.join("|")}`,
+    cells: columns.map((column, columnIndex) => ({
+      id: `${column.id}-${rowIndex}`,
+      value: row[columnIndex] ?? "",
+    })),
+  }));
+
+  return { columns, rows: bodyRows };
+}
+
+function WordDocumentPreview({ buffer }: { buffer: ArrayBuffer }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [status, setStatus] = React.useState<"loading" | "ready" | "error">("loading");
+  const [message, setMessage] = React.useState("");
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const container = containerRef.current;
+
+    if (!container) return;
+
+    const bodyContainer = container;
+
+    bodyContainer.textContent = "";
+    setStatus("loading");
+    setMessage("");
+
+    async function renderWordDocument() {
+      try {
+        const { renderAsync } = await import("docx-preview");
+
+        await renderAsync(buffer.slice(0), bodyContainer, undefined, {
+          breakPages: false,
+          className: "docx-preview-content",
+          ignoreHeight: true,
+          ignoreWidth: true,
+          inWrapper: false,
+          renderComments: false,
+          renderEndnotes: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          renderHeaders: true,
+        });
+
+        if (!cancelled) setStatus("ready");
+      } catch (error) {
+        if (!cancelled) {
+          setStatus("error");
+          setMessage(error instanceof Error ? error.message : String(error));
+        }
+      }
+    }
+
+    void renderWordDocument();
+
+    return () => {
+      cancelled = true;
+      bodyContainer.textContent = "";
+    };
+  }, [buffer]);
+
+  return (
+    <ScrollArea className="h-[70svh] rounded-md border bg-background">
+      {status === "loading" ? (
+        <div className="flex min-h-40 items-center justify-center gap-2 text-muted-foreground text-sm">
+          <Loader2 className="size-4 animate-spin" />
+          Đang dựng nội dung Word...
+        </div>
+      ) : null}
+      {status === "error" ? (
+        <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center">
+          <AlertCircle className="size-10 text-muted-foreground" />
+          <div>
+            <p className="font-medium">Không dựng được nội dung Word.</p>
+            <p className="text-muted-foreground text-sm">{message}</p>
+          </div>
+        </div>
+      ) : null}
+      <div
+        className="max-w-none p-6 text-sm leading-7 [&_.docx-preview-content]:!p-0 [&_a]:text-primary [&_h1]:font-semibold [&_h1]:text-2xl [&_h2]:font-semibold [&_h2]:text-xl [&_h3]:font-semibold [&_h3]:text-lg [&_li]:ml-5 [&_ol]:list-decimal [&_p]:mb-3 [&_table]:w-full [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:p-2 [&_ul]:list-disc"
+        ref={containerRef}
+      />
+    </ScrollArea>
+  );
 }
 
 function DocumentEditorDialog({
@@ -168,6 +358,7 @@ function DocumentEditorDialog({
               <Input
                 id="file"
                 name="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.txt,image/*"
                 type="file"
                 onChange={(event) => {
                   const nextFile = event.target.files?.[0];
@@ -217,6 +408,86 @@ function DocumentPreviewDialog({
 }) {
   const open = Boolean(document);
   const fileUrl = document ? getDocumentFileUrl(document) : "";
+  const [previewState, setPreviewState] = React.useState<PreviewState>({ status: "idle" });
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreview() {
+      if (!document?.has_file) {
+        setPreviewState({ status: "idle" });
+        return;
+      }
+
+      if (isPdfDocument(document) || isImageDocument(document)) {
+        setPreviewState({ status: "idle" });
+        return;
+      }
+
+      if (isLegacyWordDocument(document)) {
+        setPreviewState({
+          status: "error",
+          message:
+            "File Word định dạng .doc cũ chưa thể xem trực tiếp an toàn trong trình duyệt. Vui lòng tải xuống hoặc lưu lại dưới dạng .docx rồi tải lên.",
+        });
+        return;
+      }
+
+      if (!isExcelDocument(document) && !isWordDocument(document) && !isTextDocument(document)) {
+        setPreviewState({
+          status: "error",
+          message: "Định dạng này chưa hỗ trợ xem trực tiếp. Bạn vẫn có thể tải tệp gốc từ hệ thống.",
+        });
+        return;
+      }
+
+      setPreviewState({ status: "loading" });
+
+      try {
+        const response = await fetch(fileUrl);
+        if (!response.ok) throw new Error("Không tải được nội dung hồ sơ.");
+        const arrayBuffer = await response.arrayBuffer();
+
+        if (cancelled) return;
+
+        if (isExcelDocument(document)) {
+          const xlsx = await import("xlsx");
+          const workbook = xlsx.read(arrayBuffer, { type: "array", cellDates: true });
+          const sheetName = workbook.SheetNames[0] ?? "Sheet 1";
+          const sheet = workbook.Sheets[sheetName];
+          const preview = buildExcelPreview(xlsx.utils.sheet_to_json(sheet, { header: 1, raw: false }) as unknown[][]);
+
+          if (!cancelled) setPreviewState({ status: "excel", sheetName, ...preview });
+          return;
+        }
+
+        if (isWordDocument(document)) {
+          if (!cancelled) setPreviewState({ status: "word", buffer: arrayBuffer });
+          return;
+        }
+
+        const text = new TextDecoder("utf-8").decode(arrayBuffer);
+        if (!cancelled) setPreviewState({ status: "text", text });
+      } catch (error) {
+        if (!cancelled) {
+          setPreviewState({
+            status: "error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+
+    if (open) {
+      void loadPreview();
+    } else {
+      setPreviewState({ status: "idle" });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [document, fileUrl, open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -226,14 +497,77 @@ function DocumentPreviewDialog({
           <DialogDescription>{String(document?.doc_type ?? "Hồ sơ công trình")}</DialogDescription>
         </DialogHeader>
         {document?.has_file ? (
-          isPreviewable(document) ? (
-            <iframe className="h-[70svh] w-full rounded-md border bg-background" src={fileUrl} title="Xem hồ sơ" />
+          isPdfDocument(document) ? (
+            <iframe className="h-[70svh] w-full rounded-md border bg-background" src={fileUrl} title="Xem hồ sơ PDF" />
+          ) : isImageDocument(document) ? (
+            <div className="relative h-[70svh] overflow-hidden rounded-md border bg-muted/20">
+              <Image
+                alt={String(document.file_name ?? "Hồ sơ")}
+                className="object-contain"
+                fill
+                sizes="(max-width: 1024px) 100vw, 1024px"
+                src={fileUrl}
+                unoptimized
+              />
+            </div>
+          ) : previewState.status === "loading" ? (
+            <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-md border bg-muted/30 p-6 text-center">
+              <Loader2 className="size-8 animate-spin text-muted-foreground" />
+              <p className="text-muted-foreground text-sm">Đang mở nội dung hồ sơ...</p>
+            </div>
+          ) : previewState.status === "excel" ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Badge variant="secondary">{previewState.sheetName}</Badge>
+                <p className="text-muted-foreground text-xs">Hiển thị tối đa 120 dòng và 40 cột đầu tiên.</p>
+              </div>
+              <ScrollArea className="h-[70svh] rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {previewState.columns.map((column) => (
+                        <TableHead key={column.id}>{column.value}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewState.rows.map((row) => (
+                      <TableRow key={row.id}>
+                        {row.cells.map((cell) => (
+                          <TableCell key={cell.id}>{cell.value}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </div>
+          ) : previewState.status === "word" ? (
+            <WordDocumentPreview buffer={previewState.buffer} />
+          ) : previewState.status === "text" ? (
+            <ScrollArea className="h-[70svh] rounded-md border bg-muted/20">
+              <pre className="whitespace-pre-wrap p-4 text-sm">{previewState.text}</pre>
+            </ScrollArea>
+          ) : previewState.status === "error" ? (
+            <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-md border bg-muted/30 p-6 text-center">
+              <AlertCircle className="size-10 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Chưa xem được trực tiếp file này.</p>
+                <p className="text-muted-foreground text-sm">{previewState.message}</p>
+              </div>
+              <Button asChild variant="outline">
+                <a href={getDocumentFileUrl(document, true)} rel="noreferrer" target="_blank">
+                  <Download />
+                  Tải xuống
+                </a>
+              </Button>
+            </div>
           ) : (
             <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-md border bg-muted/30 p-6 text-center">
               <FileText className="size-10 text-muted-foreground" />
               <div>
-                <p className="font-medium">Định dạng này không xem trực tiếp trong trình duyệt.</p>
-                <p className="text-muted-foreground text-sm">Bạn vẫn có thể tải tệp gốc từ hệ thống.</p>
+                <p className="font-medium">Sẵn sàng xem hồ sơ.</p>
+                <p className="text-muted-foreground text-sm">Nếu nội dung chưa hiện, hãy thử tải xuống tệp gốc.</p>
               </div>
               <Button asChild variant="outline">
                 <a href={getDocumentFileUrl(document, true)} rel="noreferrer" target="_blank">
@@ -366,8 +700,8 @@ export function DocumentsWorkspace() {
                 label: "Tên file",
                 accessor: (row) => row.file_name,
                 render: (row) => (
-                  <div className="flex flex-col gap-1">
-                    <span className="font-medium">{String(row.file_name ?? "-")}</span>
+                  <div className="flex max-w-72 flex-col gap-1">
+                    <TruncatedCell className="max-w-72 font-medium" value={row.file_name} />
                     <span className="text-muted-foreground text-xs">{formatFileSize(row.file_size)}</span>
                   </div>
                 ),
@@ -382,12 +716,17 @@ export function DocumentsWorkspace() {
                   </Badge>
                 ),
               },
-              { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => String(row.note ?? "-") },
+              {
+                key: "note",
+                label: "Ghi chú",
+                accessor: (row) => row.note,
+                render: (row) => <TruncatedCell className="max-w-56" lines={2} value={row.note} />,
+              },
               {
                 key: "preview_text",
                 label: "Trích yếu",
                 accessor: (row) => row.preview_text,
-                render: (row) => String(row.preview_text ?? "-").slice(0, 160),
+                render: (row) => <TruncatedCell className="max-w-80" lines={2} value={row.preview_text} />,
               },
               ...(canManage
                 ? [
@@ -451,6 +790,7 @@ export function DocumentsWorkspace() {
             ]}
             rows={rows}
             getRowId={(row) => String(row.id)}
+            detailType="documents"
             empty="Chưa có hồ sơ cho công trình hiện tại."
             selectable
             exportFileName="ho-so-cong-trinh"

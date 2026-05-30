@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { usePathname, useRouter } from "next/navigation";
+
 import {
   type ColumnDef,
   flexRender,
@@ -37,6 +39,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { readActiveProjectCode } from "@/lib/giaphu-erp/project-context";
+import { getProjectRouteInfo, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 import { cn } from "@/lib/utils";
 
 export interface DataTableColumn<T> {
@@ -60,6 +64,20 @@ export interface DataTableFilter<T> {
   options: Array<{ label: string; value: string }>;
 }
 
+export interface DataTableServerState {
+  pageIndex: number;
+  pageSize: number;
+  query: string;
+  sorting: SortingState;
+  filters: Record<string, string>;
+}
+
+export interface DataTableServerSideOptions {
+  rowCount: number;
+  loading?: boolean;
+  onStateChange: (state: DataTableServerState) => void;
+}
+
 function normalizeText(value: unknown) {
   return String(value ?? "")
     .normalize("NFD")
@@ -73,6 +91,16 @@ function getDefaultAccessor<T>(row: T, key: string) {
   }
 
   return undefined;
+}
+
+function isInteractiveTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+
+  return Boolean(
+    target.closest(
+      'button, a, input, select, textarea, [role="button"], [role="checkbox"], [role="menuitem"], [data-row-action="true"]',
+    ),
+  );
 }
 
 function escapeXml(value: unknown) {
@@ -318,6 +346,10 @@ export function DataTable<T>({
   exportFileName = "erp-table",
   selectable = false,
   initialSorting = [],
+  enableRowDetails = true,
+  detailType,
+  rowDetailHref,
+  serverSide,
 }: {
   columns: DataTableColumn<T>[];
   rows: T[];
@@ -331,7 +363,15 @@ export function DataTable<T>({
   exportFileName?: string;
   selectable?: boolean;
   initialSorting?: SortingState;
+  enableRowDetails?: boolean;
+  detailType?: string;
+  rowDetailHref?: (row: T) => string | undefined;
+  serverSide?: DataTableServerSideOptions;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const isServerSide = Boolean(serverSide);
+  const isLoading = loading ? true : (serverSide?.loading ?? false);
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting);
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: 0,
@@ -340,7 +380,7 @@ export function DataTable<T>({
   const [query, setQuery] = React.useState("");
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] = React.useState<Record<string, boolean>>({});
-  const [filterValues, _setFilterValues] = React.useState<Record<string, string>>({});
+  const [filterValues, setFilterValues] = React.useState<Record<string, string>>({});
 
   const normalizedColumns = React.useMemo(
     () =>
@@ -353,6 +393,8 @@ export function DataTable<T>({
   );
 
   const filteredRows = React.useMemo(() => {
+    if (isServerSide) return rows;
+
     return rows.filter((row) => {
       if (searchable && query.trim()) {
         const normalizedQuery = normalizeText(query);
@@ -377,7 +419,7 @@ export function DataTable<T>({
 
       return true;
     });
-  }, [filterValues, filters, normalizedColumns, query, rows, searchable]);
+  }, [filterValues, filters, isServerSide, normalizedColumns, query, rows, searchable]);
 
   const columnDefs = React.useMemo<ColumnDef<T>[]>(
     () =>
@@ -484,20 +526,39 @@ export function DataTable<T>({
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    getSortedRowModel: isServerSide ? undefined : getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: isServerSide,
+    manualSorting: isServerSide,
+    rowCount: serverSide?.rowCount,
     autoResetPageIndex: false,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset pagination when search/filter criteria changes.
   React.useEffect(() => {
-    table.setPageIndex(0);
-  }, [filterValues, query, table]);
+    if (!serverSide) return;
+
+    serverSide.onStateChange({
+      pageIndex: pagination.pageIndex,
+      pageSize: pagination.pageSize,
+      query,
+      sorting,
+      filters: filterValues,
+    });
+  }, [filterValues, pagination.pageIndex, pagination.pageSize, query, serverSide, sorting]);
 
   const pageCount = table.getPageCount();
   const visibleRows = table.getRowModel().rows;
+  const totalRowCount = serverSide?.rowCount ?? filteredRows.length;
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
   const skeletonColumnCount = (selectionColumn ? 1 : 0) + columns.length;
+  const skeletonRows = React.useMemo(
+    () => Array.from({ length: Math.min(pageSize, 6) }, (_, index) => `skeleton-row-${index + 1}`),
+    [pageSize],
+  );
+  const skeletonColumns = React.useMemo(
+    () => Array.from({ length: skeletonColumnCount }, (_, index) => `skeleton-column-${index + 1}`),
+    [skeletonColumnCount],
+  );
 
   function exportExcel() {
     const exportColumns = normalizedColumns.filter(
@@ -522,6 +583,17 @@ export function DataTable<T>({
     URL.revokeObjectURL(url);
   }
 
+  function getDetailHref(row: T) {
+    const customHref = rowDetailHref?.(row);
+    if (customHref) return customHref;
+    if (!detailType) return undefined;
+
+    const detailPath = `/details/${detailType}/${encodeURIComponent(String(getRowId(row)))}`;
+    const projectCode = getProjectRouteInfo(pathname)?.projectCode || readActiveProjectCode();
+
+    return projectCode ? projectScopedPath(projectCode, detailPath) : `/dashboard/giaphu-erp${detailPath}`;
+  }
+
   return (
     <div className="flex w-full flex-col gap-3">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -531,12 +603,47 @@ export function DataTable<T>({
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPagination((current) => (current.pageIndex ? { ...current, pageIndex: 0 } : current));
+                }}
                 placeholder={searchPlaceholder}
                 className="h-9 pl-9"
               />
             </div>
           ) : null}
+          {filters.map((filter) => (
+            <Select
+              key={filter.key}
+              value={filterValues[filter.key] ?? "__all"}
+              onValueChange={(value) => {
+                setFilterValues((current) => {
+                  const nextValues = { ...current };
+
+                  if (value === "__all") {
+                    delete nextValues[filter.key];
+                  } else {
+                    nextValues[filter.key] = value;
+                  }
+
+                  setPagination((current) => (current.pageIndex ? { ...current, pageIndex: 0 } : current));
+                  return nextValues;
+                });
+              }}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-44">
+                <SelectValue placeholder={filter.label} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">{filter.allLabel ?? `Tất cả ${filter.label.toLowerCase()}`}</SelectItem>
+                {filter.options.map((option) => (
+                  <SelectItem key={`${filter.key}-${option.value}`} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ))}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -544,7 +651,7 @@ export function DataTable<T>({
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 rounded-md">
                 <SlidersHorizontal />
-                View
+                Cột
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
@@ -583,11 +690,11 @@ export function DataTable<T>({
             ))}
           </TableHeader>
           <TableBody>
-            {loading ? (
-              Array.from({ length: Math.min(pageSize, 6) }, (_, rowIndex) => (
-                <TableRow key={`skeleton-${rowIndex}`}>
-                  {Array.from({ length: skeletonColumnCount }, (_, columnIndex) => (
-                    <TableCell key={`skeleton-${rowIndex}-${columnIndex}`}>
+            {isLoading ? (
+              skeletonRows.map((rowKey) => (
+                <TableRow key={rowKey}>
+                  {skeletonColumns.map((columnKey, columnIndex) => (
+                    <TableCell key={`${rowKey}-${columnKey}`}>
                       <Skeleton className={cn("h-4", columnIndex === 0 ? "w-24" : "w-full max-w-28")} />
                     </TableCell>
                   ))}
@@ -595,7 +702,16 @@ export function DataTable<T>({
               ))
             ) : visibleRows.length ? (
               visibleRows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() ? "selected" : undefined}>
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() ? "selected" : undefined}
+                  className={enableRowDetails && getDetailHref(row.original) ? "cursor-pointer" : undefined}
+                  onClick={(event) => {
+                    if (!enableRowDetails || isInteractiveTarget(event.target)) return;
+                    const href = getDetailHref(row.original);
+                    if (href) router.push(href);
+                  }}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
@@ -614,9 +730,9 @@ export function DataTable<T>({
 
       <div className="flex flex-col gap-4 p-1 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-muted-foreground text-sm">
-          {loading ? "Đang tải dữ liệu..." : `${filteredRows.length.toLocaleString("vi-VN")} dòng`}
+          {isLoading ? "Đang tải dữ liệu..." : `${totalRowCount.toLocaleString("vi-VN")} dòng`}
           {selectable ? ` • ${selectedCount.toLocaleString("vi-VN")} đã chọn` : ""}
-          {loading ? "" : ` • Trang ${pageCount ? table.getState().pagination.pageIndex + 1 : 0} / ${pageCount || 1}`}
+          {isLoading ? "" : ` • Trang ${pageCount ? table.getState().pagination.pageIndex + 1 : 0} / ${pageCount || 1}`}
         </div>
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">

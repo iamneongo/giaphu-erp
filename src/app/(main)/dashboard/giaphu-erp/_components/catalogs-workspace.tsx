@@ -156,6 +156,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
           columns={columns}
           rows={rows}
           getRowId={(row) => row.id}
+          detailType="catalogs"
           selectable
           exportFileName={`danh-muc-${section.kind}`}
           searchPlaceholder={`Tìm ${section.navigationTitle.toLowerCase()}...`}

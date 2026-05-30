@@ -4,8 +4,6 @@ import * as React from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Building2 } from "lucide-react";
-
 import { InteractiveGrid } from "@/app/auth/_components/interactive-grid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +11,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { todayIso } from "../_lib/date-utils";
@@ -25,10 +24,11 @@ export function ProjectOnboarding() {
   const [pending, startTransition] = React.useTransition();
 
   React.useEffect(() => {
-    if (data.projects.length > 0) {
-      router.replace("/dashboard/giaphu-erp/overview");
+    const firstProject = data.projects[0];
+    if (firstProject) {
+      router.replace(projectScopedPath(firstProject.code, "/overview"));
     }
-  }, [data.projects.length, router]);
+  }, [data.projects, router]);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

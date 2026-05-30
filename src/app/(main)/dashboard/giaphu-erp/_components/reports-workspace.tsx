@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis } from "recharts";
+
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -12,6 +12,7 @@ import {
   ReceiptText,
   WalletCards,
 } from "lucide-react";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,19 +24,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+import { ReportsContentSkeleton } from "../../_components/loading-skeletons";
+import { useErpInsights } from "../_hooks/use-erp-insights";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import {
+  type BreakdownPoint,
+  type CategorySpendPoint,
   formatPercent,
   formatVnd,
   getReportsInsights,
-  type BreakdownPoint,
-  type CategorySpendPoint,
 } from "../_lib/dashboard-insights";
 import { DataTable } from "./data-table";
-import { ReportsContentSkeleton } from "../../_components/loading-skeletons";
 
 const monthlyCashflowConfig = {
   cost: {
@@ -75,8 +77,13 @@ const mixConfig = {
 } satisfies ChartConfig;
 
 export function ReportsWorkspace() {
-  const { activeProject, isSwitchingProject, scoped } = useGiaPhuErp();
-  const insights = React.useMemo(() => getReportsInsights(scoped), [scoped]);
+  const { activeProject, activeProjectCode, isSwitchingProject, scoped } = useGiaPhuErp();
+  const fallbackInsights = React.useMemo(() => getReportsInsights(scoped), [scoped]);
+  const { insights, loading } = useErpInsights({
+    type: "reports",
+    projectCode: activeProjectCode,
+    fallback: fallbackInsights,
+  });
 
   const monthlyData = insights.monthly.map((row) => ({
     ...row,
@@ -97,7 +104,7 @@ export function ReportsWorkspace() {
     fill: `var(--color-${row.key})`,
   }));
 
-  if (isSwitchingProject) {
+  if (isSwitchingProject || loading) {
     return <ReportsContentSkeleton />;
   }
 
@@ -107,7 +114,8 @@ export function ReportsWorkspace() {
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight">Báo cáo chi phí và dòng tiền</h1>
           <p className="max-w-3xl text-muted-foreground text-sm leading-6">
-            Tổng hợp để rà soát tuần, in báo cáo và đối chiếu tiến độ tài chính của {activeProject?.name ?? "công trình"}.
+            Tổng hợp để rà soát tuần, in báo cáo và đối chiếu tiến độ tài chính của{" "}
+            {activeProject?.name ?? "công trình"}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -182,8 +190,20 @@ export function ReportsWorkspace() {
                       cursor={false}
                       content={<ChartTooltipContent formatter={(value) => formatVnd(Number(value))} />}
                     />
-                    <Area type="monotone" dataKey="cashIn" fill="var(--color-cashIn)" fillOpacity={0.2} stroke="var(--color-cashIn)" />
-                    <Area type="monotone" dataKey="cost" fill="var(--color-cost)" fillOpacity={0.26} stroke="var(--color-cost)" />
+                    <Area
+                      type="monotone"
+                      dataKey="cashIn"
+                      fill="var(--color-cashIn)"
+                      fillOpacity={0.2}
+                      stroke="var(--color-cashIn)"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="cost"
+                      fill="var(--color-cost)"
+                      fillOpacity={0.26}
+                      stroke="var(--color-cost)"
+                    />
                   </AreaChart>
                 </ChartContainer>
               </CardContent>
@@ -203,8 +223,18 @@ export function ReportsWorkspace() {
               <CardContent className="flex items-center justify-center">
                 <ChartContainer config={mixConfig} className="mx-auto aspect-square max-h-[300px] min-h-[250px]">
                   <PieChart>
-                    <ChartTooltip content={<ChartTooltipContent formatter={(value) => formatVnd(Number(value))} hideLabel />} />
-                    <Pie data={mixRows} dataKey="value" nameKey="name" innerRadius={44} outerRadius={88} paddingAngle={4} cornerRadius={10} />
+                    <ChartTooltip
+                      content={<ChartTooltipContent formatter={(value) => formatVnd(Number(value))} hideLabel />}
+                    />
+                    <Pie
+                      data={mixRows}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={44}
+                      outerRadius={88}
+                      paddingAngle={4}
+                      cornerRadius={10}
+                    />
                   </PieChart>
                 </ChartContainer>
               </CardContent>
@@ -221,7 +251,9 @@ export function ReportsWorkspace() {
             <Card className="lg:col-span-7">
               <CardHeader>
                 <CardTitle>Bảng tổng hợp chi phí</CardTitle>
-                <CardDescription>Mỗi nhóm hiển thị số dòng, bình quân mỗi dòng và tỷ trọng trong tổng chi.</CardDescription>
+                <CardDescription>
+                  Mỗi nhóm hiển thị số dòng, bình quân mỗi dòng và tỷ trọng trong tổng chi.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <DataTable
@@ -266,7 +298,11 @@ export function ReportsWorkspace() {
                   selectable
                   exportFileName="bao-cao-tong-hop-chi-phi"
                   filters={[
-                    { key: "label", label: "Nhóm", options: breakdownRows.map((row) => ({ label: row.label, value: row.label })) },
+                    {
+                      key: "label",
+                      label: "Nhóm",
+                      options: breakdownRows.map((row) => ({ label: row.label, value: row.label })),
+                    },
                   ]}
                   initialSorting={[{ id: "value", desc: true }]}
                 />
@@ -280,7 +316,9 @@ export function ReportsWorkspace() {
             <Card className="lg:col-span-4">
               <CardHeader>
                 <CardTitle>Nhịp chi phí theo tuần</CardTitle>
-                <CardDescription>8 tuần gần nhất để rà soát tuần nào tăng tốc thi công hoặc đội chi phí.</CardDescription>
+                <CardDescription>
+                  8 tuần gần nhất để rà soát tuần nào tăng tốc thi công hoặc đội chi phí.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <ChartContainer config={weeklyConfig}>
@@ -313,7 +351,9 @@ export function ReportsWorkspace() {
             <Card className="lg:col-span-7">
               <CardHeader>
                 <CardTitle>Bảng theo tuần</CardTitle>
-                <CardDescription>Tách rõ vật tư, nhân công, thầu phụ và vận hành cho từng tuần làm việc.</CardDescription>
+                <CardDescription>
+                  Tách rõ vật tư, nhân công, thầu phụ và vận hành cho từng tuần làm việc.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <DataTable
@@ -365,7 +405,11 @@ export function ReportsWorkspace() {
                   selectable
                   exportFileName="bao-cao-theo-tuan"
                   filters={[
-                    { key: "week", label: "Tuần", options: insights.weekly.map((row) => ({ label: row.week, value: row.week })) },
+                    {
+                      key: "week",
+                      label: "Tuần",
+                      options: insights.weekly.map((row) => ({ label: row.week, value: row.week })),
+                    },
                   ]}
                   initialSorting={[{ id: "total", desc: true }]}
                 />

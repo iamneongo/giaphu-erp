@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -26,6 +28,12 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { canAccessClerkPermission } from "@/lib/clerk/erp-rbac-shared";
+import {
+  ACTIVE_PROJECT_CHANGE_EVENT,
+  type ActiveProjectChangeDetail,
+  readActiveProjectCode,
+} from "@/lib/giaphu-erp/project-context";
+import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
 interface NavMainProps {
@@ -146,6 +154,24 @@ export function NavMain({ items }: NavMainProps) {
   const path = usePathname();
   const { state, isMobile } = useSidebar();
   const { has, orgRole } = useAuth();
+  const [activeProjectCode, setActiveProjectCode] = React.useState("");
+
+  React.useEffect(() => {
+    setActiveProjectCode(readActiveProjectCode());
+
+    function handleProjectChange(event: Event) {
+      const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
+      if (nextCode) {
+        setActiveProjectCode(nextCode);
+      }
+    }
+
+    window.addEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
+
+    return () => {
+      window.removeEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
+    };
+  }, []);
 
   const visibleGroups = items
     .map((group) => {
@@ -194,6 +220,20 @@ export function NavMain({ items }: NavMainProps) {
     })
     .filter((group) => group.items.length > 0);
 
+  const hrefForProject = React.useCallback(
+    (url: string) => (activeProjectCode ? erpPathForProject(activeProjectCode, url) : url),
+    [activeProjectCode],
+  );
+
+  const projectScopedGroups = visibleGroups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => ({
+      ...item,
+      url: hrefForProject(item.url),
+      subItems: item.subItems?.map((subItem) => ({ ...subItem, url: hrefForProject(subItem.url) })),
+    })),
+  }));
+
   const isItemActive = (url: string, subItems?: NavMainItem["subItems"]) => {
     if (subItems?.length) {
       return subItems.some((sub) => path.startsWith(sub.url));
@@ -207,7 +247,7 @@ export function NavMain({ items }: NavMainProps) {
 
   return (
     <>
-      {visibleGroups.map((group) => (
+      {projectScopedGroups.map((group) => (
         <SidebarGroup key={group.id}>
           {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
           <SidebarGroupContent className="flex flex-col gap-2">
