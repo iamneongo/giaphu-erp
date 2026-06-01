@@ -5,7 +5,7 @@ import { Banknote, FileText, Hammer, ShieldCheck, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
-import type { OperationRow, SubcontractorRow } from "@/lib/giaphu-erp/types";
+import type { OperationRow, SubcontractorContractRow, SubcontractorRow } from "@/lib/giaphu-erp/types";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
@@ -32,6 +32,11 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
     dataset: "operations",
     projectCode: activeProjectCode,
     initialRows: scoped.operations,
+  });
+  const paginatedSubcontractorContracts = usePaginatedErpRows<SubcontractorContractRow>({
+    dataset: "subcontractorContracts",
+    projectCode: activeProjectCode,
+    initialRows: scoped.subcontractorContracts,
   });
   const categoryOptions = catalogOptions(data.catalogs.hangMuc);
   const contractorOptions = catalogOptions(data.catalogs.thauPhu);
@@ -305,8 +310,9 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                   ]
                 : []),
             ]}
-            rows={scoped.subcontractorContracts}
+            rows={paginatedSubcontractorContracts.rows}
             getRowId={(row) => row.id}
+            serverSide={paginatedSubcontractorContracts.serverSide}
             detailType="subcontractor-contracts"
             selectable
             exportFileName="hop-dong-thau-phu"

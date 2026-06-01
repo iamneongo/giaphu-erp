@@ -5,33 +5,41 @@ import * as React from "react";
 import type { GiaPhuPagedDataset } from "@/lib/giaphu-erp/types";
 
 import type { DataTableServerState } from "../_components/data-table";
-import { fetchGiaPhuPagedRows } from "../_lib/giaphu-erp-api";
+import { fetchGiaPhuFilterOptions, fetchGiaPhuPagedRows } from "../_lib/giaphu-erp-api";
 
-function useDebouncedValue<T>(value: T, delay = 250) {
-  const [debouncedValue, setDebouncedValue] = React.useState(value);
-
-  React.useEffect(() => {
-    const timeout = window.setTimeout(() => setDebouncedValue(value), delay);
-    return () => window.clearTimeout(timeout);
-  }, [delay, value]);
-
-  return debouncedValue;
-}
+const projectScopedDatasets = new Set<GiaPhuPagedDataset>([
+  "contracts",
+  "payments",
+  "documents",
+  "materials",
+  "attendance",
+  "materialNorms",
+  "laborNorms",
+  "progress",
+  "subcontractors",
+  "subcontractorContracts",
+  "operations",
+]);
+const emptyFixedFilters: Record<string, string> = {};
 
 export function usePaginatedErpRows<T>({
   dataset,
   projectCode,
   initialRows,
   initialPageSize = 10,
+  fixedFilters = emptyFixedFilters,
 }: {
   dataset: GiaPhuPagedDataset;
   projectCode: string;
   initialRows: T[];
   initialPageSize?: number;
+  fixedFilters?: Record<string, string>;
 }) {
   const [rows, setRows] = React.useState<T[]>(initialRows);
   const [total, setTotal] = React.useState(initialRows.length);
   const [loading, setLoading] = React.useState(false);
+  const [filterOptions, setFilterOptions] = React.useState<Record<string, Array<{ label: string; value: string }>>>({});
+  const [refreshToken, setRefreshToken] = React.useState(0);
   const [state, setState] = React.useState<DataTableServerState>({
     pageIndex: 0,
     pageSize: initialPageSize,
@@ -39,8 +47,6 @@ export function usePaginatedErpRows<T>({
     sorting: [],
     filters: {},
   });
-  const debouncedQuery = useDebouncedValue(state.query);
-
   React.useEffect(() => {
     setRows(initialRows);
     setTotal(initialRows.length);
@@ -48,12 +54,38 @@ export function usePaginatedErpRows<T>({
   }, [initialRows]);
 
   React.useEffect(() => {
-    if (!projectCode) {
+    if (projectScopedDatasets.has(dataset) && !projectCode) {
+      setFilterOptions({});
+      return;
+    }
+
+    const requestRefreshToken = refreshToken;
+    const controller = new AbortController();
+
+    fetchGiaPhuFilterOptions({
+      dataset,
+      projectCode,
+      filters: fixedFilters,
+    })
+      .then((options) => {
+        if (controller.signal.aborted || requestRefreshToken < 0) return;
+        setFilterOptions(options);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setFilterOptions({});
+      });
+
+    return () => controller.abort();
+  }, [dataset, fixedFilters, projectCode, refreshToken]);
+
+  React.useEffect(() => {
+    if (projectScopedDatasets.has(dataset) && !projectCode) {
       setRows([]);
       setTotal(0);
       return;
     }
 
+    const requestRefreshToken = refreshToken;
     const controller = new AbortController();
     setLoading(true);
 
@@ -62,11 +94,11 @@ export function usePaginatedErpRows<T>({
       projectCode,
       pageIndex: state.pageIndex,
       pageSize: state.pageSize,
-      search: debouncedQuery,
-      filters: state.filters,
+      search: state.query,
+      filters: { ...fixedFilters, ...state.filters },
     })
       .then((result) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || requestRefreshToken < 0) return;
         setRows(result.rows);
         setTotal(result.total);
       })
@@ -80,7 +112,7 @@ export function usePaginatedErpRows<T>({
       });
 
     return () => controller.abort();
-  }, [dataset, debouncedQuery, projectCode, state.filters, state.pageIndex, state.pageSize]);
+  }, [dataset, fixedFilters, projectCode, refreshToken, state.query, state.filters, state.pageIndex, state.pageSize]);
 
   const onStateChange = React.useCallback((nextState: DataTableServerState) => {
     setState((current) => {
@@ -102,10 +134,13 @@ export function usePaginatedErpRows<T>({
     () => ({
       rowCount: total,
       loading,
+      filterOptions,
       onStateChange,
     }),
-    [loading, onStateChange, total],
+    [filterOptions, loading, onStateChange, total],
   );
 
-  return { rows, total, loading, serverSide };
+  const refresh = React.useCallback(() => setRefreshToken((current) => current + 1), []);
+
+  return { rows, total, loading, serverSide, refresh };
 }

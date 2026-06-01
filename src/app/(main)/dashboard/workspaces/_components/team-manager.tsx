@@ -13,7 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { ClerkOrganizationInvitation, ClerkOrganizationMembership, ClerkOrganizationRole, ClerkRoleSet } from "@/lib/clerk/clerk-bapi";
+import type {
+  ClerkOrganizationInvitation,
+  ClerkOrganizationMembership,
+  ClerkOrganizationRole,
+  ClerkRoleSet,
+} from "@/lib/clerk/clerk-bapi";
 
 type TeamManagerResponse = {
   status: "success" | "error";
@@ -62,6 +67,17 @@ function getInitials(name: string) {
     .join("");
 }
 
+function useDebouncedValue<T>(value: T, delay = 300) {
+  const [debouncedValue, setDebouncedValue] = React.useState(value);
+
+  React.useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedValue(value), delay);
+    return () => window.clearTimeout(timeout);
+  }, [delay, value]);
+
+  return debouncedValue;
+}
+
 export function TeamManager() {
   const [loading, setLoading] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
@@ -71,6 +87,7 @@ export function TeamManager() {
   const [roleSet, setRoleSet] = React.useState<ClerkRoleSet | null>(null);
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [inviteEmail, setInviteEmail] = React.useState("");
   const [inviteRole, setInviteRole] = React.useState("");
 
@@ -87,17 +104,22 @@ export function TeamManager() {
 
   const roleNameMap = React.useMemo(() => new Map(roles.map((role) => [role.key, role.name])), [roles]);
 
-  const adminCount = React.useMemo(() => memberships.filter((membership) => membership.role === "org:admin").length, [memberships]);
+  const adminCount = React.useMemo(
+    () => memberships.filter((membership) => membership.role === "org:admin").length,
+    [memberships],
+  );
 
   const filteredMemberships = React.useMemo(() => {
-    const keyword = search.trim().toLowerCase();
+    const keyword = debouncedSearch.trim().toLowerCase();
 
     if (!keyword) {
       return memberships;
     }
 
     return memberships.filter((membership) => {
-      const fullName = [membership.publicUserData.firstName, membership.publicUserData.lastName].filter(Boolean).join(" ");
+      const fullName = [membership.publicUserData.firstName, membership.publicUserData.lastName]
+        .filter(Boolean)
+        .join(" ");
       const haystack = [
         fullName,
         membership.publicUserData.identifier,
@@ -110,7 +132,7 @@ export function TeamManager() {
 
       return haystack.includes(keyword);
     });
-  }, [memberships, roleNameMap, search]);
+  }, [debouncedSearch, memberships, roleNameMap]);
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
@@ -140,30 +162,33 @@ export function TeamManager() {
     void loadData();
   }, [loadData]);
 
-  const runAction = React.useCallback(async (body: Record<string, unknown>, successMessage: string) => {
-    setSubmitting(true);
+  const runAction = React.useCallback(
+    async (body: Record<string, unknown>, successMessage: string) => {
+      setSubmitting(true);
 
-    try {
-      const response = await fetch("/api/clerk-rbac", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      try {
+        const response = await fetch("/api/clerk-rbac", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
 
-      const payload = await readTeamManagerResponse(response);
+        const payload = await readTeamManagerResponse(response);
 
-      if (!response.ok || payload.status !== "success") {
-        throw new Error(payload.message || "Thao tác thất bại.");
+        if (!response.ok || payload.status !== "success") {
+          throw new Error(payload.message || "Thao tác thất bại.");
+        }
+
+        toast.success(successMessage);
+        await loadData();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      } finally {
+        setSubmitting(false);
       }
-
-      toast.success(successMessage);
-      await loadData();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [loadData]);
+    },
+    [loadData],
+  );
 
   async function inviteMember(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -257,13 +282,22 @@ export function TeamManager() {
                   Thành viên
                 </CardTitle>
                 <div className="relative w-full md:max-w-sm">
-                  <Search className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
-                  <Input className="pl-9" placeholder="Tìm theo tên, email, vai trò..." value={search} onChange={(event) => setSearch(event.target.value)} />
+                  <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Tìm theo tên, email, vai trò..."
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {filteredMemberships.length === 0 ? <div className="rounded-lg border border-dashed px-4 py-8 text-center text-muted-foreground text-sm">Không có thành viên phù hợp.</div> : null}
+              {filteredMemberships.length === 0 ? (
+                <div className="rounded-lg border border-dashed px-4 py-8 text-center text-muted-foreground text-sm">
+                  Không có thành viên phù hợp.
+                </div>
+              ) : null}
 
               {filteredMemberships.map((membership) => {
                 const displayName =
@@ -276,7 +310,10 @@ export function TeamManager() {
                 const disableRemoval = isCurrentUser || isLastAdmin;
 
                 return (
-                  <div key={membership.id} className="flex flex-col gap-4 rounded-xl border p-4 md:flex-row md:items-center md:justify-between">
+                  <div
+                    key={membership.id}
+                    className="flex flex-col gap-4 rounded-xl border p-4 md:flex-row md:items-center md:justify-between"
+                  >
                     <div className="flex min-w-0 items-center gap-3">
                       <Avatar className="size-11">
                         <AvatarImage src={membership.publicUserData.imageUrl ?? undefined} alt={displayName} />
@@ -291,20 +328,31 @@ export function TeamManager() {
                         <div className="text-muted-foreground text-sm">{email}</div>
                         <div className="text-muted-foreground text-xs">Tham gia {formatDate(membership.createdAt)}</div>
                         {isLastAdmin ? (
-                          <div className="text-muted-foreground text-xs">Admin cuối cùng của tổ chức. Không thể hạ quyền hoặc xóa thành viên này.</div>
+                          <div className="text-muted-foreground text-xs">
+                            Admin cuối cùng của tổ chức. Không thể hạ quyền hoặc xóa thành viên này.
+                          </div>
                         ) : null}
-                        {isCurrentUser ? <div className="text-muted-foreground text-xs">Đây là tài khoản đang đăng nhập.</div> : null}
+                        {isCurrentUser ? (
+                          <div className="text-muted-foreground text-xs">Đây là tài khoản đang đăng nhập.</div>
+                        ) : null}
                       </div>
                     </div>
 
                     <div className="flex w-full flex-col gap-2 md:w-auto md:min-w-[320px] md:flex-row md:items-center">
-                      <Select value={membership.role} onValueChange={(value) => void updateMemberRole(membership.publicUserData.userId, value)}>
+                      <Select
+                        value={membership.role}
+                        onValueChange={(value) => void updateMemberRole(membership.publicUserData.userId, value)}
+                      >
                         <SelectTrigger className="min-w-60">
                           <SelectValue placeholder="Chọn vai trò" />
                         </SelectTrigger>
                         <SelectContent>
                           {availableRoles.map((role) => (
-                            <SelectItem key={role.id} value={role.key} disabled={isLastAdmin && role.key !== "org:admin"}>
+                            <SelectItem
+                              key={role.id}
+                              value={role.key}
+                              disabled={isLastAdmin && role.key !== "org:admin"}
+                            >
                               {role.name}
                             </SelectItem>
                           ))}
@@ -338,7 +386,10 @@ export function TeamManager() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto]" onSubmit={(event) => void inviteMember(event)}>
+              <form
+                className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto]"
+                onSubmit={(event) => void inviteMember(event)}
+              >
                 <div className="space-y-2">
                   <Label htmlFor="invite-email">Email</Label>
                   <Input
@@ -382,16 +433,30 @@ export function TeamManager() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {invitations.length === 0 ? <div className="rounded-lg border border-dashed px-4 py-8 text-center text-muted-foreground text-sm">Chưa có lời mời nào đang chờ phản hồi.</div> : null}
+              {invitations.length === 0 ? (
+                <div className="rounded-lg border border-dashed px-4 py-8 text-center text-muted-foreground text-sm">
+                  Chưa có lời mời nào đang chờ phản hồi.
+                </div>
+              ) : null}
 
               {invitations.map((invitation) => (
-                <div key={invitation.id} className="flex flex-col gap-4 rounded-xl border p-4 md:flex-row md:items-center md:justify-between">
+                <div
+                  key={invitation.id}
+                  className="flex flex-col gap-4 rounded-xl border p-4 md:flex-row md:items-center md:justify-between"
+                >
                   <div className="space-y-1">
                     <div className="font-medium">{invitation.emailAddress}</div>
-                    <div className="text-muted-foreground text-sm">{roleNameMap.get(invitation.role) ?? invitation.roleName ?? invitation.role}</div>
+                    <div className="text-muted-foreground text-sm">
+                      {roleNameMap.get(invitation.role) ?? invitation.roleName ?? invitation.role}
+                    </div>
                     <div className="text-muted-foreground text-xs">Hết hạn {formatDate(invitation.expiresAt)}</div>
                   </div>
-                  <Button type="button" variant="outline" disabled={submitting} onClick={() => void revokeInvitation(invitation.id, invitation.emailAddress)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={submitting}
+                    onClick={() => void revokeInvitation(invitation.id, invitation.emailAddress)}
+                  >
                     Thu hồi
                   </Button>
                 </div>

@@ -32,10 +32,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
-import type { AttendanceRow, StaffRow } from "@/lib/giaphu-erp/types";
+import type { AttendanceRow, LaborNormRow, ProgressRow, StaffRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
+import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, todayIso } from "../_lib/date-utils";
 import { catalogOptions, uniqueOptions } from "../_lib/form-options";
 import { formatCount, formatMoney } from "../_lib/formatters";
@@ -305,6 +306,17 @@ function validateStaffOffDate(value: string, payload: Record<string, unknown>) {
   return undefined;
 }
 
+function useDebouncedValue<T>(value: T, delay = 300) {
+  const [debouncedValue, setDebouncedValue] = React.useState(value);
+
+  React.useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedValue(value), delay);
+    return () => window.clearTimeout(timeout);
+  }, [delay, value]);
+
+  return debouncedValue;
+}
+
 function StaffSearchCombobox({
   value,
   onValueChange,
@@ -318,10 +330,10 @@ function StaffSearchCombobox({
 }) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
-  const deferredSearch = React.useDeferredValue(search);
+  const debouncedSearch = useDebouncedValue(search);
   const selectedStaff = options.find((option) => option.name === value);
   const { visibleOptions, hiddenCount } = React.useMemo(() => {
-    const term = normalizeSearchText(deferredSearch);
+    const term = normalizeSearchText(debouncedSearch);
     const matchedOptions = term
       ? options.filter((option) =>
           normalizeSearchText(
@@ -334,7 +346,7 @@ function StaffSearchCombobox({
       visibleOptions: matchedOptions.slice(0, staffComboboxRenderLimit),
       hiddenCount: Math.max(0, matchedOptions.length - staffComboboxRenderLimit),
     };
-  }, [deferredSearch, options]);
+  }, [debouncedSearch, options]);
 
   return (
     <Popover
@@ -946,6 +958,21 @@ function AttendanceBoard({
 export function WorkforceWorkspace({ section = "attendance" }: { section?: WorkforceSection }) {
   const { data, activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
   const { has, orgRole } = useAuth();
+  const paginatedStaff = usePaginatedErpRows<StaffRow>({
+    dataset: "staff",
+    projectCode: "",
+    initialRows: data.staff,
+  });
+  const paginatedLaborNorms = usePaginatedErpRows<LaborNormRow>({
+    dataset: "laborNorms",
+    projectCode: activeProjectCode,
+    initialRows: scoped.laborNorms,
+  });
+  const paginatedProgress = usePaginatedErpRows<ProgressRow>({
+    dataset: "progress",
+    projectCode: activeProjectCode,
+    initialRows: scoped.progress,
+  });
   const categoryOptions = catalogOptions(data.catalogs.hangMuc);
   const attendanceWeekOptions = uniqueOptions(scoped.attendance.map((row) => row.week));
   const staffTeamOptions = uniqueOptions(data.staff.map((row) => row.team));
@@ -1160,8 +1187,9 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                   ]
                 : []),
             ]}
-            rows={data.staff}
+            rows={paginatedStaff.rows}
             getRowId={(row) => row.id}
+            serverSide={paginatedStaff.serverSide}
             detailType="staff"
             selectable
             exportFileName="nhan-su"
@@ -1251,8 +1279,9 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                   ]
                 : []),
             ]}
-            rows={scoped.laborNorms}
+            rows={paginatedLaborNorms.rows}
             getRowId={(row) => row.id}
+            serverSide={paginatedLaborNorms.serverSide}
             detailType="labor-norms"
             selectable
             exportFileName="dinh-muc-nhan-cong"
@@ -1380,8 +1409,9 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                   ]
                 : []),
             ]}
-            rows={scoped.progress}
+            rows={paginatedProgress.rows}
             getRowId={(row) => row.id}
+            serverSide={paginatedProgress.serverSide}
             detailType="progress"
             selectable
             exportFileName="tien-do-hang-muc"

@@ -6,8 +6,10 @@ import { Banknote, BriefcaseBusiness, FileText, Plus, Trash2 } from "lucide-reac
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import type { ContractRow, PaymentRow, ProjectRow } from "@/lib/giaphu-erp/types";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
+import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { todayIso } from "../_lib/date-utils";
 import { uniqueOptions } from "../_lib/form-options";
 import { formatMoney } from "../_lib/formatters";
@@ -23,6 +25,21 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
   const { data, activeProject, activeProjectCode, isSwitchingProject, setActiveProjectCode, runAction, scoped } =
     useGiaPhuErp();
   const { has, orgRole } = useAuth();
+  const paginatedProjects = usePaginatedErpRows<ProjectRow>({
+    dataset: "projects",
+    projectCode: "",
+    initialRows: data.projects,
+  });
+  const paginatedContracts = usePaginatedErpRows<ContractRow>({
+    dataset: "contracts",
+    projectCode: activeProjectCode,
+    initialRows: scoped.contracts,
+  });
+  const paginatedPayments = usePaginatedErpRows<PaymentRow>({
+    dataset: "payments",
+    projectCode: activeProjectCode,
+    initialRows: scoped.payments,
+  });
   const projectStatusOptions = uniqueOptions(data.projects.map((project) => project.status));
   const projectOwnerOptions = uniqueOptions(data.projects.map((project) => project.owner));
   const canManage = canAccessClerkPermission(
@@ -189,8 +206,9 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                   ]
                 : []),
             ]}
-            rows={data.projects}
+            rows={paginatedProjects.rows}
             getRowId={(project) => project.code}
+            serverSide={paginatedProjects.serverSide}
             detailType="projects"
             selectable
             exportFileName="crm-cong-trinh"
@@ -296,8 +314,9 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                   ]
                 : []),
             ]}
-            rows={scoped.contracts}
+            rows={paginatedContracts.rows}
             getRowId={(row) => row.id}
+            serverSide={paginatedContracts.serverSide}
             detailType="contracts"
             selectable
             exportFileName="crm-hop-dong"
@@ -381,8 +400,9 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                   ]
                 : []),
             ]}
-            rows={scoped.payments}
+            rows={paginatedPayments.rows}
             getRowId={(row) => row.id}
+            serverSide={paginatedPayments.serverSide}
             detailType="payments"
             selectable
             exportFileName="crm-thu-tien"

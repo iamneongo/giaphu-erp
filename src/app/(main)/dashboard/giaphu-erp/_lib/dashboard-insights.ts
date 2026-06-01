@@ -46,6 +46,15 @@ export function getOverviewInsights(scope: ScopeData): GiaPhuOverviewInsights {
 
   const contractValue = scope.contracts.reduce((sum, row) => sum + row.value, 0);
   const collectedCash = scope.payments.reduce((sum, row) => sum + row.amount, 0);
+  const materialMainCost = scope.materials
+    .filter((row) => row.materialType === "VT Chính")
+    .reduce((sum, row) => sum + row.quantity * row.price, 0);
+  const materialSubCost = scope.materials
+    .filter((row) => row.materialType !== "VT Chính")
+    .reduce((sum, row) => sum + row.quantity * row.price, 0);
+  const laborCost = scope.attendance.reduce((sum, row) => sum + row.total, 0);
+  const subcontractorCost = scope.subcontractors.reduce((sum, row) => sum + row.advance, 0);
+  const operationCost = scope.operations.reduce((sum, row) => sum + row.amount, 0);
   const totalCost = breakdown.reduce((sum, row) => sum + row.value, 0);
   const openMaterialDebt = scope.materials
     .filter((row) => row.paymentStatus !== "Đã TT")
@@ -80,7 +89,14 @@ export function getOverviewInsights(scope: ScopeData): GiaPhuOverviewInsights {
     headline: {
       contractValue,
       collectedCash,
+      remainingReceivable: Math.max(contractValue - collectedCash, 0),
       totalCost,
+      materialMainCost,
+      materialSubCost,
+      laborCost,
+      subcontractorCost,
+      operationCost,
+      provisionalProfit: contractValue - totalCost,
       openMaterialDebt,
       activeCategories,
       activeWeeks,
@@ -91,10 +107,15 @@ export function getOverviewInsights(scope: ScopeData): GiaPhuOverviewInsights {
 }
 
 export function getReportsInsights(scope: ScopeData): GiaPhuReportsInsights {
-  const breakdown = buildCostBreakdown(scope);
-  const monthly = buildMonthlyCostData(scope, 8);
-  const weekly = buildWeeklySnapshots(scope, 8);
-  const categorySpend = buildCategorySpend(scope, 8);
+  const mainMaterialScope = {
+    ...scope,
+    materials: scope.materials.filter((row) => row.materialType === "VT Chính"),
+    subcontractors: [],
+  };
+  const breakdown = buildCostBreakdown(mainMaterialScope);
+  const monthly = buildMonthlyCostData(mainMaterialScope, 8);
+  const weekly = buildWeeklySnapshots(mainMaterialScope, 8);
+  const categorySpend = buildCategorySpend(mainMaterialScope, 8);
 
   const totalCost = breakdown.reduce((sum, row) => sum + row.value, 0);
   const contractValue = scope.contracts.reduce((sum, row) => sum + row.value, 0);
@@ -113,6 +134,9 @@ export function getReportsInsights(scope: ScopeData): GiaPhuReportsInsights {
       contractValue,
       collectedCash,
       unpaidMaterials,
+      materialMainCost: mainMaterialScope.materials.reduce((sum, row) => sum + row.quantity * row.price, 0),
+      laborCost: scope.attendance.reduce((sum, row) => sum + row.total, 0),
+      operationCost: scope.operations.reduce((sum, row) => sum + row.amount, 0),
       contractCoverage: contractValue ? (collectedCash / contractValue) * 100 : 0,
       costCoverage: totalCost ? (collectedCash / totalCost) * 100 : 0,
     },

@@ -19,6 +19,7 @@ import {
   deleteSubcontractor,
   deleteSubcontractorContract,
   getGiaPhuDashboardData,
+  getGiaPhuFilterOptions,
   getGiaPhuOverviewInsights,
   getGiaPhuPagedRows,
   getGiaPhuProjectList,
@@ -46,6 +47,23 @@ import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
 import type { GiaPhuPagedDataset } from "@/lib/giaphu-erp/types";
 
 export const runtime = "nodejs";
+
+const pagedDatasets = [
+  "projects",
+  "catalogs",
+  "staff",
+  "contracts",
+  "payments",
+  "documents",
+  "materials",
+  "attendance",
+  "materialNorms",
+  "laborNorms",
+  "progress",
+  "subcontractors",
+  "subcontractorContracts",
+  "operations",
+] satisfies GiaPhuPagedDataset[];
 
 type ActionBody = {
   action?: string;
@@ -99,7 +117,7 @@ export async function GET(request: Request) {
 
     if (searchParams.get("view") === "rows") {
       const dataset = searchParams.get("dataset") as GiaPhuPagedDataset | null;
-      if (!dataset || !["materials", "subcontractors", "operations"].includes(dataset)) {
+      if (!dataset || !pagedDatasets.includes(dataset)) {
         return NextResponse.json({ status: "error", message: "Dataset không hợp lệ." }, { status: 400 });
       }
 
@@ -113,6 +131,21 @@ export async function GET(request: Request) {
       });
 
       return NextResponse.json({ status: "success", ...result });
+    }
+
+    if (searchParams.get("view") === "filter-options") {
+      const dataset = searchParams.get("dataset") as GiaPhuPagedDataset | null;
+      if (!dataset || !pagedDatasets.includes(dataset)) {
+        return NextResponse.json({ status: "error", message: "Dataset không hợp lệ." }, { status: 400 });
+      }
+
+      const filterOptions = await getGiaPhuFilterOptions({
+        dataset,
+        activeProjectCode: searchParams.get("projectCode") || readActiveProjectCode(request),
+        filters: parseFilters(searchParams),
+      });
+
+      return NextResponse.json({ status: "success", filterOptions });
     }
 
     if (searchParams.get("view") === "insights") {

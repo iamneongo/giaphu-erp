@@ -5,19 +5,7 @@ import * as React from "react";
 import Image from "next/image";
 
 import { useAuth } from "@clerk/nextjs";
-import {
-  AlertCircle,
-  Download,
-  Eye,
-  FileText,
-  Loader2,
-  Pencil,
-  RefreshCw,
-  Save,
-  Search,
-  Trash2,
-  Upload,
-} from "lucide-react";
+import { AlertCircle, Download, Eye, FileText, Loader2, Pencil, RefreshCw, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -37,27 +25,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import type { DocumentRow } from "@/lib/giaphu-erp/types";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
+import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { uniqueOptions } from "../_lib/form-options";
 import { uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
-import { collectFormPayload } from "./action-dialog";
 import { DataTable } from "./data-table";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
-
-type DocumentRow = {
-  id: number | string;
-  project_code?: string;
-  doc_type?: string;
-  file_name?: string;
-  mime_type?: string;
-  file_size?: number | string;
-  note?: string;
-  preview_text?: string;
-  has_file?: boolean;
-};
 
 type ExcelCell = {
   id: string;
@@ -96,7 +73,7 @@ function formatFileSize(value: unknown) {
 
 function TruncatedCell({
   value,
-  className = "max-w-64",
+  className = "w-64 max-w-64",
   lines = 1,
 }: {
   value: unknown;
@@ -107,7 +84,7 @@ function TruncatedCell({
   const lineClass = lines === 2 ? "line-clamp-2 whitespace-normal" : "truncate";
 
   return (
-    <span className={`block ${className} ${lineClass}`} title={text}>
+    <span className={`block min-w-0 ${className} ${lineClass}`} title={text}>
       {text}
     </span>
   );
@@ -588,10 +565,14 @@ function DocumentPreviewDialog({
 }
 
 export function DocumentsWorkspace() {
-  const { activeProjectCode, isSwitchingProject, runAction, searchDocuments } = useGiaPhuErp();
+  const { activeProjectCode, isSwitchingProject, runAction } = useGiaPhuErp();
   const { has, orgRole } = useAuth();
-  const [rows, setRows] = React.useState<DocumentRow[]>([]);
-  const [lastKeyword, setLastKeyword] = React.useState("");
+  const emptyDocuments = React.useMemo<DocumentRow[]>(() => [], []);
+  const paginatedDocuments = usePaginatedErpRows<DocumentRow>({
+    dataset: "documents",
+    projectCode: activeProjectCode,
+    initialRows: emptyDocuments,
+  });
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editingDocument, setEditingDocument] = React.useState<DocumentRow | null>(null);
   const [previewDocument, setPreviewDocument] = React.useState<DocumentRow | null>(null);
@@ -604,48 +585,13 @@ export function DocumentsWorkspace() {
     ERP_PERMISSIONS.documentsManage,
   );
 
-  const loadDocuments = React.useCallback(
-    async (keyword = lastKeyword) => {
-      if (!activeProjectCode) {
-        setRows([]);
-        return;
-      }
-
-      const nextRows = await searchDocuments({
-        projectCode: activeProjectCode,
-        keyword,
-      });
-      setRows(nextRows as DocumentRow[]);
-    },
-    [activeProjectCode, lastKeyword, searchDocuments],
-  );
-
-  async function submitSearch(form: HTMLFormElement) {
-    const payload = collectFormPayload(form);
-    const keyword = String(payload.keyword ?? "");
-    setLastKeyword(keyword);
-    await loadDocuments(keyword);
-  }
-
   async function runDocumentAction(action: string, payload: Record<string, unknown>) {
     const saved = await runAction(action, payload);
     if (!saved) return false;
 
-    await loadDocuments();
+    paginatedDocuments.refresh();
     return true;
   }
-
-  React.useEffect(() => {
-    setLastKeyword("");
-    if (!activeProjectCode) {
-      setRows([]);
-      return;
-    }
-
-    void searchDocuments({ projectCode: activeProjectCode, keyword: "" }).then((nextRows) => {
-      setRows(nextRows as DocumentRow[]);
-    });
-  }, [activeProjectCode, searchDocuments]);
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
@@ -669,23 +615,8 @@ export function DocumentsWorkspace() {
         }
       />
 
-      <SectionBlock title="Danh sách hồ sơ" meta={<Badge variant="outline">{rows.length} hồ sơ</Badge>}>
+      <SectionBlock title="Danh sách hồ sơ" meta={<Badge variant="outline">{paginatedDocuments.total} hồ sơ</Badge>}>
         <div className="space-y-4">
-          <Form
-            className="flex flex-col gap-2 md:flex-row"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submitSearch(event.currentTarget);
-            }}
-          >
-            <Input type="hidden" name="projectCode" value={activeProjectCode} />
-            <Input name="keyword" placeholder="Nhập từ khóa hồ sơ..." />
-            <Button type="submit" variant="outline">
-              <Search />
-              Tìm
-            </Button>
-          </Form>
-
           <DataTable
             loading={isSwitchingProject}
             columns={[
@@ -700,8 +631,8 @@ export function DocumentsWorkspace() {
                 label: "Tên file",
                 accessor: (row) => row.file_name,
                 render: (row) => (
-                  <div className="flex max-w-72 flex-col gap-1">
-                    <TruncatedCell className="max-w-72 font-medium" value={row.file_name} />
+                  <div className="flex w-[260px] max-w-[260px] flex-col gap-1">
+                    <TruncatedCell className="w-[260px] max-w-[260px] font-medium" value={row.file_name} />
                     <span className="text-muted-foreground text-xs">{formatFileSize(row.file_size)}</span>
                   </div>
                 ),
@@ -720,13 +651,13 @@ export function DocumentsWorkspace() {
                 key: "note",
                 label: "Ghi chú",
                 accessor: (row) => row.note,
-                render: (row) => <TruncatedCell className="max-w-56" lines={2} value={row.note} />,
+                render: (row) => <TruncatedCell className="w-[240px] max-w-[240px]" value={row.note} />,
               },
               {
                 key: "preview_text",
                 label: "Trích yếu",
                 accessor: (row) => row.preview_text,
-                render: (row) => <TruncatedCell className="max-w-80" lines={2} value={row.preview_text} />,
+                render: (row) => <TruncatedCell className="w-[360px] max-w-[360px]" value={row.preview_text} />,
               },
               ...(canManage
                 ? [
@@ -788,20 +719,25 @@ export function DocumentsWorkspace() {
                   ]
                 : []),
             ]}
-            rows={rows}
+            rows={paginatedDocuments.rows}
             getRowId={(row) => String(row.id)}
+            serverSide={paginatedDocuments.serverSide}
             detailType="documents"
             empty="Chưa có hồ sơ cho công trình hiện tại."
             selectable
             exportFileName="ho-so-cong-trinh"
             searchPlaceholder="Lọc nhanh trong kết quả hồ sơ..."
             filters={[
-              { key: "doc_type", label: "Loại", options: uniqueOptions(rows.map((row) => row.doc_type as string)) },
+              {
+                key: "doc_type",
+                label: "Loại",
+                options: uniqueOptions(paginatedDocuments.rows.map((row) => row.doc_type)),
+              },
               {
                 key: "has_file",
                 label: "Tệp",
                 accessor: (row) => (row.has_file ? "Đã tải" : "Thiếu tệp"),
-                options: uniqueOptions(rows.map((row) => (row.has_file ? "Đã tải" : "Thiếu tệp"))),
+                options: uniqueOptions(paginatedDocuments.rows.map((row) => (row.has_file ? "Đã tải" : "Thiếu tệp"))),
               },
             ]}
           />
@@ -814,7 +750,9 @@ export function DocumentsWorkspace() {
           setEditorOpen(open);
           if (!open) setEditingDocument(null);
         }}
-        onSaved={() => loadDocuments()}
+        onSaved={async () => {
+          paginatedDocuments.refresh();
+        }}
         open={editorOpen}
         projectCode={activeProjectCode}
       />

@@ -15,9 +15,11 @@ import {
 import {
   ACTIVE_PROJECT_CHANGE_EVENT,
   type ActiveProjectChangeDetail,
+  PROJECTS_REFRESH_EVENT,
   readActiveProjectCode,
 } from "@/lib/giaphu-erp/project-context";
 import { projectScopedPath } from "@/lib/giaphu-erp/project-routes";
+import type { ProjectRow } from "@/lib/giaphu-erp/types";
 
 const segmentLabels: Record<string, string> = {
   dashboard: "Bảng điều khiển",
@@ -56,9 +58,27 @@ const segmentLabels: Record<string, string> = {
   "thau-phu": "Thầu phụ",
 };
 
+type GiaPhuProjectsResponse = {
+  status: "success" | "error";
+  message?: string;
+  projects?: ProjectRow[];
+};
+
+async function fetchProjects() {
+  const response = await fetch("/api/giaphu-erp?view=projects", { cache: "no-store" });
+  const result = (await response.json()) as GiaPhuProjectsResponse;
+
+  if (!response.ok || result.status !== "success") {
+    throw new Error(result.message || "Không thể tải danh sách công trình.");
+  }
+
+  return result.projects ?? [];
+}
+
 export function DashboardBreadcrumbs() {
   const pathname = usePathname();
   const [activeProjectCode, setActiveProjectCode] = React.useState("");
+  const [projects, setProjects] = React.useState<ProjectRow[]>([]);
   const segments = pathname.split("/").filter(Boolean);
   const visibleSegments = segments
     .map((segment, index) => ({
@@ -84,6 +104,39 @@ export function DashboardBreadcrumbs() {
     };
   }, []);
 
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadProjects() {
+      try {
+        const nextProjects = await fetchProjects();
+        if (!cancelled) setProjects(nextProjects);
+      } catch {
+        if (!cancelled) setProjects([]);
+      }
+    }
+
+    void loadProjects();
+    window.addEventListener(PROJECTS_REFRESH_EVENT, loadProjects);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(PROJECTS_REFRESH_EVENT, loadProjects);
+    };
+  }, []);
+
+  function getSegmentLabel(segment: string, index: number) {
+    if (segment.startsWith("role_")) return "Chi tiết vai trò";
+
+    const previousSegment = visibleSegments[index - 1]?.segment;
+    if (previousSegment === "projects") {
+      const decodedProjectCode = decodeURIComponent(segment);
+      return projects.find((project) => project.code === decodedProjectCode)?.name ?? decodedProjectCode;
+    }
+
+    return segmentLabels[segment] ?? segment;
+  }
+
   return (
     <Breadcrumb>
       <BreadcrumbList>
@@ -94,19 +147,16 @@ export function DashboardBreadcrumbs() {
         </BreadcrumbItem>
         {visibleSegments.map(({ href, segment }, index) => {
           const isLast = index === visibleSegments.length - 1;
+          const label = getSegmentLabel(segment, index);
 
           return (
             <React.Fragment key={href}>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
                 {isLast ? (
-                  <BreadcrumbPage>
-                    {segment.startsWith("role_") ? "Chi tiết vai trò" : (segmentLabels[segment] ?? segment)}
-                  </BreadcrumbPage>
+                  <BreadcrumbPage>{label}</BreadcrumbPage>
                 ) : (
-                  <BreadcrumbLink href={href}>
-                    {segment.startsWith("role_") ? "Chi tiết vai trò" : (segmentLabels[segment] ?? segment)}
-                  </BreadcrumbLink>
+                  <BreadcrumbLink href={href}>{label}</BreadcrumbLink>
                 )}
               </BreadcrumbItem>
             </React.Fragment>

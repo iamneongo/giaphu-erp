@@ -7,6 +7,7 @@ import type {
   CatalogItem,
   ContractRow,
   CostSummary,
+  DocumentRow,
   GiaPhuDashboardData,
   GiaPhuOverviewInsights,
   GiaPhuPagedDataset,
@@ -37,9 +38,29 @@ export type GiaPhuPagedRowsOptions = {
   filters?: Record<string, string>;
 };
 
+export type GiaPhuFilterOption = { label: string; value: string };
+export type GiaPhuFilterOptionsResult = Record<string, GiaPhuFilterOption[]>;
+
 export type GiaPhuPagedRowsResult =
+  | { dataset: "projects"; rows: ProjectRow[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "catalogs"; rows: CatalogItem[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "staff"; rows: StaffRow[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "contracts"; rows: ContractRow[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "payments"; rows: PaymentRow[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "documents"; rows: DocumentRow[]; total: number; pageIndex: number; pageSize: number }
   | { dataset: "materials"; rows: MaterialRow[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "attendance"; rows: AttendanceRow[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "materialNorms"; rows: MaterialNormRow[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "laborNorms"; rows: LaborNormRow[]; total: number; pageIndex: number; pageSize: number }
+  | { dataset: "progress"; rows: ProgressRow[]; total: number; pageIndex: number; pageSize: number }
   | { dataset: "subcontractors"; rows: SubcontractorRow[]; total: number; pageIndex: number; pageSize: number }
+  | {
+      dataset: "subcontractorContracts";
+      rows: SubcontractorContractRow[];
+      total: number;
+      pageIndex: number;
+      pageSize: number;
+    }
   | { dataset: "operations"; rows: OperationRow[]; total: number; pageIndex: number; pageSize: number };
 
 type GlobalSchemaState = typeof globalThis & {
@@ -382,6 +403,20 @@ function contractFromRow(row: Row): ContractRow {
     value: number(row.value),
     signedDate: dateOnly(row.signed_date),
     note: text(row.note),
+  };
+}
+
+function documentFromRow(row: Row): DocumentRow {
+  return {
+    id: number(row.id),
+    project_code: text(row.project_code),
+    doc_type: text(row.doc_type),
+    file_name: text(row.file_name),
+    mime_type: text(row.mime_type),
+    file_size: number(row.file_size),
+    note: text(row.note),
+    preview_text: text(row.preview_text),
+    has_file: bool(row.has_file),
   };
 }
 
@@ -840,6 +875,13 @@ function totalFromCountRows(rows: unknown) {
   return number(row?.total);
 }
 
+function distinctOptions(rows: unknown): GiaPhuFilterOption[] {
+  return (rows as Row[])
+    .map((row) => text(row.value).trim())
+    .filter(Boolean)
+    .map((value) => ({ label: value, value }));
+}
+
 function monthKey(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -918,7 +960,14 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
       headline: {
         contractValue: 0,
         collectedCash: 0,
+        remainingReceivable: 0,
         totalCost: 0,
+        materialMainCost: 0,
+        materialSubCost: 0,
+        laborCost: 0,
+        subcontractorCost: 0,
+        operationCost: 0,
+        provisionalProfit: 0,
         openMaterialDebt: 0,
         activeCategories: 0,
         activeWeeks: 0,
@@ -930,6 +979,7 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
 
   const [
     materialBreakdown,
+    materialTypeRows,
     laborBreakdown,
     subcontractorBreakdown,
     operationBreakdown,
@@ -952,6 +1002,7 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
     recentOperationRows,
   ] = await Promise.all([
     sql`select 'materials' as key, count(*)::int as rows, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where project_code = ${activeProjectCode}`,
+    sql`select material_type, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where project_code = ${activeProjectCode} group by material_type`,
     sql`select 'labor' as key, count(*)::int as rows, coalesce(sum(total), 0)::float8 as value from gp_attendance where project_code = ${activeProjectCode}`,
     sql`select 'subcontractors' as key, count(*)::int as rows, coalesce(sum(advance), 0)::float8 as value from gp_subcontractors where project_code = ${activeProjectCode}`,
     sql`select 'operations' as key, count(*)::int as rows, coalesce(sum(amount), 0)::float8 as value from gp_operations where project_code = ${activeProjectCode}`,
@@ -1093,10 +1144,22 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
   const currentCost = latest.materials + latest.labor + latest.subcontractors + latest.operations;
   const previousCost = previous.materials + previous.labor + previous.subcontractors + previous.operations;
   const totalCost = breakdown.reduce((sum, row) => sum + row.value, 0);
+  const materialMainCost = (materialTypeRows as Row[])
+    .filter((row) => text(row.material_type) === "VT Chính")
+    .reduce((sum, row) => sum + number(row.value), 0);
+  const materialSubCost = (materialTypeRows as Row[])
+    .filter((row) => text(row.material_type) !== "VT Chính")
+    .reduce((sum, row) => sum + number(row.value), 0);
+  const laborCost = number((laborBreakdown as Row[])[0]?.value);
+  const subcontractorCost = number((subcontractorBreakdown as Row[])[0]?.value);
+  const operationCost = number((operationBreakdown as Row[])[0]?.value);
   const [contractTotal] = contractRows as Row[];
   const [paymentTotal] = paymentRows as Row[];
   const [unpaidTotal] = unpaidRows as Row[];
   const [activeTotals] = activeRows as Row[];
+
+  const contractValue = number(contractTotal?.total);
+  const collectedCash = number(paymentTotal?.total);
 
   return {
     monthly,
@@ -1104,9 +1167,16 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
     recentActivities,
     categorySpend: [...categoryMap.values()].sort((a, b) => b.total - a.total).slice(0, 6),
     headline: {
-      contractValue: number(contractTotal?.total),
-      collectedCash: number(paymentTotal?.total),
+      contractValue,
+      collectedCash,
+      remainingReceivable: Math.max(contractValue - collectedCash, 0),
       totalCost,
+      materialMainCost,
+      materialSubCost,
+      laborCost,
+      subcontractorCost,
+      operationCost,
+      provisionalProfit: contractValue - totalCost,
       openMaterialDebt: number(unpaidTotal?.total),
       activeCategories: number(activeTotals?.active_categories),
       activeWeeks: number(activeTotals?.active_weeks),
@@ -1133,6 +1203,9 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
         contractValue: 0,
         collectedCash: 0,
         unpaidMaterials: 0,
+        materialMainCost: 0,
+        laborCost: 0,
+        operationCost: 0,
         contractCoverage: 0,
         costCoverage: 0,
       },
@@ -1150,14 +1223,14 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
     weeklySubcontractorRows,
     weeklyOperationRows,
   ] = await Promise.all([
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where project_code = ${activeProjectCode} group by 1`,
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(advance), 0)::float8 as value from gp_subcontractors where project_code = ${activeProjectCode} group by 1`,
+    sql`select null::text as month, 0::float8 as value where false`,
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_operations where project_code = ${activeProjectCode} group by 1`,
     sql`select to_char(coalesce(payment_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_payments where project_code = ${activeProjectCode} group by 1`,
-    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where project_code = ${activeProjectCode} group by 1`,
+    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
     sql`select week, coalesce(sum(total), 0)::float8 as labor from gp_attendance where project_code = ${activeProjectCode} group by 1`,
-    sql`select week, coalesce(sum(advance), 0)::float8 as subcontractors from gp_subcontractors where project_code = ${activeProjectCode} group by 1`,
+    sql`select null::text as week, 0::float8 as subcontractors where false`,
     sql`select week, coalesce(sum(amount), 0)::float8 as operations from gp_operations where project_code = ${activeProjectCode} group by 1`,
   ]);
 
@@ -1200,10 +1273,33 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
     .sort((a, b) => compareWeekDesc(a.week, b.week))
     .slice(0, 8)
     .reverse();
-  const totalCost = overview.breakdown.reduce((sum, row) => sum + row.value, 0);
+  const totalCost = overview.headline.materialMainCost + overview.headline.laborCost + overview.headline.operationCost;
+  const breakdown = [
+    {
+      key: "materials",
+      label: "VT Chính",
+      value: overview.headline.materialMainCost,
+      rows: 0,
+      share: totalCost ? (overview.headline.materialMainCost / totalCost) * 100 : 0,
+    },
+    {
+      key: "labor",
+      label: "Nhân công",
+      value: overview.headline.laborCost,
+      rows: 0,
+      share: totalCost ? (overview.headline.laborCost / totalCost) * 100 : 0,
+    },
+    {
+      key: "operations",
+      label: "Vận hành",
+      value: overview.headline.operationCost,
+      rows: 0,
+      share: totalCost ? (overview.headline.operationCost / totalCost) * 100 : 0,
+    },
+  ];
 
   return {
-    breakdown: overview.breakdown,
+    breakdown,
     monthly: monthlyKeys.map((month) => monthlyMap.get(month) ?? emptyMonthlyPoint(month)),
     weekly,
     categorySpend: overview.categorySpend.slice(0, 8),
@@ -1212,6 +1308,9 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
       contractValue: overview.headline.contractValue,
       collectedCash: overview.headline.collectedCash,
       unpaidMaterials: overview.headline.openMaterialDebt,
+      materialMainCost: overview.headline.materialMainCost,
+      laborCost: overview.headline.laborCost,
+      operationCost: overview.headline.operationCost,
       contractCoverage: overview.headline.contractValue
         ? (overview.headline.collectedCash / overview.headline.contractValue) * 100
         : 0,
@@ -1233,8 +1332,194 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
   const pattern = `%${search}%`;
   const filterValue = (key: string) => text(options.filters?.[key]).trim();
 
+  if (options.dataset === "projects") {
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', code, name, owner, contact, referrer, status, failure_reason)) like lower(${pattern})`
+      : sql``;
+    const statusFilter = filterValue("status");
+    const ownerFilter = filterValue("owner");
+    const whereFilters = sql`
+      ${statusFilter ? sql`and status = ${statusFilter}` : sql``}
+      ${ownerFilter ? sql`and owner = ${ownerFilter}` : sql``}
+    `;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_projects where true ${whereSearch} ${whereFilters}`,
+      sql`
+        select *
+        from gp_projects
+        where true ${whereSearch} ${whereFilters}
+        order by updated_at desc, code asc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "projects",
+      rows: (rows as Row[]).map(projectFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
+  if (options.dataset === "catalogs") {
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', kind, code, name, unit, contact, note)) like lower(${pattern})`
+      : sql``;
+    const kindFilter = filterValue("kind");
+    const unitFilter = filterValue("unit");
+    const contactFilter = filterValue("contact");
+    const whereFilters = sql`
+      ${kindFilter ? sql`and kind = ${kindFilter}` : sql``}
+      ${unitFilter ? sql`and unit = ${unitFilter}` : sql``}
+      ${contactFilter ? sql`and contact = ${contactFilter}` : sql``}
+    `;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_catalog_items where true ${whereSearch} ${whereFilters}`,
+      sql`
+        select *
+        from gp_catalog_items
+        where true ${whereSearch} ${whereFilters}
+        order by kind asc, name asc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "catalogs",
+      rows: (rows as Row[]).map(catalogFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
+  if (options.dataset === "staff") {
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', id, name, team, position)) like lower(${pattern})`
+      : sql``;
+    const teamFilter = filterValue("team");
+    const positionFilter = filterValue("position");
+    const resignedFilter = filterValue("resigned");
+    const whereFilters = sql`
+      ${teamFilter ? sql`and team = ${teamFilter}` : sql``}
+      ${positionFilter ? sql`and position = ${positionFilter}` : sql``}
+      ${resignedFilter ? sql`and resigned = ${resignedFilter === "Đã nghỉ việc"}` : sql``}
+    `;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_staff where true ${whereSearch} ${whereFilters}`,
+      sql`
+        select *
+        from gp_staff
+        where true ${whereSearch} ${whereFilters}
+        order by id asc, name asc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "staff",
+      rows: (rows as Row[]).map(staffFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
   if (!activeProjectCode) {
     return { dataset: options.dataset, rows: [], total: 0, pageIndex, pageSize } as GiaPhuPagedRowsResult;
+  }
+
+  if (options.dataset === "contracts") {
+    const whereSearch = search ? sql`and lower(concat_ws(' ', contract_no, note)) like lower(${pattern})` : sql``;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_contracts where project_code = ${activeProjectCode} ${whereSearch}`,
+      sql`
+        select *
+        from gp_contracts
+        where project_code = ${activeProjectCode} ${whereSearch}
+        order by signed_date desc, id desc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "contracts",
+      rows: (rows as Row[]).map(contractFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
+  if (options.dataset === "payments") {
+    const whereSearch = search ? sql`and lower(concat_ws(' ', note)) like lower(${pattern})` : sql``;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_payments where project_code = ${activeProjectCode} ${whereSearch}`,
+      sql`
+        select *
+        from gp_payments
+        where project_code = ${activeProjectCode} ${whereSearch}
+        order by payment_date desc, id desc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "payments",
+      rows: (rows as Row[]).map(paymentFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
+  if (options.dataset === "documents") {
+    await ensureDocumentFileColumns();
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', doc_type, file_name, note, preview_text)) like lower(${pattern})`
+      : sql``;
+    const typeFilter = filterValue("doc_type");
+    const hasFileFilter = filterValue("has_file");
+    const whereFilters = sql`
+      ${typeFilter ? sql`and doc_type = ${typeFilter}` : sql``}
+      ${hasFileFilter ? sql`and (file_data <> '') = ${hasFileFilter === "Đã tải"}` : sql``}
+    `;
+    const selectDocumentFields = sql`
+      id,
+      project_code,
+      doc_type,
+      file_name,
+      mime_type,
+      file_size,
+      note,
+      preview_text,
+      file_data <> '' as has_file
+    `;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_documents where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`
+        select ${selectDocumentFields}
+        from gp_documents
+        where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        order by created_at desc, id desc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "documents",
+      rows: (rows as Row[]).map(documentFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
   }
 
   if (options.dataset === "materials") {
@@ -1274,6 +1559,124 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     };
   }
 
+  if (options.dataset === "attendance") {
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', week, shift, category, staff_name, position, status)) like lower(${pattern})`
+      : sql``;
+    const weekFilter = filterValue("week");
+    const categoryFilter = filterValue("category");
+    const staffNameFilter = filterValue("staffName");
+    const positionFilter = filterValue("position");
+    const shiftFilter = filterValue("shift");
+    const whereFilters = sql`
+      ${weekFilter ? sql`and week = ${weekFilter}` : sql``}
+      ${categoryFilter ? sql`and category = ${categoryFilter}` : sql``}
+      ${staffNameFilter ? sql`and staff_name = ${staffNameFilter}` : sql``}
+      ${positionFilter ? sql`and position = ${positionFilter}` : sql``}
+      ${shiftFilter ? sql`and shift = ${shiftFilter}` : sql``}
+    `;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_attendance where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`
+        select *
+        from gp_attendance
+        where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        order by coalesce(work_date, created_at::date) desc, id desc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "attendance",
+      rows: (rows as Row[]).map(attendanceFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
+  if (options.dataset === "materialNorms") {
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', category, material_name, unit, material_type)) like lower(${pattern})`
+      : sql``;
+    const categoryFilter = filterValue("category");
+    const materialTypeFilter = filterValue("materialType");
+    const whereFilters = sql`
+      ${categoryFilter ? sql`and category = ${categoryFilter}` : sql``}
+      ${materialTypeFilter ? sql`and material_type = ${materialTypeFilter}` : sql``}
+    `;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_material_norms where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`
+        select *
+        from gp_material_norms
+        where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        order by category asc, material_name asc, id desc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "materialNorms",
+      rows: (rows as Row[]).map(materialNormFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
+  if (options.dataset === "laborNorms") {
+    const whereSearch = search ? sql`and lower(concat_ws(' ', category)) like lower(${pattern})` : sql``;
+    const categoryFilter = filterValue("category");
+    const whereFilters = sql`${categoryFilter ? sql`and category = ${categoryFilter}` : sql``}`;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_labor_norms where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`
+        select *
+        from gp_labor_norms
+        where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        order by category asc, id desc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "laborNorms",
+      rows: (rows as Row[]).map(laborNormFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
+  if (options.dataset === "progress") {
+    const whereSearch = search ? sql`and lower(concat_ws(' ', category, evaluation)) like lower(${pattern})` : sql``;
+    const categoryFilter = filterValue("category");
+    const whereFilters = sql`${categoryFilter ? sql`and category = ${categoryFilter}` : sql``}`;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_progress where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`
+        select *
+        from gp_progress
+        where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        order by start_date desc nulls last, category asc, id desc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "progress",
+      rows: (rows as Row[]).map(progressFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
   if (options.dataset === "subcontractors") {
     const whereSearch = search
       ? sql`and lower(concat_ws(' ', week, category, contractor_name, note, status)) like lower(${pattern})`
@@ -1307,6 +1710,33 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     };
   }
 
+  if (options.dataset === "subcontractorContracts") {
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', contractor_name, note, status)) like lower(${pattern})`
+      : sql``;
+    const statusFilter = filterValue("status");
+    const whereFilters = sql`${statusFilter ? sql`and status = ${statusFilter}` : sql``}`;
+    const [countRows, rows] = await Promise.all([
+      sql`select count(*)::int as total from gp_subcontractor_contracts where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`
+        select *
+        from gp_subcontractor_contracts
+        where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        order by updated_at desc, id desc
+        limit ${pageSize}
+        offset ${offset}
+      `,
+    ]);
+
+    return {
+      dataset: "subcontractorContracts",
+      rows: (rows as Row[]).map(subcontractorContractFromRow),
+      total: totalFromCountRows(countRows),
+      pageIndex,
+      pageSize,
+    };
+  }
+
   const whereSearch = search ? sql`and lower(concat_ws(' ', week, description)) like lower(${pattern})` : sql``;
   const weekFilter = filterValue("week");
   const whereFilters = sql`${weekFilter ? sql`and week = ${weekFilter}` : sql``}`;
@@ -1329,6 +1759,168 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     pageIndex,
     pageSize,
   };
+}
+
+export async function getGiaPhuFilterOptions(options: {
+  dataset: GiaPhuPagedDataset;
+  activeProjectCode?: string;
+  filters?: Record<string, string>;
+}): Promise<GiaPhuFilterOptionsResult> {
+  const sql = getSql();
+  const projects = await getGiaPhuProjectList();
+  const activeProjectCode = projects.some((project) => project.code === options.activeProjectCode)
+    ? (options.activeProjectCode ?? "")
+    : (projects[0]?.code ?? "");
+  const fixedFilterValue = (key: string) => text(options.filters?.[key]).trim();
+
+  if (options.dataset === "projects") {
+    const [statusRows, ownerRows] = await Promise.all([
+      sql`select distinct status as value from gp_projects where status <> '' order by status asc limit 300`,
+      sql`select distinct owner as value from gp_projects where owner <> '' order by owner asc limit 300`,
+    ]);
+
+    return {
+      status: distinctOptions(statusRows),
+      owner: distinctOptions(ownerRows),
+    };
+  }
+
+  if (options.dataset === "catalogs") {
+    const kindFilter = fixedFilterValue("kind");
+    const whereKind = kindFilter ? sql`and kind = ${kindFilter}` : sql``;
+    const [kindRows, unitRows, contactRows] = await Promise.all([
+      sql`select distinct kind as value from gp_catalog_items where kind <> '' order by kind asc limit 300`,
+      sql`select distinct unit as value from gp_catalog_items where unit <> '' ${whereKind} order by unit asc limit 300`,
+      sql`select distinct contact as value from gp_catalog_items where contact <> '' ${whereKind} order by contact asc limit 300`,
+    ]);
+
+    return {
+      kind: distinctOptions(kindRows),
+      unit: distinctOptions(unitRows),
+      contact: distinctOptions(contactRows),
+    };
+  }
+
+  if (options.dataset === "staff") {
+    const [teamRows, positionRows] = await Promise.all([
+      sql`select distinct team as value from gp_staff where team <> '' order by team asc limit 300`,
+      sql`select distinct position as value from gp_staff where position <> '' order by position asc limit 300`,
+    ]);
+
+    return {
+      team: distinctOptions(teamRows),
+      position: distinctOptions(positionRows),
+      resigned: [
+        { label: "Đang làm", value: "Đang làm" },
+        { label: "Đã nghỉ việc", value: "Đã nghỉ việc" },
+      ],
+    };
+  }
+
+  if (!activeProjectCode) return {};
+
+  if (options.dataset === "documents") {
+    await ensureDocumentFileColumns();
+    const [typeRows] = await Promise.all([
+      sql`select distinct doc_type as value from gp_documents where project_code = ${activeProjectCode} and doc_type <> '' order by doc_type asc limit 300`,
+    ]);
+
+    return {
+      doc_type: distinctOptions(typeRows),
+      has_file: [
+        { label: "Đã tải", value: "Đã tải" },
+        { label: "Thiếu tệp", value: "Thiếu tệp" },
+      ],
+    };
+  }
+
+  if (options.dataset === "materials") {
+    const [weekRows, materialTypeRows, paymentStatusRows, categoryRows, supplierRows] = await Promise.all([
+      sql`select distinct week as value from gp_materials where project_code = ${activeProjectCode} and week <> '' order by week desc limit 300`,
+      sql`select distinct material_type as value from gp_materials where project_code = ${activeProjectCode} and material_type <> '' order by material_type asc limit 300`,
+      sql`select distinct payment_status as value from gp_materials where project_code = ${activeProjectCode} and payment_status <> '' order by payment_status asc limit 300`,
+      sql`select distinct category as value from gp_materials where project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`,
+      sql`select distinct supplier as value from gp_materials where project_code = ${activeProjectCode} and supplier <> '' order by supplier asc limit 300`,
+    ]);
+
+    return {
+      week: distinctOptions(weekRows),
+      materialType: distinctOptions(materialTypeRows),
+      paymentStatus: distinctOptions(paymentStatusRows),
+      category: distinctOptions(categoryRows),
+      supplier: distinctOptions(supplierRows),
+    };
+  }
+
+  if (options.dataset === "attendance") {
+    const [weekRows, categoryRows, staffRows, positionRows, shiftRows] = await Promise.all([
+      sql`select distinct week as value from gp_attendance where project_code = ${activeProjectCode} and week <> '' order by week desc limit 300`,
+      sql`select distinct category as value from gp_attendance where project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`,
+      sql`select distinct staff_name as value from gp_attendance where project_code = ${activeProjectCode} and staff_name <> '' order by staff_name asc limit 300`,
+      sql`select distinct position as value from gp_attendance where project_code = ${activeProjectCode} and position <> '' order by position asc limit 300`,
+      sql`select distinct shift as value from gp_attendance where project_code = ${activeProjectCode} and shift <> '' order by shift asc limit 300`,
+    ]);
+
+    return {
+      week: distinctOptions(weekRows),
+      category: distinctOptions(categoryRows),
+      staffName: distinctOptions(staffRows),
+      position: distinctOptions(positionRows),
+      shift: distinctOptions(shiftRows),
+    };
+  }
+
+  if (options.dataset === "materialNorms") {
+    const [categoryRows, materialTypeRows] = await Promise.all([
+      sql`select distinct category as value from gp_material_norms where project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`,
+      sql`select distinct material_type as value from gp_material_norms where project_code = ${activeProjectCode} and material_type <> '' order by material_type asc limit 300`,
+    ]);
+
+    return {
+      category: distinctOptions(categoryRows),
+      materialType: distinctOptions(materialTypeRows),
+    };
+  }
+
+  if (options.dataset === "laborNorms") {
+    const rows =
+      await sql`select distinct category as value from gp_labor_norms where project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`;
+    return { category: distinctOptions(rows) };
+  }
+
+  if (options.dataset === "progress") {
+    const rows =
+      await sql`select distinct category as value from gp_progress where project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`;
+    return { category: distinctOptions(rows) };
+  }
+
+  if (options.dataset === "subcontractors") {
+    const [weekRows, categoryRows, contractorRows] = await Promise.all([
+      sql`select distinct week as value from gp_subcontractors where project_code = ${activeProjectCode} and week <> '' order by week desc limit 300`,
+      sql`select distinct category as value from gp_subcontractors where project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`,
+      sql`select distinct contractor_name as value from gp_subcontractors where project_code = ${activeProjectCode} and contractor_name <> '' order by contractor_name asc limit 300`,
+    ]);
+
+    return {
+      week: distinctOptions(weekRows),
+      category: distinctOptions(categoryRows),
+      contractorName: distinctOptions(contractorRows),
+    };
+  }
+
+  if (options.dataset === "subcontractorContracts") {
+    const rows =
+      await sql`select distinct status as value from gp_subcontractor_contracts where project_code = ${activeProjectCode} and status <> '' order by status asc limit 300`;
+    return { status: distinctOptions(rows) };
+  }
+
+  if (options.dataset === "operations") {
+    const rows =
+      await sql`select distinct week as value from gp_operations where project_code = ${activeProjectCode} and week <> '' order by week desc limit 300`;
+    return { week: distinctOptions(rows) };
+  }
+
+  return {};
 }
 
 export async function saveProject(payload: Record<string, unknown>) {

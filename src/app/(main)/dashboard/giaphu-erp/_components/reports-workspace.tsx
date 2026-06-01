@@ -2,82 +2,75 @@
 
 import * as React from "react";
 
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  BadgeCheck,
-  ClipboardList,
-  Coins,
-  FileSpreadsheet,
-  ReceiptText,
-  WalletCards,
-} from "lucide-react";
+import { Banknote, Download, HardHat, PackageSearch, ReceiptText } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis } from "recharts";
 
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+  type ChartConfig,
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import type { AttendanceRow, MaterialRow, OperationRow } from "@/lib/giaphu-erp/types";
 
 import { ReportsContentSkeleton } from "../../_components/loading-skeletons";
 import { useErpInsights } from "../_hooks/use-erp-insights";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
-import {
-  type BreakdownPoint,
-  type CategorySpendPoint,
-  formatPercent,
-  formatVnd,
-  getReportsInsights,
-} from "../_lib/dashboard-insights";
+import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
+import { formatVnd, getReportsInsights } from "../_lib/dashboard-insights";
+import { formatCount } from "../_lib/formatters";
 import { DataTable } from "./data-table";
 
-const monthlyCashflowConfig = {
-  cost: {
-    label: "Chi phí",
-    color: "var(--chart-1)",
-  },
-  cashIn: {
-    label: "Thu tiền",
-    color: "var(--chart-2)",
-  },
-} satisfies ChartConfig;
-
-const weeklyConfig = {
-  total: {
-    label: "Tổng chi",
-    color: "var(--chart-3)",
-  },
-} satisfies ChartConfig;
-
-const mixConfig = {
+const costChartConfig = {
   materials: {
-    label: "Vật tư",
+    label: "VT Chính",
     color: "var(--chart-1)",
   },
   labor: {
     label: "Nhân công",
     color: "var(--chart-2)",
   },
-  subcontractors: {
-    label: "Thầu phụ",
-    color: "var(--chart-3)",
-  },
   operations: {
     label: "Vận hành",
-    color: "var(--chart-4)",
+    color: "var(--chart-3)",
   },
 } satisfies ChartConfig;
 
+const ReuiPie = Pie as unknown as React.ComponentType<
+  Omit<React.ComponentProps<typeof Pie>, "activeIndex" | "activeShape"> & {
+    activeIndex?: number;
+    activeShape?: unknown;
+  }
+>;
+
 export function ReportsWorkspace() {
   const { activeProject, activeProjectCode, isSwitchingProject, scoped } = useGiaPhuErp();
+  const chartId = React.useId().replace(/\W/g, "");
+  const mainMaterialFilters = React.useMemo(() => ({ materialType: "VT Chính" }), []);
+  const mainMaterialRows = React.useMemo(
+    () => scoped.materials.filter((row) => row.materialType === "VT Chính"),
+    [scoped.materials],
+  );
+  const paginatedLabor = usePaginatedErpRows<AttendanceRow>({
+    dataset: "attendance",
+    projectCode: activeProjectCode,
+    initialRows: scoped.attendance,
+  });
+  const paginatedMainMaterials = usePaginatedErpRows<MaterialRow>({
+    dataset: "materials",
+    projectCode: activeProjectCode,
+    initialRows: mainMaterialRows,
+    fixedFilters: mainMaterialFilters,
+  });
+  const paginatedOperations = usePaginatedErpRows<OperationRow>({
+    dataset: "operations",
+    projectCode: activeProjectCode,
+    initialRows: scoped.operations,
+  });
   const fallbackInsights = React.useMemo(() => getReportsInsights(scoped), [scoped]);
   const { insights, loading } = useErpInsights({
     type: "reports",
@@ -85,24 +78,76 @@ export function ReportsWorkspace() {
     fallback: fallbackInsights,
   });
 
+  const totalFocusedCost =
+    insights.headline.materialMainCost + insights.headline.laborCost + insights.headline.operationCost;
+  const laborShare = totalFocusedCost ? (insights.headline.laborCost / totalFocusedCost) * 100 : 0;
   const monthlyData = insights.monthly.map((row) => ({
     ...row,
-    cost: row.materials + row.labor + row.subcontractors + row.operations,
     monthLabel: formatMonthLabel(row.month),
   }));
-
   const weeklyData = insights.weekly.map((row) => ({
     ...row,
     shortWeek: row.week.replace(".", "/"),
   }));
-
-  const breakdownRows = insights.breakdown;
-
-  const mixRows = insights.breakdown.map((row) => ({
-    name: row.key,
+  const reportCostRows = [
+    {
+      key: "materials",
+      label: "VT Chính",
+      value: insights.headline.materialMainCost,
+      fill: "var(--color-materials)",
+    },
+    {
+      key: "labor",
+      label: "Nhân công",
+      value: insights.headline.laborCost,
+      fill: "var(--color-labor)",
+    },
+    {
+      key: "operations",
+      label: "Vận hành",
+      value: insights.headline.operationCost,
+      fill: "var(--color-operations)",
+    },
+  ];
+  const reportDonutData = reportCostRows.map((row) => ({
+    key: row.key,
+    label: row.label,
     value: row.value,
-    fill: `var(--color-${row.key})`,
+    fill: row.fill,
   }));
+  const activeReportCostIndex = reportDonutData.reduce(
+    (bestIndex, row, index, rows) => (row.value > rows[bestIndex].value ? index : bestIndex),
+    0,
+  );
+  const reportGradientIds = {
+    materials: `report-materials-${chartId}`,
+    labor: `report-labor-${chartId}`,
+    operations: `report-operations-${chartId}`,
+  };
+
+  function exportReport() {
+    const lines = [
+      ["Báo cáo", activeProject?.name ?? "Công trình"],
+      ["Tổng 3 nhóm", totalFocusedCost],
+      ["Chi phí nhân công", insights.headline.laborCost],
+      ["Chi phí vật tư chính", insights.headline.materialMainCost],
+      ["Chi phí vận hành", insights.headline.operationCost],
+      ["Tỷ trọng nhân công", `${laborShare.toFixed(1)}%`],
+      [],
+      ["Tuần", "VT Chính", "Nhân công", "Vận hành", "Tổng 3 nhóm"],
+      ...weeklyData.map((row) => [row.week, row.materials, row.labor, row.operations, row.total]),
+    ];
+    const csv = lines
+      .map((line) => line.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(";"))
+      .join("\r\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `bao-cao-nhan-cong-vat-tu-van-hanh-${activeProjectCode || "cong-trinh"}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   if (isSwitchingProject || loading) {
     return <ReportsContentSkeleton />;
@@ -112,312 +157,369 @@ export function ReportsWorkspace() {
     <div className="flex flex-1 flex-col gap-4 md:gap-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Báo cáo chi phí và dòng tiền</h1>
+          <h1 className="font-semibold text-3xl tracking-tight">Báo cáo chi phí công trình</h1>
           <p className="max-w-3xl text-muted-foreground text-sm leading-6">
-            Tổng hợp để rà soát tuần, in báo cáo và đối chiếu tiến độ tài chính của{" "}
-            {activeProject?.name ?? "công trình"}.
+            Tập trung vào chi phí nhân công, vật tư chính và vận hành của {activeProject?.name ?? "công trình"}.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">
-            <FileSpreadsheet className="mr-1 size-3.5" />
-            {activeProject?.code ?? "Chưa chọn công trình"}
-          </Badge>
-          <Badge variant="secondary">{insights.weekly.length} tuần gần nhất</Badge>
-        </div>
+        <Button size="sm" onClick={exportReport}>
+          <Download />
+          Xuất báo cáo
+        </Button>
       </div>
 
-      <Tabs defaultValue="summary" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="summary">Tổng hợp</TabsTrigger>
-          <TabsTrigger value="weekly">Theo tuần</TabsTrigger>
-        </TabsList>
-
-        <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:grid-cols-2 2xl:grid-cols-4">
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:grid-cols-2 2xl:grid-cols-4">
           <ReportMetricCard
-            title="Tổng chi phí"
-            value={formatVnd(insights.headline.totalCost)}
-            badge={`${insights.breakdown.length} nhóm chi`}
-            footer="Toàn bộ vật tư, nhân công, thầu phụ và vận hành."
+            title="Tổng 3 nhóm"
+            value={formatVnd(totalFocusedCost)}
+            footer="Nhân công, vật tư chính và vận hành."
             icon={ReceiptText}
           />
           <ReportMetricCard
-            title="Giá trị hợp đồng"
-            value={formatVnd(insights.headline.contractValue)}
-            badge={`${insights.headline.contractValue ? ((insights.headline.totalCost / insights.headline.contractValue) * 100).toFixed(1) : "0.0"}% đã dùng`}
-            footer="So với phần ngân sách đã ký của công trình."
-            icon={ClipboardList}
+            title="Chi phí nhân công"
+            value={formatVnd(insights.headline.laborCost)}
+            footer={`${laborShare.toFixed(1)}% trong tổng 3 nhóm.`}
+            icon={HardHat}
           />
           <ReportMetricCard
-            title="Tiền đã thu"
-            value={formatVnd(insights.headline.collectedCash)}
-            badge={`${insights.headline.contractCoverage.toFixed(1)}% hợp đồng`}
-            footer="Mức độ bao phủ dòng tiền vào trên tổng giá trị hợp đồng."
-            icon={WalletCards}
+            title="Chi phí vật tư chính"
+            value={formatVnd(insights.headline.materialMainCost)}
+            footer="Chỉ tính vật tư loại VT Chính."
+            icon={PackageSearch}
           />
           <ReportMetricCard
-            title="Vật tư chưa thanh toán"
-            value={formatVnd(insights.headline.unpaidMaterials)}
-            badge={`${insights.headline.costCoverage.toFixed(1)}% thu/chi`}
-            footer="Ưu tiên kiểm soát công nợ mở trước các kỳ thanh toán tiếp theo."
-            icon={Coins}
+            title="Chi phí vận hành"
+            value={formatVnd(insights.headline.operationCost)}
+            footer="Các khoản vận hành phát sinh."
+            icon={Banknote}
           />
         </div>
 
-        <TabsContent value="summary" className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-7">
-            <Card className="lg:col-span-4">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Dòng tiền theo tháng
-                  <Badge variant="outline">
-                    {insights.headline.collectedCash >= insights.headline.totalCost ? (
-                      <ArrowUpRight className="mr-1 size-3.5" />
-                    ) : (
-                      <ArrowDownLeft className="mr-1 size-3.5" />
-                    )}
-                    {formatPercent(insights.headline.costCoverage - 100)}
-                  </Badge>
-                </CardTitle>
-                <CardDescription>So sánh tổng chi với tiền đã thu trong 8 tháng gần nhất.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={monthlyCashflowConfig}>
-                  <AreaChart accessibilityLayer data={monthlyData}>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="monthLabel" tickLine={false} axisLine={false} tickMargin={8} />
-                    <ChartTooltip
-                      cursor={false}
-                      content={<ChartTooltipContent formatter={(value) => formatVnd(Number(value))} />}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="cashIn"
-                      fill="var(--color-cashIn)"
-                      fillOpacity={0.2}
-                      stroke="var(--color-cashIn)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="cost"
-                      fill="var(--color-cost)"
-                      fillOpacity={0.26}
-                      stroke="var(--color-cost)"
-                    />
-                  </AreaChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-7">
+          <Card className="lg:col-span-4">
+            <CardHeader className="pb-3">
+              <CardTitle>Chi phí theo tháng</CardTitle>
+              <CardDescription>So sánh 3 nhóm chi phí chính theo từng tháng.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ChartContainer config={costChartConfig} className="aspect-auto h-[230px] w-full">
+                <BarChart accessibilityLayer data={monthlyData} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id={reportGradientIds.materials} x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-materials)" stopOpacity={0.96} />
+                      <stop offset="95%" stopColor="var(--color-materials)" stopOpacity={0.42} />
+                    </linearGradient>
+                    <linearGradient id={reportGradientIds.labor} x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-labor)" stopOpacity={0.96} />
+                      <stop offset="95%" stopColor="var(--color-labor)" stopOpacity={0.42} />
+                    </linearGradient>
+                    <linearGradient id={reportGradientIds.operations} x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-operations)" stopOpacity={0.96} />
+                      <stop offset="95%" stopColor="var(--color-operations)" stopOpacity={0.42} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis dataKey="monthLabel" tickLine={false} axisLine={false} tickMargin={8} />
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent formatter={(value) => formatVnd(Number(value))} />}
+                  />
+                  <Bar
+                    dataKey="materials"
+                    fill={`url(#${reportGradientIds.materials})`}
+                    radius={[6, 6, 2, 2]}
+                    barSize={16}
+                  />
+                  <Bar dataKey="labor" fill={`url(#${reportGradientIds.labor})`} radius={[6, 6, 2, 2]} barSize={16} />
+                  <Bar
+                    dataKey="operations"
+                    fill={`url(#${reportGradientIds.operations})`}
+                    radius={[6, 6, 2, 2]}
+                    barSize={16}
+                  />
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
 
-            <Card className="lg:col-span-3">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Cơ cấu chi phí
-                  <Badge variant="outline">
-                    <BadgeCheck className="mr-1 size-3.5" />
-                    Tổng hợp
-                  </Badge>
-                </CardTitle>
-                <CardDescription>Tỷ trọng chi phí theo module nghiệp vụ đang phát sinh.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex items-center justify-center">
-                <ChartContainer config={mixConfig} className="mx-auto aspect-square max-h-[300px] min-h-[250px]">
-                  <PieChart>
-                    <ChartTooltip
-                      content={<ChartTooltipContent formatter={(value) => formatVnd(Number(value))} hideLabel />}
-                    />
-                    <Pie
-                      data={mixRows}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={44}
-                      outerRadius={88}
-                      paddingAngle={4}
-                      cornerRadius={10}
-                    />
-                  </PieChart>
-                </ChartContainer>
-              </CardContent>
-              <CardFooter className="grid gap-2 text-sm">
-                {breakdownRows.map((row) => (
-                  <div key={row.key} className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">{row.label}</span>
-                    <span className="font-medium">{row.share.toFixed(1)}%</span>
-                  </div>
-                ))}
-              </CardFooter>
-            </Card>
+          <Card className="lg:col-span-3">
+            <CardHeader className="items-center pb-0">
+              <CardTitle>Cơ cấu 3 nhóm</CardTitle>
+              <CardDescription>Tỷ trọng nhân công, VT Chính và vận hành trong tổng báo cáo.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-1 items-center justify-center pt-1 pb-0">
+              <ChartContainer config={costChartConfig} className="mx-auto aspect-square h-[285px] w-full max-w-[330px]">
+                <PieChart accessibilityLayer>
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        className="min-w-44 gap-2.5"
+                        formatter={(value, name) => (
+                          <div className="flex w-full items-center justify-between gap-3">
+                            <div className="flex items-center gap-1.5">
+                              <div
+                                className="size-2.5 shrink-0 rounded-xs bg-(--color-bg)"
+                                style={
+                                  {
+                                    "--color-bg": `var(--color-${name})`,
+                                  } as React.CSSProperties
+                                }
+                              />
+                              <span className="text-muted-foreground">
+                                {costChartConfig[name as keyof typeof costChartConfig]?.label || name}
+                              </span>
+                            </div>
+                            <span className="font-semibold text-foreground tabular-nums">
+                              {formatVnd(Number(value))}
+                            </span>
+                          </div>
+                        )}
+                      />
+                    }
+                  />
+                  <ChartLegend content={<ChartLegendContent nameKey="key" />} className="-translate-y-2 flex-wrap" />
+                  <ReuiPie
+                    activeIndex={activeReportCostIndex}
+                    activeShape={{ outerRadius: 102 }}
+                    cornerRadius={5}
+                    data={reportDonutData}
+                    dataKey="value"
+                    innerRadius={55}
+                    nameKey="key"
+                    outerRadius={92}
+                    paddingAngle={3}
+                    stroke="var(--background)"
+                    strokeWidth={3}
+                  />
+                </PieChart>
+              </ChartContainer>
+            </CardContent>
+            <CardFooter className="justify-center border-t bg-muted/20 py-3">
+              <div className="text-center">
+                <div className="text-muted-foreground text-xs">Tổng 3 nhóm</div>
+                <div className="font-semibold text-lg tabular-nums">{formatVnd(totalFocusedCost)}</div>
+              </div>
+            </CardFooter>
+          </Card>
 
-            <Card className="lg:col-span-7">
-              <CardHeader>
-                <CardTitle>Bảng tổng hợp chi phí</CardTitle>
-                <CardDescription>
-                  Mỗi nhóm hiển thị số dòng, bình quân mỗi dòng và tỷ trọng trong tổng chi.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DataTable
-                  columns={[
-                    {
-                      key: "label",
-                      label: "Nhóm",
-                      accessor: (row: BreakdownPoint) => row.label,
-                      render: (row: BreakdownPoint) => <div className="font-medium">{row.label}</div>,
-                    },
-                    {
-                      key: "rows",
-                      label: "Số dòng",
-                      accessor: (row: BreakdownPoint) => row.rows,
-                      render: (row: BreakdownPoint) => row.rows.toLocaleString("vi-VN"),
-                      className: "text-right",
-                    },
-                    {
-                      key: "avg",
-                      label: "Bình quân / dòng",
-                      accessor: (row: BreakdownPoint) => (row.rows ? row.value / row.rows : 0),
-                      render: (row: BreakdownPoint) => formatVnd(row.rows ? row.value / row.rows : 0),
-                      className: "text-right",
-                    },
-                    {
-                      key: "share",
-                      label: "Tỷ trọng",
-                      accessor: (row: BreakdownPoint) => row.share,
-                      render: (row: BreakdownPoint) => `${row.share.toFixed(1)}%`,
-                      className: "text-right",
-                    },
-                    {
-                      key: "value",
-                      label: "Tổng tiền",
-                      accessor: (row: BreakdownPoint) => row.value,
-                      render: (row: BreakdownPoint) => <span className="font-medium">{formatVnd(row.value)}</span>,
-                      className: "text-right",
-                    },
-                  ]}
-                  rows={breakdownRows}
-                  getRowId={(row) => row.key}
-                  selectable
-                  exportFileName="bao-cao-tong-hop-chi-phi"
-                  filters={[
-                    {
-                      key: "label",
-                      label: "Nhóm",
-                      options: breakdownRows.map((row) => ({ label: row.label, value: row.label })),
-                    },
-                  ]}
-                  initialSorting={[{ id: "value", desc: true }]}
-                />
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
+          <Card className="lg:col-span-7">
+            <CardHeader className="pb-3">
+              <CardTitle>Nhịp chi phí theo tuần</CardTitle>
+              <CardDescription>8 tuần gần nhất của nhân công, VT Chính và vận hành.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ChartContainer config={costChartConfig} className="aspect-auto h-[230px] w-full">
+                <AreaChart accessibilityLayer data={weeklyData} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id={`${reportGradientIds.materials}-area`} x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-materials)" stopOpacity={0.36} />
+                      <stop offset="95%" stopColor="var(--color-materials)" stopOpacity={0.04} />
+                    </linearGradient>
+                    <linearGradient id={`${reportGradientIds.labor}-area`} x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-labor)" stopOpacity={0.36} />
+                      <stop offset="95%" stopColor="var(--color-labor)" stopOpacity={0.04} />
+                    </linearGradient>
+                    <linearGradient id={`${reportGradientIds.operations}-area`} x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-operations)" stopOpacity={0.36} />
+                      <stop offset="95%" stopColor="var(--color-operations)" stopOpacity={0.04} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis dataKey="shortWeek" tickLine={false} axisLine={false} tickMargin={8} />
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent formatter={(value) => formatVnd(Number(value))} />}
+                  />
+                  <Area
+                    type="natural"
+                    dataKey="operations"
+                    stackId="weekly"
+                    fill={`url(#${reportGradientIds.operations}-area)`}
+                    fillOpacity={1}
+                    stroke="var(--color-operations)"
+                    strokeDasharray="4 4"
+                    strokeWidth={2}
+                  />
+                  <Area
+                    type="natural"
+                    dataKey="labor"
+                    stackId="weekly"
+                    fill={`url(#${reportGradientIds.labor}-area)`}
+                    fillOpacity={1}
+                    stroke="var(--color-labor)"
+                    strokeWidth={2}
+                  />
+                  <Area
+                    type="natural"
+                    dataKey="materials"
+                    stackId="weekly"
+                    fill={`url(#${reportGradientIds.materials}-area)`}
+                    fillOpacity={1}
+                    stroke="var(--color-materials)"
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
 
-        <TabsContent value="weekly" className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-7">
-            <Card className="lg:col-span-4">
-              <CardHeader>
-                <CardTitle>Nhịp chi phí theo tuần</CardTitle>
-                <CardDescription>
-                  8 tuần gần nhất để rà soát tuần nào tăng tốc thi công hoặc đội chi phí.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={weeklyConfig}>
-                  <BarChart accessibilityLayer data={weeklyData}>
-                    <XAxis dataKey="shortWeek" tickLine={false} axisLine={false} tickMargin={8} />
-                    <ChartTooltip
-                      cursor={false}
-                      content={<ChartTooltipContent formatter={(value) => formatVnd(Number(value))} />}
-                    />
-                    <Bar dataKey="total" fill="var(--color-total)" radius={8} />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
+          <Card className="lg:col-span-7">
+            <CardHeader>
+              <CardTitle>Bảng chi phí nhân công</CardTitle>
+              <CardDescription>Theo dõi nhân sự, tuần, hạng mục và tổng tiền chấm công.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={[
+                  { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+                  { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
+                  {
+                    key: "category",
+                    label: "Hạng mục",
+                    accessor: (row) => row.category,
+                    render: (row) => row.category || "-",
+                  },
+                  {
+                    key: "staffName",
+                    label: "Nhân công",
+                    accessor: (row) => row.staffName,
+                    render: (row) => row.staffName || "-",
+                  },
+                  {
+                    key: "position",
+                    label: "Vai trò",
+                    accessor: (row) => row.position,
+                    render: (row) => row.position || "-",
+                  },
+                  {
+                    key: "coefficient",
+                    label: "Công",
+                    accessor: (row) => row.coefficient,
+                    render: (row) => formatCount(row.coefficient),
+                    className: "text-right",
+                  },
+                  {
+                    key: "total",
+                    label: "Thành tiền",
+                    accessor: (row) => row.total,
+                    render: (row) => <span className="font-medium">{formatVnd(row.total)}</span>,
+                    className: "text-right",
+                  },
+                ]}
+                rows={paginatedLabor.rows}
+                getRowId={(row) => row.id}
+                serverSide={paginatedLabor.serverSide}
+                selectable
+                exportFileName="bao-cao-chi-phi-nhan-cong"
+                filters={[
+                  { key: "week", label: "Tuần", options: [] },
+                  { key: "category", label: "Hạng mục", options: [] },
+                  { key: "staffName", label: "Nhân công", options: [] },
+                  { key: "position", label: "Vai trò", options: [] },
+                ]}
+                initialSorting={[{ id: "date", desc: true }]}
+                searchPlaceholder="Tìm nhân công, hạng mục, vai trò..."
+              />
+            </CardContent>
+          </Card>
 
-            <Card className="lg:col-span-3">
-              <CardHeader>
-                <CardTitle>Top hạng mục tiêu tiền</CardTitle>
-                <CardDescription>Những hạng mục đang hấp thụ ngân sách lớn nhất trong công trình.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {insights.categorySpend.slice(0, 5).map((item, index) => (
-                    <CategorySpendRow key={item.category} item={item} rank={index + 1} />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+          <Card className="lg:col-span-7">
+            <CardHeader>
+              <CardTitle>Bảng chi phí vật tư chính</CardTitle>
+              <CardDescription>Chỉ hiển thị vật tư loại VT Chính của công trình.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={[
+                  { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+                  { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
+                  {
+                    key: "category",
+                    label: "Hạng mục",
+                    accessor: (row) => row.category,
+                    render: (row) => row.category || "-",
+                  },
+                  {
+                    key: "materialName",
+                    label: "Vật tư",
+                    accessor: (row) => row.materialName,
+                    render: (row) => row.materialName || "-",
+                  },
+                  {
+                    key: "supplier",
+                    label: "NCC",
+                    accessor: (row) => row.supplier,
+                    render: (row) => row.supplier || "-",
+                  },
+                  {
+                    key: "quantity",
+                    label: "SL",
+                    accessor: (row) => row.quantity,
+                    render: (row) => `${formatCount(row.quantity)} ${row.unit}`,
+                    className: "text-right",
+                  },
+                  {
+                    key: "total",
+                    label: "Thành tiền",
+                    accessor: (row) => row.quantity * row.price,
+                    render: (row) => <span className="font-medium">{formatVnd(row.quantity * row.price)}</span>,
+                    className: "text-right",
+                  },
+                ]}
+                rows={paginatedMainMaterials.rows}
+                getRowId={(row) => row.id}
+                serverSide={paginatedMainMaterials.serverSide}
+                selectable
+                exportFileName="bao-cao-chi-phi-vat-tu-chinh"
+                filters={[
+                  { key: "week", label: "Tuần", options: [] },
+                  { key: "category", label: "Hạng mục", options: [] },
+                  { key: "supplier", label: "NCC", options: [] },
+                ]}
+                initialSorting={[{ id: "date", desc: true }]}
+                searchPlaceholder="Tìm vật tư chính, NCC, hạng mục..."
+              />
+            </CardContent>
+          </Card>
 
-            <Card className="lg:col-span-7">
-              <CardHeader>
-                <CardTitle>Bảng theo tuần</CardTitle>
-                <CardDescription>
-                  Tách rõ vật tư, nhân công, thầu phụ và vận hành cho từng tuần làm việc.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DataTable
-                  columns={[
-                    {
-                      key: "week",
-                      label: "Tuần",
-                      accessor: (row) => row.week,
-                      render: (row) => <span className="font-medium">{row.week}</span>,
-                    },
-                    {
-                      key: "materials",
-                      label: "Vật tư",
-                      accessor: (row) => row.materials,
-                      render: (row) => formatVnd(row.materials),
-                      className: "text-right",
-                    },
-                    {
-                      key: "labor",
-                      label: "Nhân công",
-                      accessor: (row) => row.labor,
-                      render: (row) => formatVnd(row.labor),
-                      className: "text-right",
-                    },
-                    {
-                      key: "subcontractors",
-                      label: "Thầu phụ",
-                      accessor: (row) => row.subcontractors,
-                      render: (row) => formatVnd(row.subcontractors),
-                      className: "text-right",
-                    },
-                    {
-                      key: "operations",
-                      label: "Vận hành",
-                      accessor: (row) => row.operations,
-                      render: (row) => formatVnd(row.operations),
-                      className: "text-right",
-                    },
-                    {
-                      key: "total",
-                      label: "Tổng chi",
-                      accessor: (row) => row.total,
-                      render: (row) => <span className="font-medium">{formatVnd(row.total)}</span>,
-                      className: "text-right",
-                    },
-                  ]}
-                  rows={insights.weekly}
-                  getRowId={(row) => row.week}
-                  selectable
-                  exportFileName="bao-cao-theo-tuan"
-                  filters={[
-                    {
-                      key: "week",
-                      label: "Tuần",
-                      options: insights.weekly.map((row) => ({ label: row.week, value: row.week })),
-                    },
-                  ]}
-                  initialSorting={[{ id: "total", desc: true }]}
-                />
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+          <Card className="lg:col-span-7">
+            <CardHeader>
+              <CardTitle>Bảng chi phí vận hành</CardTitle>
+              <CardDescription>Các khoản vận hành phát sinh theo ngày và tuần.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={[
+                  { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+                  { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
+                  {
+                    key: "description",
+                    label: "Diễn giải",
+                    accessor: (row) => row.description,
+                    render: (row) => row.description || "-",
+                  },
+                  {
+                    key: "amount",
+                    label: "Số tiền",
+                    accessor: (row) => row.amount,
+                    render: (row) => <span className="font-medium">{formatVnd(row.amount)}</span>,
+                    className: "text-right",
+                  },
+                ]}
+                rows={paginatedOperations.rows}
+                getRowId={(row) => row.id}
+                serverSide={paginatedOperations.serverSide}
+                selectable
+                exportFileName="bao-cao-chi-phi-van-hanh"
+                filters={[{ key: "week", label: "Tuần", options: [] }]}
+                initialSorting={[{ id: "date", desc: true }]}
+                searchPlaceholder="Tìm diễn giải vận hành..."
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
@@ -425,13 +527,11 @@ export function ReportsWorkspace() {
 function ReportMetricCard({
   title,
   value,
-  badge,
   footer,
   icon: Icon,
 }: {
   title: string;
   value: string;
-  badge: string;
   footer: string;
   icon: React.ComponentType<{ className?: string }>;
 }) {
@@ -439,10 +539,7 @@ function ReportMetricCard({
     <Card className="@container/card">
       <CardHeader>
         <CardDescription>{title}</CardDescription>
-        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">{value}</CardTitle>
-        <CardAction>
-          <Badge variant="outline">{badge}</Badge>
-        </CardAction>
+        <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">{value}</CardTitle>
       </CardHeader>
       <CardFooter className="flex-col items-start gap-1.5 text-sm">
         <div className="flex items-center gap-2 font-medium">
@@ -452,24 +549,6 @@ function ReportMetricCard({
         <div className="text-muted-foreground">{footer}</div>
       </CardFooter>
     </Card>
-  );
-}
-
-function CategorySpendRow({ item, rank }: { item: CategorySpendPoint; rank: number }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex size-9 items-center justify-center rounded-full border bg-muted font-medium">{rank}</div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate font-medium">{item.category}</div>
-        <div className="text-muted-foreground text-sm">
-          VT {formatVnd(item.materials)} • NC {formatVnd(item.labor)}
-        </div>
-      </div>
-      <div className="text-right">
-        <div className="font-medium">{formatVnd(item.total)}</div>
-        <div className="text-muted-foreground text-xs">Tổng cộng</div>
-      </div>
-    </div>
   );
 }
 

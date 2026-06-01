@@ -18,10 +18,12 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  Check,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  ChevronsUpDown,
   Download,
   Search,
   SlidersHorizontal,
@@ -29,6 +31,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -36,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -75,6 +79,7 @@ export interface DataTableServerState {
 export interface DataTableServerSideOptions {
   rowCount: number;
   loading?: boolean;
+  filterOptions?: Record<string, Array<{ label: string; value: string }>>;
   onStateChange: (state: DataTableServerState) => void;
 }
 
@@ -100,6 +105,84 @@ function isInteractiveTarget(target: EventTarget | null) {
     target.closest(
       'button, a, input, select, textarea, [role="button"], [role="checkbox"], [role="menuitem"], [data-row-action="true"]',
     ),
+  );
+}
+
+function useDebouncedValue<T>(value: T, delay = 300) {
+  const [debouncedValue, setDebouncedValue] = React.useState(value);
+
+  React.useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedValue(value), delay);
+    return () => window.clearTimeout(timeout);
+  }, [delay, value]);
+
+  return debouncedValue;
+}
+
+function DataTableFilterCombobox({
+  filter,
+  options,
+  value,
+  onValueChange,
+}: {
+  filter: DataTableFilter<unknown>;
+  options: Array<{ label: string; value: string }>;
+  value: string;
+  onValueChange: (value: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const allLabel = filter.allLabel ?? `Tất cả ${filter.label.toLowerCase()}`;
+  const selectedOption = options.find((option) => option.value === value);
+  const displayValue = value === "__all" ? allLabel : (selectedOption?.label ?? allLabel);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          aria-expanded={open}
+          className="h-9 w-full justify-between rounded-md px-3 font-normal sm:w-44"
+          role="combobox"
+          type="button"
+          variant="outline"
+        >
+          <span className="truncate">{displayValue}</span>
+          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-(--radix-popover-trigger-width) p-0">
+        <Command shouldFilter>
+          <CommandInput placeholder={`Tìm ${filter.label.toLowerCase()}...`} />
+          <CommandList>
+            <CommandEmpty>Không có lựa chọn phù hợp.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value={allLabel}
+                onSelect={() => {
+                  onValueChange("__all");
+                  setOpen(false);
+                }}
+              >
+                <Check className={cn("size-4", value === "__all" ? "opacity-100" : "opacity-0")} />
+                <span className="truncate">{allLabel}</span>
+              </CommandItem>
+              {options.map((option) => (
+                <CommandItem
+                  key={`${filter.key}-${option.value}`}
+                  value={`${option.label} ${option.value}`}
+                  onSelect={() => {
+                    onValueChange(option.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("size-4", value === option.value ? "opacity-100" : "opacity-0")} />
+                  <span className="truncate">{option.label}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -378,6 +461,7 @@ export function DataTable<T>({
     pageSize,
   });
   const [query, setQuery] = React.useState("");
+  const debouncedQuery = useDebouncedValue(query);
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] = React.useState<Record<string, boolean>>({});
   const [filterValues, setFilterValues] = React.useState<Record<string, string>>({});
@@ -396,8 +480,8 @@ export function DataTable<T>({
     if (isServerSide) return rows;
 
     return rows.filter((row) => {
-      if (searchable && query.trim()) {
-        const normalizedQuery = normalizeText(query);
+      if (searchable && debouncedQuery.trim()) {
+        const normalizedQuery = normalizeText(debouncedQuery);
         const matchesQuery = normalizedColumns.some((column) => {
           if (!column.searchable) return false;
           const value = column.accessor ? column.accessor(row) : getDefaultAccessor(row, column.key);
@@ -419,7 +503,7 @@ export function DataTable<T>({
 
       return true;
     });
-  }, [filterValues, filters, isServerSide, normalizedColumns, query, rows, searchable]);
+  }, [debouncedQuery, filterValues, filters, isServerSide, normalizedColumns, rows, searchable]);
 
   const columnDefs = React.useMemo<ColumnDef<T>[]>(
     () =>
@@ -540,11 +624,11 @@ export function DataTable<T>({
     serverSide.onStateChange({
       pageIndex: pagination.pageIndex,
       pageSize: pagination.pageSize,
-      query,
+      query: debouncedQuery,
       sorting,
       filters: filterValues,
     });
-  }, [filterValues, pagination.pageIndex, pagination.pageSize, query, serverSide, sorting]);
+  }, [debouncedQuery, filterValues, pagination.pageIndex, pagination.pageSize, serverSide, sorting]);
 
   const pageCount = table.getPageCount();
   const visibleRows = table.getRowModel().rows;
@@ -552,8 +636,8 @@ export function DataTable<T>({
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
   const skeletonColumnCount = (selectionColumn ? 1 : 0) + columns.length;
   const skeletonRows = React.useMemo(
-    () => Array.from({ length: Math.min(pageSize, 6) }, (_, index) => `skeleton-row-${index + 1}`),
-    [pageSize],
+    () => Array.from({ length: pagination.pageSize }, (_, index) => `skeleton-row-${index + 1}`),
+    [pagination.pageSize],
   );
   const skeletonColumns = React.useMemo(
     () => Array.from({ length: skeletonColumnCount }, (_, index) => `skeleton-column-${index + 1}`),
@@ -612,38 +696,31 @@ export function DataTable<T>({
               />
             </div>
           ) : null}
-          {filters.map((filter) => (
-            <Select
-              key={filter.key}
-              value={filterValues[filter.key] ?? "__all"}
-              onValueChange={(value) => {
-                setFilterValues((current) => {
-                  const nextValues = { ...current };
+          {filters.map((filter) => {
+            const options = serverSide?.filterOptions?.[filter.key] ?? filter.options;
+            return (
+              <DataTableFilterCombobox
+                key={filter.key}
+                filter={filter as DataTableFilter<unknown>}
+                options={options}
+                value={filterValues[filter.key] ?? "__all"}
+                onValueChange={(value) => {
+                  setFilterValues((current) => {
+                    const nextValues = { ...current };
 
-                  if (value === "__all") {
-                    delete nextValues[filter.key];
-                  } else {
-                    nextValues[filter.key] = value;
-                  }
+                    if (value === "__all") {
+                      delete nextValues[filter.key];
+                    } else {
+                      nextValues[filter.key] = value;
+                    }
 
-                  setPagination((current) => (current.pageIndex ? { ...current, pageIndex: 0 } : current));
-                  return nextValues;
-                });
-              }}
-            >
-              <SelectTrigger className="h-9 w-full sm:w-44">
-                <SelectValue placeholder={filter.label} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all">{filter.allLabel ?? `Tất cả ${filter.label.toLowerCase()}`}</SelectItem>
-                {filter.options.map((option) => (
-                  <SelectItem key={`${filter.key}-${option.value}`} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ))}
+                    setPagination((current) => (current.pageIndex ? { ...current, pageIndex: 0 } : current));
+                    return nextValues;
+                  });
+                }}
+              />
+            );
+          })}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -692,10 +769,10 @@ export function DataTable<T>({
           <TableBody>
             {isLoading ? (
               skeletonRows.map((rowKey) => (
-                <TableRow key={rowKey}>
+                <TableRow key={rowKey} className="h-12">
                   {skeletonColumns.map((columnKey, columnIndex) => (
                     <TableCell key={`${rowKey}-${columnKey}`}>
-                      <Skeleton className={cn("h-4", columnIndex === 0 ? "w-24" : "w-full max-w-28")} />
+                      <Skeleton className={cn("h-4", columnIndex === 0 ? "w-24" : "w-full max-w-32")} />
                     </TableCell>
                   ))}
                 </TableRow>

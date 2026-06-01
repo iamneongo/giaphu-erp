@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+
 import { useAuth } from "@clerk/nextjs";
 import { BookOpen, Plus, Trash2 } from "lucide-react";
 
@@ -7,8 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import { buildNextCatalogCode } from "@/lib/giaphu-erp/catalog-codes";
 import { isValidPhoneNumber } from "@/lib/giaphu-erp/phone";
+import type { CatalogItem } from "@/lib/giaphu-erp/types";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
+import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import type { CatalogKind } from "../_lib/catalog-config";
 import { getCatalogSectionByKind } from "../_lib/catalog-config";
 import { uniqueOptions } from "../_lib/form-options";
@@ -23,6 +27,13 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
   const { has, orgRole } = useAuth();
   const section = getCatalogSectionByKind(kind);
   const rows = data.catalogs[kind];
+  const catalogFixedFilters = React.useMemo(() => ({ kind }), [kind]);
+  const paginatedCatalogs = usePaginatedErpRows<CatalogItem>({
+    dataset: "catalogs",
+    projectCode: "",
+    initialRows: rows,
+    fixedFilters: catalogFixedFilters,
+  });
   const requiresPhoneContact = kind === "thauPhu" || kind === "nhaCungCap";
   const contactField: FormFieldDefinition = {
     name: "contact",
@@ -154,8 +165,9 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
         <DataTable
           loading={isSwitchingProject}
           columns={columns}
-          rows={rows}
+          rows={paginatedCatalogs.rows}
           getRowId={(row) => row.id}
+          serverSide={paginatedCatalogs.serverSide}
           detailType="catalogs"
           selectable
           exportFileName={`danh-muc-${section.kind}`}

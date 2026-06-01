@@ -34,7 +34,7 @@ function PageHeaderSkeleton({
   );
 }
 
-function TableSurfaceSkeleton({ rows = 6 }: { rows?: number }) {
+function TableSurfaceSkeleton({ rows = 10 }: { rows?: number }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -53,9 +53,9 @@ function TableSurfaceSkeleton({ rows = 6 }: { rows?: number }) {
         </div>
         <div className="divide-y">
           {Array.from({ length: rows }).map((_, index) => (
-            <div key={index} className="grid grid-cols-4 gap-4 px-4 py-4 md:grid-cols-6">
+            <div key={index} className="grid min-h-12 grid-cols-4 gap-4 px-4 py-4 md:grid-cols-6">
               {Array.from({ length: 6 }).map((__, cellIndex) => (
-                <Skeleton key={cellIndex} className="h-4 w-full max-w-28" />
+                <Skeleton key={cellIndex} className="h-4 w-full max-w-32" />
               ))}
             </div>
           ))}
@@ -73,13 +73,7 @@ function TableSurfaceSkeleton({ rows = 6 }: { rows?: number }) {
   );
 }
 
-function SectionTitleSkeleton({
-  width = "w-44",
-  metaWidth,
-}: {
-  width?: string;
-  metaWidth?: string;
-}) {
+function SectionTitleSkeleton({ width = "w-44", metaWidth }: { width?: string; metaWidth?: string }) {
   return (
     <div className="flex items-center justify-between gap-3 px-1">
       <Skeleton className={`h-7 ${width}`} />
@@ -363,7 +357,10 @@ export function RoleEditorSkeleton() {
                     <Skeleton className="h-4 w-56 max-w-full" />
                   </div>
                   {Array.from({ length: 4 }).map((__, itemIndex) => (
-                    <div key={itemIndex} className="flex items-center justify-between gap-4 rounded-lg border px-3 py-3">
+                    <div
+                      key={itemIndex}
+                      className="flex items-center justify-between gap-4 rounded-lg border px-3 py-3"
+                    >
                       <div className="space-y-2">
                         <Skeleton className="h-4 w-40" />
                         <Skeleton className="h-3 w-56 max-w-full" />

@@ -8,7 +8,7 @@ import { Check, ClipboardList, PackagePlus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
-import type { MaterialRow } from "@/lib/giaphu-erp/types";
+import type { MaterialNormRow, MaterialRow } from "@/lib/giaphu-erp/types";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
@@ -37,6 +37,11 @@ export function MaterialsWorkspace({ section = "entries" }: { section?: Material
     dataset: "materials",
     projectCode: activeProjectCode,
     initialRows: scoped.materials,
+  });
+  const paginatedMaterialNorms = usePaginatedErpRows<MaterialNormRow>({
+    dataset: "materialNorms",
+    projectCode: activeProjectCode,
+    initialRows: scoped.materialNorms,
   });
   const canManage = canAccessClerkPermission(
     {
@@ -436,8 +441,9 @@ export function MaterialsWorkspace({ section = "entries" }: { section?: Material
                   ]
                 : []),
             ]}
-            rows={scoped.materialNorms}
+            rows={paginatedMaterialNorms.rows}
             getRowId={(row) => row.id}
+            serverSide={paginatedMaterialNorms.serverSide}
             detailType="material-norms"
             selectable
             exportFileName="dinh-muc-vat-tu"

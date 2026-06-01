@@ -21,6 +21,7 @@ export interface GiaPhuActionResult {
   pageIndex?: number;
   pageSize?: number;
   insights?: GiaPhuOverviewInsights | GiaPhuReportsInsights;
+  filterOptions?: Record<string, Array<{ label: string; value: string }>>;
 }
 
 export interface GiaPhuPagedRowsResult<T> {
@@ -100,6 +101,30 @@ export async function fetchGiaPhuPagedRows<T>({
     pageIndex: Number(result.pageIndex ?? pageIndex),
     pageSize: Number(result.pageSize ?? pageSize),
   } satisfies GiaPhuPagedRowsResult<T>;
+}
+
+export async function fetchGiaPhuFilterOptions({
+  dataset,
+  projectCode,
+  filters,
+}: {
+  dataset: GiaPhuPagedDataset;
+  projectCode: string;
+  filters?: Record<string, string>;
+}) {
+  const params = new URLSearchParams({
+    view: "filter-options",
+    dataset,
+    projectCode,
+  });
+
+  const activeFilters = Object.fromEntries(
+    Object.entries(filters ?? {}).filter(([, value]) => value && value !== "__all"),
+  );
+  if (Object.keys(activeFilters).length) params.set("filters", JSON.stringify(activeFilters));
+
+  const result = await parseResponse(await fetch(`/api/giaphu-erp?${params.toString()}`, { cache: "no-store" }));
+  return result.filterOptions ?? {};
 }
 
 export async function fetchGiaPhuInsights<T extends GiaPhuOverviewInsights | GiaPhuReportsInsights>({

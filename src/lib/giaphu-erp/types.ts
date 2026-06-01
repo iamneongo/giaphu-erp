@@ -1,7 +1,21 @@
 export type MaterialType = "VT Chính" | "VT Phụ" | "VT MEP" | "VT MEP-HVAC";
 export type PaymentStatus = "Chưa TT" | "Đã TT";
 export type AttendanceLockStatus = "OPEN" | "CLOSED";
-export type GiaPhuPagedDataset = "materials" | "subcontractors" | "operations";
+export type GiaPhuPagedDataset =
+  | "projects"
+  | "catalogs"
+  | "staff"
+  | "contracts"
+  | "payments"
+  | "documents"
+  | "materials"
+  | "attendance"
+  | "materialNorms"
+  | "laborNorms"
+  | "progress"
+  | "subcontractors"
+  | "subcontractorContracts"
+  | "operations";
 
 export type MonthlyCostPoint = {
   month: string;
@@ -55,7 +69,14 @@ export interface GiaPhuOverviewInsights {
   headline: {
     contractValue: number;
     collectedCash: number;
+    remainingReceivable: number;
     totalCost: number;
+    materialMainCost: number;
+    materialSubCost: number;
+    laborCost: number;
+    subcontractorCost: number;
+    operationCost: number;
+    provisionalProfit: number;
     openMaterialDebt: number;
     activeCategories: number;
     activeWeeks: number;
@@ -74,6 +95,9 @@ export interface GiaPhuReportsInsights {
     contractValue: number;
     collectedCash: number;
     unpaidMaterials: number;
+    materialMainCost: number;
+    laborCost: number;
+    operationCost: number;
     contractCoverage: number;
     costCoverage: number;
   };
@@ -232,6 +256,18 @@ export interface ContractRow {
   value: number;
   signedDate: string;
   note: string;
+}
+
+export interface DocumentRow {
+  id: number;
+  project_code: string;
+  doc_type: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  note: string;
+  preview_text: string;
+  has_file: boolean;
 }
 
 export interface AttendanceLockRow {
