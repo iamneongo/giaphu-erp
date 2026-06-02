@@ -259,7 +259,7 @@ export function GiaPhuErpProvider({
           const patch = result.patch;
           if (patch) {
             setData((current) => applyDataPatch(current, patch));
-          } else {
+          } else if (result.refresh !== false) {
             await refresh();
           }
         }

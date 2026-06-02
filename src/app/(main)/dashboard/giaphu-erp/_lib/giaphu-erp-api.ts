@@ -18,6 +18,7 @@ export interface GiaPhuActionResult {
   };
   rows?: Record<string, unknown>[];
   documentId?: number;
+  refresh?: false;
   total?: number;
   pageIndex?: number;
   pageSize?: number;
@@ -72,6 +73,7 @@ export async function fetchGiaPhuPagedRows<T>({
   pageSize,
   search,
   filters,
+  signal,
 }: {
   dataset: GiaPhuPagedDataset;
   projectCode: string;
@@ -79,6 +81,7 @@ export async function fetchGiaPhuPagedRows<T>({
   pageSize: number;
   search: string;
   filters?: Record<string, string>;
+  signal?: AbortSignal;
 }) {
   const params = new URLSearchParams({
     view: "rows",
@@ -94,7 +97,9 @@ export async function fetchGiaPhuPagedRows<T>({
   );
   if (Object.keys(activeFilters).length) params.set("filters", JSON.stringify(activeFilters));
 
-  const result = await parseResponse(await fetch(`/api/giaphu-erp?${params.toString()}`, { cache: "no-store" }));
+  const result = await parseResponse(
+    await fetch(`/api/giaphu-erp?${params.toString()}`, { cache: "no-store", signal }),
+  );
 
   return {
     rows: (result.rows ?? []) as T[],
@@ -108,10 +113,12 @@ export async function fetchGiaPhuFilterOptions({
   dataset,
   projectCode,
   filters,
+  signal,
 }: {
   dataset: GiaPhuPagedDataset;
   projectCode: string;
   filters?: Record<string, string>;
+  signal?: AbortSignal;
 }) {
   const params = new URLSearchParams({
     view: "filter-options",
@@ -124,7 +131,9 @@ export async function fetchGiaPhuFilterOptions({
   );
   if (Object.keys(activeFilters).length) params.set("filters", JSON.stringify(activeFilters));
 
-  const result = await parseResponse(await fetch(`/api/giaphu-erp?${params.toString()}`, { cache: "no-store" }));
+  const result = await parseResponse(
+    await fetch(`/api/giaphu-erp?${params.toString()}`, { cache: "no-store", signal }),
+  );
   return result.filterOptions ?? {};
 }
 

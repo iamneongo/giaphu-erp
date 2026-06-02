@@ -136,7 +136,7 @@ function buildColumns({
                     title: "Cập nhật đơn giá vật tư",
                     action: "updateMaterialPrice",
                     onAction: async (action, payload) => {
-                      await runAction(action, payload);
+                      await runAction(action, { ...payload, __returnData: false });
                       refresh();
                     },
                     fields: [
@@ -149,7 +149,7 @@ function buildColumns({
                       label: "Đánh dấu đã TT",
                       icon: CheckCircle2,
                       onSelect: async () => {
-                        await runAction("markMaterialPaid", { id: row.id });
+                        await runAction("markMaterialPaid", { id: row.id, __returnData: false });
                         refresh();
                       },
                     },
@@ -159,7 +159,7 @@ function buildColumns({
                       destructive: true,
                       onSelect: async () => {
                         if (!window.confirm(`Xóa dòng vật tư "${row.materialName}"?`)) return;
-                        await runAction("deleteMaterial", { id: row.id });
+                        await runAction("deleteMaterial", { id: row.id, __returnData: false });
                         refresh();
                       },
                     },

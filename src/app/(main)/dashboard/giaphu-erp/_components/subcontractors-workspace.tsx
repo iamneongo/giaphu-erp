@@ -65,6 +65,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
     const nextPayload = { ...payload };
     delete nextPayload.attachment;
 
+    nextPayload.__returnData = false;
     nextPayload.fileUrl = existingRow?.fileUrl ?? "";
     nextPayload.fileId = existingRow?.fileId ?? "";
 
@@ -105,6 +106,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
     const nextPayload = { ...payload };
     delete nextPayload.attachment;
 
+    nextPayload.__returnData = false;
     nextPayload.fileUrl = existingRow?.fileUrl ?? "";
     nextPayload.fileId = existingRow?.fileId ?? "";
 
@@ -132,6 +134,12 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
 
     const result = await runAction(action, nextPayload);
     paginatedOperations.refresh();
+    return result;
+  }
+
+  async function runSubcontractorContractAction(action: string, payload: Record<string, unknown>) {
+    const result = await runAction(action, { ...payload, __returnData: false });
+    if (result) paginatedSubcontractorContracts.refresh();
     return result;
   }
 
@@ -166,7 +174,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
         button="HĐ thầu phụ"
         icon={FileText}
         action="saveSubcontractorContract"
-        onAction={runAction}
+        onAction={runSubcontractorContractAction}
         fields={[
           { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
           { name: "contractorName", label: "Thầu phụ", type: "select", options: contractorOptions },
@@ -306,9 +314,14 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                 label: "Xóa",
                                 icon: Trash2,
                                 destructive: true,
-                                onSelect: () => {
+                                onSelect: async () => {
                                   if (window.confirm(`Xóa tạm ứng của "${row.contractorName}"?`)) {
-                                    return runAction("deleteSubcontractor", { id: row.id });
+                                    const result = await runAction("deleteSubcontractor", {
+                                      id: row.id,
+                                      __returnData: false,
+                                    });
+                                    paginatedSubcontractors.refresh();
+                                    return result;
                                   }
                                 },
                               },
@@ -378,7 +391,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                             edit={{
                               title: "Sửa hợp đồng thầu phụ",
                               action: "saveSubcontractorContract",
-                              onAction: runAction,
+                              onAction: runSubcontractorContractAction,
                               fields: [
                                 { name: "id", label: "ID", type: "hidden", value: row.id },
                                 { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
@@ -404,7 +417,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                 label: "Duyệt hợp đồng",
                                 icon: ShieldCheck,
                                 onSelect: () => {
-                                  return runAction("approveSubcontractorContract", {
+                                  return runSubcontractorContractAction("approveSubcontractorContract", {
                                     projectCode: activeProjectCode,
                                     contractorName: row.contractorName,
                                     by: "Admin",
@@ -417,7 +430,9 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                 destructive: true,
                                 onSelect: () => {
                                   if (window.confirm(`Xóa hợp đồng của "${row.contractorName}"?`)) {
-                                    return runAction("deleteSubcontractorContract", { id: row.id });
+                                    return runSubcontractorContractAction("deleteSubcontractorContract", {
+                                      id: row.id,
+                                    });
                                   }
                                 },
                               },
@@ -517,9 +532,14 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                 label: "Xóa",
                                 icon: Trash2,
                                 destructive: true,
-                                onSelect: () => {
+                                onSelect: async () => {
                                   if (window.confirm(`Xóa chi phí vận hành "${row.description}"?`)) {
-                                    return runAction("deleteOperation", { id: row.id });
+                                    const result = await runAction("deleteOperation", {
+                                      id: row.id,
+                                      __returnData: false,
+                                    });
+                                    paginatedOperations.refresh();
+                                    return result;
                                   }
                                 },
                               },

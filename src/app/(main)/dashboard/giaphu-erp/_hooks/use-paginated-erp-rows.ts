@@ -65,6 +65,7 @@ export function usePaginatedErpRows<T>({
       dataset,
       projectCode,
       filters: fixedFilters,
+      signal: controller.signal,
     })
       .then((options) => {
         if (controller.signal.aborted || requestRefreshToken < 0) return;
@@ -95,6 +96,7 @@ export function usePaginatedErpRows<T>({
       pageSize: state.pageSize,
       search: state.query,
       filters: { ...fixedFilters, ...state.filters },
+      signal: controller.signal,
     })
       .then((result) => {
         if (controller.signal.aborted || requestRefreshToken < 0) return;

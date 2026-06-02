@@ -988,6 +988,18 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
     ERP_PERMISSIONS.workforceManage,
   );
 
+  async function runLaborNormAction(action: string, payload: Record<string, unknown>) {
+    const result = await runAction(action, { ...payload, __returnData: false });
+    if (result) paginatedLaborNorms.refresh();
+    return result;
+  }
+
+  async function runProgressAction(action: string, payload: Record<string, unknown>) {
+    const result = await runAction(action, { ...payload, __returnData: false });
+    if (result) paginatedProgress.refresh();
+    return result;
+  }
+
   const actions = {
     attendance: (
       <>
@@ -1045,7 +1057,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
         button="Định mức"
         icon={ClipboardList}
         action="saveLaborNorm"
-        onAction={runAction}
+        onAction={runLaborNormAction}
         fields={[
           { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
           { name: "category", label: "Hạng mục", type: "select", options: categoryOptions, required: true },
@@ -1060,7 +1072,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
         button="Tiến độ"
         icon={CalendarCheck}
         action="saveProgress"
-        onAction={runAction}
+        onAction={runProgressAction}
         fields={[
           { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
           { name: "category", label: "Hạng mục", type: "select", options: categoryOptions, required: true },
@@ -1232,7 +1244,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                             edit={{
                               title: "Sửa định mức nhân công",
                               action: "saveLaborNorm",
-                              onAction: runAction,
+                              onAction: runLaborNormAction,
                               fields: [
                                 { name: "id", label: "ID", type: "hidden", value: row.id },
                                 { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
@@ -1267,7 +1279,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                                 destructive: true,
                                 onSelect: () => {
                                   if (window.confirm(`Xóa định mức nhân công của "${row.category}"?`)) {
-                                    return runAction("deleteLaborNorm", { id: row.id });
+                                    return runLaborNormAction("deleteLaborNorm", { id: row.id });
                                   }
                                 },
                               },
@@ -1337,7 +1349,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                             edit={{
                               title: "Sửa tiến độ",
                               action: "saveProgress",
-                              onAction: runAction,
+                              onAction: runProgressAction,
                               fields: [
                                 { name: "id", label: "ID", type: "hidden", value: row.id },
                                 { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
@@ -1397,7 +1409,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                                 destructive: true,
                                 onSelect: () => {
                                   if (window.confirm(`Xóa tiến độ của "${row.category}"?`)) {
-                                    return runAction("deleteProgress", { id: row.id });
+                                    return runProgressAction("deleteProgress", { id: row.id });
                                   }
                                 },
                               },

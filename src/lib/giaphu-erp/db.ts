@@ -437,12 +437,11 @@ function emptySummary(): CostSummary {
   };
 }
 
-function buildSummaries(data: {
-  materials: MaterialRow[];
-  attendance: AttendanceRow[];
-  subcontractors: SubcontractorRow[];
-  operations: OperationRow[];
-}) {
+async function getGiaPhuSummaries(activeProjectCode?: string) {
+  const projectCode = text(activeProjectCode).trim();
+  if (!projectCode) return {};
+
+  const sql = getSql();
   const summaries: Record<string, CostSummary> = {};
   const get = (code: string) => {
     const key = code || "CHUNG";
@@ -450,17 +449,45 @@ function buildSummaries(data: {
     return summaries[key];
   };
 
-  for (const row of data.materials) {
-    const summary = get(row.projectCode);
-    const amount = row.quantity * row.price;
-    if (row.materialType === "VT Phụ") summary.materialSub += amount;
-    else if (row.materialType === "VT MEP" || row.materialType === "VT MEP-HVAC") summary.materialMep += amount;
+  const [materialRows, attendanceRows, subcontractorRows, operationRows] = await Promise.all([
+    sql`
+      select project_code, material_type, coalesce(sum(quantity * price), 0)::float8 as total
+      from gp_materials
+      where project_code = ${projectCode}
+      group by project_code, material_type
+    `,
+    sql`
+      select project_code, coalesce(sum(total), 0)::float8 as total
+      from gp_attendance
+      where project_code = ${projectCode}
+      group by project_code
+    `,
+    sql`
+      select project_code, coalesce(sum(advance), 0)::float8 as total
+      from gp_subcontractors
+      where project_code = ${projectCode}
+      group by project_code
+    `,
+    sql`
+      select project_code, coalesce(sum(amount), 0)::float8 as total
+      from gp_operations
+      where project_code = ${projectCode}
+      group by project_code
+    `,
+  ]);
+
+  for (const row of materialRows as Row[]) {
+    const summary = get(text(row.project_code));
+    const amount = number(row.total);
+    const materialType = text(row.material_type);
+    if (materialType === "VT Phụ") summary.materialSub += amount;
+    else if (materialType === "VT MEP" || materialType === "VT MEP-HVAC") summary.materialMep += amount;
     else summary.materialMain += amount;
   }
 
-  for (const row of data.attendance) get(row.projectCode).labor += row.total;
-  for (const row of data.subcontractors) get(row.projectCode).subcontractor += row.advance;
-  for (const row of data.operations) get(row.projectCode).operations += row.amount;
+  for (const row of attendanceRows as Row[]) get(text(row.project_code)).labor += number(row.total);
+  for (const row of subcontractorRows as Row[]) get(text(row.project_code)).subcontractor += number(row.total);
+  for (const row of operationRows as Row[]) get(text(row.project_code)).operations += number(row.total);
 
   for (const summary of Object.values(summaries)) {
     summary.total =
@@ -699,6 +726,7 @@ export async function createGiaPhuSchema() {
 
   if (readiness.projects_table && readiness.progress_table) {
     state.__giaPhuSchemaReady = true;
+    await ensureGiaPhuPerformanceIndexes();
     return;
   }
 
@@ -718,10 +746,19 @@ async function ensureGiaPhuPerformanceIndexes() {
   const sql = getSql();
   state.__giaPhuPerformanceIndexesPromise ??= (async () => {
     await sql`create index if not exists gp_materials_project_date_idx on gp_materials (project_code, work_date desc, id desc)`;
+    await sql`create index if not exists gp_materials_project_filters_idx on gp_materials (project_code, material_type, payment_status, week, category, supplier)`;
     await sql`create index if not exists gp_attendance_project_date_idx on gp_attendance (project_code, work_date desc, id desc)`;
+    await sql`create index if not exists gp_attendance_project_filters_idx on gp_attendance (project_code, week, category, staff_name, position, shift)`;
     await sql`create index if not exists gp_subcontractors_project_date_idx on gp_subcontractors (project_code, work_date desc, id desc)`;
+    await sql`create index if not exists gp_subcontractors_project_filters_idx on gp_subcontractors (project_code, week, category, contractor_name)`;
     await sql`create index if not exists gp_operations_project_date_idx on gp_operations (project_code, work_date desc, id desc)`;
+    await sql`create index if not exists gp_operations_project_week_idx on gp_operations (project_code, week)`;
     await sql`create index if not exists gp_documents_project_date_idx on gp_documents (project_code, created_at desc, id desc)`;
+    await sql`create index if not exists gp_documents_project_type_idx on gp_documents (project_code, doc_type)`;
+    await sql`create index if not exists gp_contracts_project_date_idx on gp_contracts (project_code, signed_date desc, id desc)`;
+    await sql`create index if not exists gp_payments_project_date_idx on gp_payments (project_code, payment_date desc, id desc)`;
+    await sql`create index if not exists gp_labor_norms_project_category_idx on gp_labor_norms (project_code, category)`;
+    await sql`create index if not exists gp_progress_project_category_idx on gp_progress (project_code, category)`;
   })().catch((error) => {
     state.__giaPhuPerformanceIndexesPromise = undefined;
     throw error;
@@ -759,21 +796,22 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     paymentRows,
     contractRows,
     lockRows,
+    summaries,
   ] = await Promise.all([
     activeProjectCode
-      ? sql`select * from gp_materials where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 240`
+      ? sql`select * from gp_materials where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 80`
       : sql`select * from gp_materials order by coalesce(work_date, created_at::date) desc, id desc limit 80`,
     activeProjectCode
       ? sql`select * from gp_attendance where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 280`
       : sql`select * from gp_attendance order by coalesce(work_date, created_at::date) desc, id desc limit 80`,
     activeProjectCode
-      ? sql`select * from gp_subcontractors where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 220`
+      ? sql`select * from gp_subcontractors where project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 80`
       : sql`select * from gp_subcontractors order by coalesce(work_date, created_at::date) desc, id desc limit 80`,
     activeProjectCode
-      ? sql`select * from gp_subcontractor_contracts where project_code = ${activeProjectCode} order by updated_at desc, id desc`
+      ? sql`select * from gp_subcontractor_contracts where project_code = ${activeProjectCode} order by updated_at desc, id desc limit 80`
       : sql`select * from gp_subcontractor_contracts order by updated_at desc, id desc limit 40`,
     activeProjectCode
-      ? sql`select * from gp_operations where project_code = ${activeProjectCode} or project_code = 'CHUNG DOANH NGHIỆP' order by coalesce(work_date, created_at::date) desc, id desc limit 160`
+      ? sql`select * from gp_operations where project_code = ${activeProjectCode} or project_code = 'CHUNG DOANH NGHIỆP' order by coalesce(work_date, created_at::date) desc, id desc limit 80`
       : sql`select * from gp_operations order by coalesce(work_date, created_at::date) desc, id desc limit 60`,
     activeProjectCode
       ? sql`select * from gp_labor_norms where project_code = ${activeProjectCode} order by category asc`
@@ -782,14 +820,15 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
       ? sql`select * from gp_progress where project_code = ${activeProjectCode} order by category asc`
       : sql`select * from gp_progress order by category asc limit 60`,
     activeProjectCode
-      ? sql`select * from gp_payments where project_code = ${activeProjectCode} order by payment_date desc, id desc`
+      ? sql`select * from gp_payments where project_code = ${activeProjectCode} order by payment_date desc, id desc limit 40`
       : sql`select * from gp_payments order by payment_date desc, id desc limit 60`,
     activeProjectCode
-      ? sql`select * from gp_contracts where project_code = ${activeProjectCode} order by signed_date desc, id desc`
+      ? sql`select * from gp_contracts where project_code = ${activeProjectCode} order by signed_date desc, id desc limit 40`
       : sql`select * from gp_contracts order by signed_date desc, id desc limit 60`,
     activeProjectCode
       ? sql`select * from gp_attendance_locks where project_code = ${activeProjectCode} order by updated_at desc`
       : sql`select * from gp_attendance_locks order by updated_at desc limit 60`,
+    getGiaPhuSummaries(activeProjectCode),
   ]);
 
   const catalogs = {
@@ -823,7 +862,7 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     payments: (paymentRows as Row[]).map(paymentFromRow),
     contracts: (contractRows as Row[]).map(contractFromRow),
     attendanceLocks: (lockRows as Row[]).map(lockFromRow),
-    summaries: buildSummaries({ materials, attendance, subcontractors, operations }),
+    summaries,
   };
 }
 
@@ -908,10 +947,16 @@ function compareWeekDesc(a: string, b: string) {
 }
 
 async function resolveActiveProjectCode(activeProjectCode?: string) {
-  const projects = await getGiaPhuProjectList();
-  return projects.some((project) => project.code === activeProjectCode)
-    ? (activeProjectCode ?? "")
-    : (projects[0]?.code ?? "");
+  const sql = getSql();
+  const requestedCode = text(activeProjectCode).trim();
+
+  if (requestedCode) {
+    const rows = (await sql`select code from gp_projects where code = ${requestedCode} limit 1`) as Row[];
+    if (rows[0]?.code) return text(rows[0].code);
+  }
+
+  const rows = (await sql`select code from gp_projects order by updated_at desc, code asc limit 1`) as Row[];
+  return text(rows[0]?.code);
 }
 
 export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = {}): Promise<GiaPhuOverviewInsights> {
@@ -1290,10 +1335,7 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
 
 export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promise<GiaPhuPagedRowsResult> {
   const sql = getSql();
-  const projects = await getGiaPhuProjectList();
-  const activeProjectCode = projects.some((project) => project.code === options.activeProjectCode)
-    ? (options.activeProjectCode ?? "")
-    : (projects[0]?.code ?? "");
+  const activeProjectCode = await resolveActiveProjectCode(options.activeProjectCode);
   const pageSize = normalizePageSize(options.pageSize);
   const pageIndex = normalizePageIndex(options.pageIndex);
   const offset = pageIndex * pageSize;
@@ -1705,10 +1747,7 @@ export async function getGiaPhuFilterOptions(options: {
   filters?: Record<string, string>;
 }): Promise<GiaPhuFilterOptionsResult> {
   const sql = getSql();
-  const projects = await getGiaPhuProjectList();
-  const activeProjectCode = projects.some((project) => project.code === options.activeProjectCode)
-    ? (options.activeProjectCode ?? "")
-    : (projects[0]?.code ?? "");
+  const activeProjectCode = await resolveActiveProjectCode(options.activeProjectCode);
   const fixedFilterValue = (key: string) => text(options.filters?.[key]).trim();
 
   if (options.dataset === "projects") {

@@ -74,6 +74,10 @@ type ActionBody = {
   payload?: Record<string, unknown>;
 };
 
+function sanitizeActionPayload(payload: Record<string, unknown>) {
+  return Object.fromEntries(Object.entries(payload).filter(([key]) => !key.startsWith("__")));
+}
+
 function readActiveProjectCode(request: Request, payload?: Record<string, unknown>) {
   const projectCode =
     typeof payload?.projectCode === "string"
@@ -185,7 +189,9 @@ export async function POST(request: Request) {
   try {
     await createGiaPhuSchema();
     const body = (await request.json()) as ActionBody;
-    const payload = body.payload ?? {};
+    const rawPayload = body.payload ?? {};
+    const shouldReturnData = rawPayload.__returnData !== false;
+    const payload = sanitizeActionPayload(rawPayload);
 
     switch (body.action) {
       case "saveProject":
@@ -292,6 +298,10 @@ export async function POST(request: Request) {
       }
       default:
         return NextResponse.json({ status: "error", message: "Unknown GiaPhu ERP action." }, { status: 400 });
+    }
+
+    if (!shouldReturnData) {
+      return NextResponse.json({ status: "success", refresh: false });
     }
 
     const data = await getGiaPhuDashboardData({

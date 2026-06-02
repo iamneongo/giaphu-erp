@@ -55,6 +55,18 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
     return null;
   }
 
+  async function runContractAction(action: string, payload: Record<string, unknown>) {
+    const result = await runAction(action, { ...payload, __returnData: false });
+    if (result) paginatedContracts.refresh();
+    return result;
+  }
+
+  async function runPaymentAction(action: string, payload: Record<string, unknown>) {
+    const result = await runAction(action, { ...payload, __returnData: false });
+    if (result) paginatedPayments.refresh();
+    return result;
+  }
+
   const headerBySection: Record<
     CrmSection,
     {
@@ -231,7 +243,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
           button="Hợp đồng"
           icon={FileText}
           action="saveContract"
-          onAction={runAction}
+          onAction={runContractAction}
           fields={[
             { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
             { name: "contractNo", label: "Số hợp đồng", required: true },
@@ -280,7 +292,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                             edit={{
                               title: "Sửa hợp đồng",
                               action: "saveContract",
-                              onAction: runAction,
+                              onAction: runContractAction,
                               fields: [
                                 { name: "id", label: "ID", type: "hidden", value: row.id },
                                 { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
@@ -302,7 +314,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                                 destructive: true,
                                 onSelect: () => {
                                   if (window.confirm(`Xóa hợp đồng "${row.contractNo || row.id}"?`)) {
-                                    return runAction("deleteContract", { id: row.id });
+                                    return runContractAction("deleteContract", { id: row.id });
                                   }
                                 },
                               },
@@ -335,7 +347,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
           button="Thu tiền"
           icon={Banknote}
           action="savePayment"
-          onAction={runAction}
+          onAction={runPaymentAction}
           fields={[
             { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
             { name: "date", label: "Ngày thu", type: "date", value: todayIso() },
@@ -372,7 +384,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                             edit={{
                               title: "Sửa thu tiền",
                               action: "savePayment",
-                              onAction: runAction,
+                              onAction: runPaymentAction,
                               fields: [
                                 { name: "id", label: "ID", type: "hidden", value: row.id },
                                 { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
@@ -388,7 +400,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                                 destructive: true,
                                 onSelect: () => {
                                   if (window.confirm("Xóa phiếu thu này?")) {
-                                    return runAction("deletePayment", { id: row.id });
+                                    return runPaymentAction("deletePayment", { id: row.id });
                                   }
                                 },
                               },

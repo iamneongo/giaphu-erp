@@ -353,7 +353,7 @@ function buildSavedMaterialColumns({
                     title: "Cập nhật đơn giá vật tư",
                     action: "updateMaterialPrice",
                     onAction: async (action, payload) => {
-                      await runAction(action, payload);
+                      await runAction(action, { ...payload, __returnData: false });
                       refresh();
                     },
                     fields: [
@@ -367,7 +367,7 @@ function buildSavedMaterialColumns({
                       icon: CheckCircle2,
                       disabled: row.paymentStatus === "Đã TT",
                       onSelect: async () => {
-                        await runAction("markMaterialPaid", { id: row.id });
+                        await runAction("markMaterialPaid", { id: row.id, __returnData: false });
                         refresh();
                       },
                     },
@@ -377,7 +377,7 @@ function buildSavedMaterialColumns({
                       destructive: true,
                       onSelect: async () => {
                         if (!window.confirm(`Xóa dòng vật tư "${row.materialName}"?`)) return;
-                        await runAction("deleteMaterial", { id: row.id });
+                        await runAction("deleteMaterial", { id: row.id, __returnData: false });
                         refresh();
                       },
                     },
@@ -604,6 +604,7 @@ export function ZaloMaterialBreakdownPage({
         date,
         week,
         materialType,
+        __returnData: false,
         rows: rows.map((row) => ({
           date,
           week,
@@ -733,7 +734,7 @@ export function ZaloMaterialBreakdownPage({
                 </Button>
               }
               onAction={async (action, payload) => {
-                const result = await runAction(action, payload);
+                const result = await runAction(action, { ...payload, __returnData: false });
                 paginatedMaterials.refresh();
                 return result;
               }}

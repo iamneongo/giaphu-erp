@@ -586,7 +586,7 @@ export function DocumentsWorkspace() {
   );
 
   async function runDocumentAction(action: string, payload: Record<string, unknown>) {
-    const saved = await runAction(action, payload);
+    const saved = await runAction(action, { ...payload, __returnData: false });
     if (!saved) return false;
 
     paginatedDocuments.refresh();
