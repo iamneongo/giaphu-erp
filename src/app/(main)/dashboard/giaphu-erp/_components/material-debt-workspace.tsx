@@ -31,27 +31,28 @@ function isUnpaid(row: MaterialRow) {
 function DebtMetricCard({
   title,
   value,
+  hint,
   footer,
   icon: Icon,
 }: {
   title: string;
   value: string;
+  hint: string;
   footer: string;
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="@container/card" size="sm">
+    <Card className="@container/card">
       <CardHeader>
         <CardDescription>{title}</CardDescription>
-        <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums tracking-tight">
-          {value}
-        </CardTitle>
+        <CardTitle className="font-semibold @[250px]/card:text-3xl text-2xl tabular-nums">{value}</CardTitle>
       </CardHeader>
       <CardFooter className="flex-col items-start gap-1.5 text-sm">
         <div className="flex items-center gap-2 font-medium">
           <Icon className="size-4" />
-          {footer}
+          {hint}
         </div>
+        <div className="text-muted-foreground">{footer}</div>
       </CardFooter>
     </Card>
   );
@@ -207,19 +208,22 @@ export function MaterialDebtWorkspace() {
         <DebtMetricCard
           title="Tổng công nợ"
           value={formatMoney(debtTotal)}
-          footer="Tổng vật tư đang Chưa TT"
+          hint="Tổng vật tư đang Chưa TT"
+          footer="Tổng giá trị vật tư còn mở theo dữ liệu công trình hiện tại."
           icon={CircleDollarSign}
         />
         <DebtMetricCard
           title="Dòng chưa thanh toán"
           value={formatCount(debtRowsForStats.length)}
-          footer="Theo dữ liệu công trình hiện tại"
+          hint="Theo dữ liệu công trình hiện tại"
+          footer="Số dòng vật tư chưa hoàn tất thanh toán trong công trình."
           icon={Receipt}
         />
         <DebtMetricCard
           title="Nhà cung cấp"
           value={formatCount(supplierCount)}
-          footer="Số NCC còn công nợ mở"
+          hint="Số NCC còn công nợ mở"
+          footer="Nhà cung cấp đang có ít nhất một dòng vật tư chưa thanh toán."
           icon={CheckCircle2}
         />
       </div>

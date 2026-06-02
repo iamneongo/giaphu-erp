@@ -40,6 +40,8 @@ export interface FormFieldDefinition {
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   validate?: (value: string, payload: FormPayload) => string | undefined;
   deriveValue?: (payload: FormPayload) => string | number | boolean | undefined;
+  visibleWhen?: (payload: FormPayload) => boolean;
+  defaultValueWhen?: (payload: FormPayload) => string | number | boolean | undefined;
 }
 
 export type FormPayload = Record<string, unknown>;
@@ -223,6 +225,11 @@ export function ActionDialog({
         const next = { ...current, [name]: value };
 
         for (const field of fields) {
+          const defaultValue = field.defaultValueWhen?.(next);
+          if (defaultValue !== undefined && !String(next[field.name] ?? "").trim()) {
+            next[field.name] = defaultValue;
+          }
+
           const derivedValue = field.deriveValue?.(next);
           if (derivedValue !== undefined) {
             next[field.name] = derivedValue;
@@ -239,7 +246,8 @@ export function ActionDialog({
     event.preventDefault();
     const form = event.currentTarget;
     const payload = collectFormPayload(form);
-    const missingField = fields.find((field) => {
+    const visibleFields = fields.filter((field) => field.visibleWhen?.(payload) ?? true);
+    const missingField = visibleFields.find((field) => {
       if (!field.required || field.disabled || field.type === "checkbox" || field.type === "hidden") {
         return false;
       }
@@ -253,7 +261,7 @@ export function ActionDialog({
       return;
     }
 
-    const invalidField = fields
+    const invalidField = visibleFields
       .map((field) => ({
         field,
         message:
@@ -298,15 +306,29 @@ export function ActionDialog({
           <FieldGroup className="grid gap-4 md:grid-cols-2">
             {fields.map((field) => {
               const fieldType = getResolvedFieldType(field);
+              const isVisible = field.visibleWhen?.(fieldValues) ?? true;
+              if (!isVisible) return null;
 
               if (fieldType === "hidden") {
-                return <Input key={field.name} type="hidden" name={field.name} value={String(field.value ?? "")} />;
+                return (
+                  <Input
+                    key={field.name}
+                    type="hidden"
+                    name={field.name}
+                    value={String(fieldValues[field.name] ?? "")}
+                  />
+                );
               }
 
               if (fieldType === "checkbox") {
                 return (
                   <Field key={field.name} orientation="horizontal" className="rounded-lg border p-3">
-                    <Checkbox name={field.name} defaultChecked={Boolean(field.value)} disabled={field.disabled} />
+                    <Checkbox
+                      name={field.name}
+                      checked={Boolean(fieldValues[field.name])}
+                      disabled={field.disabled}
+                      onCheckedChange={(value) => updateFieldValue(field.name, Boolean(value))}
+                    />
                     <FieldLabel>{field.label}</FieldLabel>
                   </Field>
                 );

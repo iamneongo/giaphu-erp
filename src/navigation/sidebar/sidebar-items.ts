@@ -236,7 +236,7 @@ export const sidebarItems: NavGroup[] = [
         icon: UserRound,
       },
       {
-        title: "Tổ chức & phân quyền",
+        title: "Tổ chức & thành viên",
         url: "/dashboard/workspaces",
         icon: Building2,
         permission: ERP_PERMISSIONS.organizationsManage,
@@ -248,7 +248,7 @@ export const sidebarItems: NavGroup[] = [
             permission: ERP_PERMISSIONS.organizationsManage,
           },
           {
-            title: "Phân quyền",
+            title: "Thành viên",
             url: "/dashboard/workspaces/team",
             icon: ShieldCheck,
             permission: ERP_PERMISSIONS.rolesManage,

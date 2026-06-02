@@ -2359,6 +2359,92 @@ export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
   return savedRows;
 }
 
+export async function saveStaffWeeklyAttendance(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const rows = Array.isArray(payload.rows) ? (payload.rows as Record<string, unknown>[]) : [];
+  const projectCode = text(payload.projectCode).trim();
+  const week = text(payload.week).trim();
+  const category = text(payload.category).trim();
+  const staffName = text(payload.staffName).trim();
+  const savedRows: AttendanceRow[] = [];
+  const preparedRows = rows.map((row) => {
+    const date = requireDateInput(row.date, "Ngày chấm công");
+    const rowWeek = weekFromDate(date);
+    const shift = text(row.shift).trim();
+    const position = text(row.position).trim();
+    const status = text(row.status).trim();
+    const halfDaySalary = requireNumericInput(row.halfDaySalary, "Lương ngày");
+    const coefficient = requireNumericInput(row.coefficient, "Hệ số");
+    const allowance = requireNumericInput(row.allowance, "Phụ cấp");
+    const overtimeHours = requireNumericInput(row.overtimeHours, "OT giờ");
+    const overtimeAmount = requireNumericInput(row.overtimeAmount, "OT tiền");
+    const total = money(row.total) || halfDaySalary * coefficient + allowance + overtimeAmount;
+
+    if (rowWeek !== week) throw new Error("Các dòng chấm công phải cùng tuần.");
+    if (!shift) throw new Error("Thiếu ca.");
+    if (!position) throw new Error("Thiếu chức vụ.");
+    if (!status) throw new Error("Thiếu trạng thái.");
+
+    return {
+      date,
+      shift,
+      position,
+      status,
+      halfDaySalary,
+      coefficient,
+      allowance,
+      overtimeHours,
+      overtimeAmount,
+      total,
+    };
+  });
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!week) throw new Error("Tuần chấm công không hợp lệ.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+  if (!staffName) throw new Error("Thiếu nhân sự.");
+
+  const lockKey = attendanceLockKey(projectCode, week, category);
+  const [lock] = (await sql`select status from gp_attendance_locks where lock_key = ${lockKey}`) as Row[];
+  if (text(lock?.status) === "CLOSED") throw new Error("Tuần/hạng mục đã kết sổ, không thể sửa chấm công.");
+
+  const existingRows = (await sql`
+    select id
+    from gp_attendance
+    where project_code = ${projectCode}
+      and week = ${week}
+      and category = ${category}
+      and staff_name = ${staffName}
+  `) as Row[];
+  const deletedIds = existingRows.map((row) => number(row.id)).filter(Boolean);
+
+  await sql`
+    delete from gp_attendance
+    where project_code = ${projectCode}
+      and week = ${week}
+      and category = ${category}
+      and staff_name = ${staffName}
+  `;
+
+  for (const row of preparedRows) {
+    const [savedRow] = (await sql`
+      insert into gp_attendance (
+        work_date, week, shift, project_code, category, staff_name, position, half_day_salary,
+        allowance, overtime_hours, overtime_amount, total, status, coefficient
+      )
+      values (
+        ${row.date}, ${week}, ${row.shift}, ${projectCode}, ${category}, ${staffName}, ${row.position},
+        ${row.halfDaySalary}, ${row.allowance}, ${row.overtimeHours}, ${row.overtimeAmount}, ${row.total},
+        ${row.status}, ${row.coefficient}
+      )
+      returning *
+    `) as Row[];
+    if (savedRow) savedRows.push(attendanceFromRow(savedRow));
+  }
+
+  return { savedRows, deletedIds };
+}
+
 export async function deleteAttendanceRow(payload: Record<string, unknown>) {
   const sql = getSql();
   const id = number(payload.id);

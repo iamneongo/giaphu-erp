@@ -387,23 +387,24 @@ export function TeamManager() {
             </CardHeader>
             <CardContent>
               <form
-                className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto]"
+                className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(12rem,220px)_auto] xl:items-end"
                 onSubmit={(event) => void inviteMember(event)}
               >
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label htmlFor="invite-email">Email</Label>
                   <Input
                     id="invite-email"
+                    className="w-full"
                     type="email"
                     placeholder="name@company.com"
                     value={inviteEmail}
                     onChange={(event) => setInviteEmail(event.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label>Vai trò</Label>
                   <Select value={inviteRole} onValueChange={setInviteRole}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Chọn vai trò" />
                     </SelectTrigger>
                     <SelectContent>
@@ -415,8 +416,11 @@ export function TeamManager() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-end">
-                  <Button type="submit" disabled={submitting}>
+                <div className="space-y-2">
+                  <Label aria-hidden="true" className="invisible">
+                    Gửi lời mời
+                  </Label>
+                  <Button type="submit" className="w-full whitespace-nowrap xl:min-w-32" disabled={submitting}>
                     <MailPlus />
                     Gửi lời mời
                   </Button>

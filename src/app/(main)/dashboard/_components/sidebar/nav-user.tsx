@@ -85,7 +85,7 @@ export function NavUser({
               <DropdownMenuItem asChild>
                 <Link href="/dashboard/workspaces/team">
                   <ShieldCheck />
-                  Phân quyền
+                  Thành viên
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>

@@ -34,7 +34,7 @@ const segmentLabels: Record<string, string> = {
   reports: "Báo cáo",
   profile: "Hồ sơ tài khoản",
   workspaces: "Tổ chức",
-  team: "Phân quyền",
+  team: "Thành viên",
   roles: "Vai trò & quyền",
   create: "Tạo vai trò",
   edit: "Sửa vai trò",

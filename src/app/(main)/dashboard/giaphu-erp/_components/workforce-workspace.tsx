@@ -17,20 +17,11 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type { AttendanceRow, LaborNormRow, ProgressRow, StaffRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
@@ -42,7 +33,7 @@ import { catalogOptions, uniqueOptions } from "../_lib/form-options";
 import { formatCount, formatMoney } from "../_lib/formatters";
 import type { GiaPhuActionResult } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
-import { DataTable } from "./data-table";
+import { DataTable, type DataTableColumn } from "./data-table";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
@@ -50,57 +41,19 @@ import { TableRowActions } from "./table-row-actions";
 type WorkforceSection = "attendance" | "staff" | "laborNorms" | "progress";
 
 const weekDayLabels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
-const allFilterValue = "__all__";
 const staffComboboxRenderLimit = 40;
-const attendanceStatusOptions = [
-  {
-    key: "morning",
-    label: "Sáng",
-    shortLabel: "Sáng",
-    helper: "+0.5",
-    coefficient: 0.5,
-    shift: "Sáng",
-    status: "Sáng",
-    className: "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100",
-    activeClassName: "border-sky-500 bg-sky-100 text-sky-900 ring-sky-500/30",
-  },
-  {
-    key: "afternoon",
-    label: "Chiều",
-    shortLabel: "Chiều",
-    helper: "+0.5",
-    coefficient: 0.5,
-    shift: "Chiều",
-    status: "Chiều",
-    className: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100",
-    activeClassName: "border-amber-500 bg-amber-100 text-amber-900 ring-amber-500/30",
-  },
-  {
-    key: "leave",
-    label: "Nghỉ có phép",
-    shortLabel: "P",
-    helper: "0",
-    coefficient: 0,
-    shift: "Nghỉ",
-    status: "Nghỉ có phép",
-    className: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100",
-    activeClassName: "border-violet-500 bg-violet-100 text-violet-900 ring-violet-500/30",
-  },
-  {
-    key: "absent",
-    label: "Nghỉ không phép",
-    shortLabel: "V",
-    helper: "0",
-    coefficient: 0,
-    shift: "Vắng",
-    status: "Nghỉ không phép",
-    className: "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100",
-    activeClassName: "border-rose-500 bg-rose-100 text-rose-900 ring-rose-500/30",
-  },
+const attendanceShiftOptions = [
+  { key: "morning", label: "Sáng", shortLabel: "S", shift: "Sáng", status: "Sáng", coefficient: 0.5 },
+  { key: "afternoon", label: "Chiều", shortLabel: "C", shift: "Chiều", status: "Chiều", coefficient: 0.5 },
 ] as const;
 
-type AttendanceStatusOption = (typeof attendanceStatusOptions)[number];
-const fullDayCellStyle = "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100";
+type AttendanceShiftKey = (typeof attendanceShiftOptions)[number]["key"];
+type AttendanceCellDraft = Record<AttendanceShiftKey, boolean>;
+type AttendanceExtraDraft = {
+  allowance: number;
+  overtimeHours: number;
+};
+type AttendanceBoardRow = StaffRow;
 
 function normalizeSearchText(value: string) {
   return value
@@ -110,48 +63,13 @@ function normalizeSearchText(value: string) {
     .trim();
 }
 
-function getAttendanceStatusOption(row?: AttendanceRow) {
+function getAttendanceShiftKey(row?: AttendanceRow): AttendanceShiftKey | null {
   if (!row) return null;
-
   const statusText = normalizeSearchText(`${row.status} ${row.shift}`);
 
-  if (statusText.includes("khong phep") || statusText.includes("vang")) {
-    return attendanceStatusOptions.find((option) => option.key === "absent") ?? null;
-  }
-  if (statusText.includes("co phep") || statusText.includes("phep")) {
-    return attendanceStatusOptions.find((option) => option.key === "leave") ?? null;
-  }
-  if (statusText.includes("sang")) return attendanceStatusOptions.find((option) => option.key === "morning") ?? null;
-  if (statusText.includes("chieu")) return attendanceStatusOptions.find((option) => option.key === "afternoon") ?? null;
-  if (Number(row.coefficient) === 0) return attendanceStatusOptions.find((option) => option.key === "leave") ?? null;
-
-  return attendanceStatusOptions.find((option) => option.key === "morning") ?? null;
-}
-
-function getAttendanceCellState(rows: AttendanceRow[]) {
-  if (!rows.length) return null;
-
-  const rowOptions = rows.map((row) => getAttendanceStatusOption(row)).filter(Boolean);
-  const hasMorning = rowOptions.some((option) => option?.key === "morning");
-  const hasAfternoon = rowOptions.some((option) => option?.key === "afternoon");
-  const absenceOption = rowOptions.find((option) => option?.key === "absent" || option?.key === "leave");
-
-  if (hasMorning && hasAfternoon) {
-    return {
-      label: "Cả ngày",
-      detail: "+1",
-      className: fullDayCellStyle,
-    };
-  }
-
-  const option = absenceOption ?? rowOptions[0];
-  const workdays = rows.reduce((sum, row) => sum + Number(row.coefficient || 0), 0);
-
-  return {
-    label: option?.shortLabel ?? rows[0]?.status ?? "Đã chấm",
-    detail: rows.length > 1 ? `${rows.length} dòng` : `${workdays > 0 ? "+" : ""}${formatCount(workdays)}`,
-    className: option?.className ?? "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60",
-  };
+  if (statusText.includes("sang")) return "morning";
+  if (statusText.includes("chieu")) return "afternoon";
+  return null;
 }
 
 function isoDate(date: Date) {
@@ -201,7 +119,6 @@ type DraftAttendanceParticipant = {
   id: string;
   week: string;
   category: string;
-  shift: string;
   staff: StaffRow;
 };
 
@@ -219,7 +136,7 @@ function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: St
         name: row.staffName,
         team: "",
         position: row.position,
-        salaryDay: row.halfDaySalary * 2,
+        salaryDay: row.halfDaySalary,
         resigned: false,
         offDate: "",
       });
@@ -240,16 +157,6 @@ function buildWeekOptions(options: Array<{ label: string; value: string }>) {
   return Array.from(values)
     .sort((first, second) => weekSortValue(second) - weekSortValue(first))
     .map((value) => ({ label: value, value }));
-}
-
-function buildAttendanceShiftOptions() {
-  const values = new Map<string, { label: string; value: string }>();
-
-  for (const option of attendanceStatusOptions) {
-    values.set(option.shift, { label: option.label, value: option.shift });
-  }
-
-  return Array.from(values.values());
 }
 
 function dateTimeFromInput(value: unknown) {
@@ -304,6 +211,14 @@ function validateStaffOffDate(value: string, payload: Record<string, unknown>) {
   }
 
   return undefined;
+}
+
+function shouldShowStaffOffDate(payload: Record<string, unknown>) {
+  return payload.resigned === true;
+}
+
+function defaultStaffOffDate(payload: Record<string, unknown>) {
+  return payload.resigned === true ? todayIso() : undefined;
 }
 
 function useDebouncedValue<T>(value: T, delay = 300) {
@@ -407,6 +322,35 @@ function StaffSearchCombobox({
   );
 }
 
+function getAttendanceCellDraft(rows: AttendanceRow[]): AttendanceCellDraft {
+  return {
+    morning: rows.some((row) => getAttendanceShiftKey(row) === "morning"),
+    afternoon: rows.some((row) => getAttendanceShiftKey(row) === "afternoon"),
+  };
+}
+
+function attendanceCellKey(staffName: string, date: string) {
+  return `${staffName}::${date}`;
+}
+
+function attendanceStaffKey(staffName: string) {
+  return staffName;
+}
+
+function countAttendanceWorkdays(cells: AttendanceCellDraft[]) {
+  return cells.reduce((total, cell) => total + (cell.morning ? 0.5 : 0) + (cell.afternoon ? 0.5 : 0), 0);
+}
+
+function getAttendanceExtraDraft(rows: AttendanceRow[]): AttendanceExtraDraft {
+  return rows.reduce(
+    (total, row) => ({
+      allowance: total.allowance + Number(row.allowance || 0),
+      overtimeHours: total.overtimeHours + Number(row.overtimeHours || 0),
+    }),
+    { allowance: 0, overtimeHours: 0 },
+  );
+}
+
 function AttendanceBoard({
   rows,
   staff,
@@ -430,22 +374,14 @@ function AttendanceBoard({
   ) => Promise<GiaPhuActionResult | false | boolean | undefined>;
 }) {
   const normalizedWeekOptions = React.useMemo(() => buildWeekOptions(weekOptions), [weekOptions]);
-  const normalizedShiftOptions = React.useMemo(() => buildAttendanceShiftOptions(), []);
   const [selectedWeek, setSelectedWeek] = React.useState(currentIsoWeek());
-  const [selectedCategory, setSelectedCategory] = React.useState(categoryOptions[0]?.value || allFilterValue);
-  const [selectedShift, setSelectedShift] = React.useState(allFilterValue);
+  const [selectedCategory, setSelectedCategory] = React.useState(categoryOptions[0]?.value || "");
   const [selectedStaffName, setSelectedStaffName] = React.useState("");
   const [draftParticipants, setDraftParticipants] = React.useState<DraftAttendanceParticipant[]>([]);
-  const [attendanceNote, setAttendanceNote] = React.useState("");
-  const [savingAttendance, setSavingAttendance] = React.useState(false);
-  const [editor, setEditor] = React.useState<{
-    row?: AttendanceRow;
-    rows: AttendanceRow[];
-    date: string;
-    staff: StaffRow;
-    category: string;
-    shift: string;
-  } | null>(null);
+  const [draftCells, setDraftCells] = React.useState<Record<string, AttendanceCellDraft>>({});
+  const [draftExtras, setDraftExtras] = React.useState<Record<string, AttendanceExtraDraft>>({});
+  const [dirtyStaffNames, setDirtyStaffNames] = React.useState<Set<string>>(new Set());
+  const [savingStaffName, setSavingStaffName] = React.useState("");
 
   React.useEffect(() => {
     if (normalizedWeekOptions.length > 0 && !normalizedWeekOptions.some((option) => option.value === selectedWeek)) {
@@ -454,35 +390,36 @@ function AttendanceBoard({
   }, [normalizedWeekOptions, selectedWeek]);
 
   React.useEffect(() => {
-    if (
-      selectedCategory !== allFilterValue &&
-      categoryOptions.length > 0 &&
-      !categoryOptions.some((option) => option.value === selectedCategory)
-    ) {
+    if (categoryOptions.length === 0) {
+      setSelectedCategory("");
+      return;
+    }
+
+    if (!selectedCategory || !categoryOptions.some((option) => option.value === selectedCategory)) {
       setSelectedCategory(categoryOptions[0].value);
     }
   }, [categoryOptions, selectedCategory]);
 
+  React.useEffect(() => {
+    if (!selectedCategory && !selectedWeek) return;
+
+    setDraftCells({});
+    setDraftExtras({});
+    setDirtyStaffNames(new Set());
+    setSelectedStaffName("");
+  }, [selectedCategory, selectedWeek]);
+
   const weekDates = React.useMemo(() => getWeekDates(selectedWeek), [selectedWeek]);
   const filteredRows = React.useMemo(
-    () =>
-      rows.filter(
-        (row) =>
-          row.week === selectedWeek &&
-          (selectedCategory === allFilterValue || row.category === selectedCategory) &&
-          (selectedShift === allFilterValue || row.shift === selectedShift),
-      ),
-    [rows, selectedCategory, selectedShift, selectedWeek],
+    () => rows.filter((row) => row.week === selectedWeek && row.category === selectedCategory),
+    [rows, selectedCategory, selectedWeek],
   );
   const visibleDraftParticipants = React.useMemo(
     () =>
       draftParticipants.filter(
-        (participant) =>
-          participant.week === selectedWeek &&
-          (selectedCategory === allFilterValue || participant.category === selectedCategory) &&
-          (selectedShift === allFilterValue || participant.shift === selectedShift),
+        (participant) => participant.week === selectedWeek && participant.category === selectedCategory,
       ),
-    [draftParticipants, selectedCategory, selectedShift, selectedWeek],
+    [draftParticipants, selectedCategory, selectedWeek],
   );
   const boardRows = React.useMemo(
     () =>
@@ -496,14 +433,22 @@ function AttendanceBoard({
     const map = new Map<string, AttendanceRow[]>();
 
     for (const row of filteredRows) {
-      const key = `${row.staffName}::${row.date}`;
+      const key = attendanceCellKey(row.staffName, row.date);
       map.set(key, [...(map.get(key) ?? []), row]);
     }
 
     return map;
   }, [filteredRows]);
-  const currentCategory = selectedCategory === allFilterValue ? categoryOptions[0]?.value || "" : selectedCategory;
-  const currentShift = selectedShift === allFilterValue ? normalizedShiftOptions[0]?.value || "" : selectedShift;
+  const rowByStaff = React.useMemo(() => {
+    const map = new Map<string, AttendanceRow[]>();
+
+    for (const row of filteredRows) {
+      const key = attendanceStaffKey(row.staffName);
+      map.set(key, [...(map.get(key) ?? []), row]);
+    }
+
+    return map;
+  }, [filteredRows]);
   const availableStaff = React.useMemo(() => {
     const participantNames = new Set(boardRows.map((row) => row.name));
 
@@ -512,12 +457,28 @@ function AttendanceBoard({
       .sort((first, second) => first.name.localeCompare(second.name, "vi"));
   }, [boardRows, staff]);
 
+  const getCurrentCellDraft = React.useCallback(
+    (staffName: string, date: string) => {
+      const key = attendanceCellKey(staffName, date);
+      return draftCells[key] ?? getAttendanceCellDraft(rowByCell.get(key) ?? []);
+    },
+    [draftCells, rowByCell],
+  );
+
+  const getCurrentStaffExtras = React.useCallback(
+    (staffName: string) => {
+      const key = attendanceStaffKey(staffName);
+      return draftExtras[key] ?? getAttendanceExtraDraft(rowByStaff.get(key) ?? []);
+    },
+    [draftExtras, rowByStaff],
+  );
+
   function addParticipant() {
     const staffRow = staff.find((row) => row.name === selectedStaffName);
 
-    if (!staffRow || !currentCategory || !currentShift) return;
+    if (!staffRow || !selectedCategory) return;
 
-    const id = [selectedWeek, currentCategory, currentShift, staffRow.name].join("::");
+    const id = [selectedWeek, selectedCategory, staffRow.name].join("::");
     setDraftParticipants((current) => {
       if (current.some((participant) => participant.id === id)) return current;
 
@@ -526,8 +487,7 @@ function AttendanceBoard({
         {
           id,
           week: selectedWeek,
-          category: currentCategory,
-          shift: currentShift,
+          category: selectedCategory,
           staff: staffRow,
         },
       ];
@@ -535,114 +495,284 @@ function AttendanceBoard({
     setSelectedStaffName("");
   }
 
-  function openEditor(staffRow: StaffRow, date: string, cellRows: AttendanceRow[]) {
-    if (!canManage) return;
+  const updateCell = React.useCallback(
+    (staffName: string, date: string, key: AttendanceShiftKey, checked: boolean) => {
+      if (!canManage) return;
 
-    const existingRow =
-      selectedShift === allFilterValue && selectedCategory === allFilterValue
-        ? cellRows[0]
-        : (cellRows.find(
-            (row) =>
-              (selectedShift === allFilterValue || row.shift === selectedShift) &&
-              (selectedCategory === allFilterValue || row.category === selectedCategory),
-          ) ?? cellRows[0]);
+      const cellKey = attendanceCellKey(staffName, date);
+      const baseDraft = draftCells[cellKey] ?? getAttendanceCellDraft(rowByCell.get(cellKey) ?? []);
+      setDraftCells((current) => ({
+        ...current,
+        [cellKey]: {
+          ...baseDraft,
+          [key]: checked,
+        },
+      }));
+      setDirtyStaffNames((current) => new Set(current).add(staffName));
+    },
+    [canManage, draftCells, rowByCell],
+  );
 
-    setEditor({
-      row: existingRow,
-      rows: cellRows,
-      date,
-      staff: staffRow,
-      category: existingRow?.category || currentCategory,
-      shift: existingRow?.shift || currentShift,
-    });
-    setAttendanceNote("");
-  }
+  const updateStaffExtra = React.useCallback(
+    (staffName: string, key: keyof AttendanceExtraDraft, value: number) => {
+      if (!canManage) return;
 
-  async function saveAttendanceStatus(option: AttendanceStatusOption) {
-    if (!editor || savingAttendance) return;
+      const staffKey = attendanceStaffKey(staffName);
+      const baseDraft = draftExtras[staffKey] ?? getAttendanceExtraDraft(rowByStaff.get(staffKey) ?? []);
+      setDraftExtras((current) => ({
+        ...current,
+        [staffKey]: {
+          ...baseDraft,
+          [key]: Number.isFinite(value) ? Math.max(0, value) : 0,
+        },
+      }));
+      setDirtyStaffNames((current) => new Set(current).add(staffName));
+    },
+    [canManage, draftExtras, rowByStaff],
+  );
 
-    setSavingAttendance(true);
-    const baseSalary = Math.max(0, Math.round(Number(editor.staff.salaryDay || editor.row?.halfDaySalary || 0)));
-    const note = attendanceNote.trim();
-    const existingOptionRow = editor.rows.find((row) => getAttendanceStatusOption(row)?.key === option.key);
-    const rowsToReplace =
-      option.key === "leave" || option.key === "absent"
-        ? editor.rows.filter((row) => row.id)
-        : editor.rows.filter((row) => {
-            const rowOptionKey = getAttendanceStatusOption(row)?.key;
-            return row.id && (rowOptionKey === "leave" || rowOptionKey === "absent");
-          });
+  const saveStaffAttendance = React.useCallback(
+    async (staffRow: AttendanceBoardRow) => {
+      if (!canManage || !selectedCategory || savingStaffName) return;
 
-    const deleteResults = rowsToReplace.length
-      ? await Promise.all(rowsToReplace.map((row) => onAction("deleteAttendanceRow", { id: row.id })))
-      : [];
+      setSavingStaffName(staffRow.name);
+      const salaryDay = Math.max(0, Math.round(Number(staffRow.salaryDay || 0)));
+      const staffExtras = getCurrentStaffExtras(staffRow.name);
+      const overtimeAmount = Math.round(staffExtras.overtimeHours * (salaryDay / 8));
+      const selectedRows = weekDates.flatMap((date) => {
+        const draft = getCurrentCellDraft(staffRow.name, date);
 
-    if (deleteResults.some((ok) => ok === false)) {
-      setSavingAttendance(false);
-      return;
-    }
+        return attendanceShiftOptions
+          .filter((option) => draft[option.key])
+          .map((option) => ({
+            projectCode: activeProjectCode,
+            date,
+            week: selectedWeek,
+            shift: option.shift,
+            category: selectedCategory,
+            staffName: staffRow.name,
+            position: staffRow.position || "Nhân công",
+            halfDaySalary: salaryDay,
+            allowance: 0,
+            overtimeHours: 0,
+            overtimeAmount: 0,
+            coefficient: option.coefficient,
+            total: Math.round(salaryDay * option.coefficient),
+            status: option.status,
+          }));
+      });
+      const payloadRows = selectedRows.map((row, index) => ({
+        ...row,
+        allowance: index === 0 ? staffExtras.allowance : 0,
+        overtimeHours: index === 0 ? staffExtras.overtimeHours : 0,
+        overtimeAmount: index === 0 ? overtimeAmount : 0,
+        total: row.total + (index === 0 ? staffExtras.allowance + overtimeAmount : 0),
+      }));
 
-    const payload = {
-      id: option.key === "leave" || option.key === "absent" ? "" : (existingOptionRow?.id ?? ""),
-      projectCode: activeProjectCode,
-      date: existingOptionRow?.date || editor.row?.date || editor.date,
-      week: existingOptionRow?.week || editor.row?.week || selectedWeek,
-      shift: option.shift,
-      category: editor.category,
-      staffName: existingOptionRow?.staffName || editor.row?.staffName || editor.staff.name,
-      position: existingOptionRow?.position || editor.row?.position || editor.staff.position || "Nhân công",
-      halfDaySalary: baseSalary,
-      allowance: 0,
-      overtimeHours: 0,
-      overtimeAmount: 0,
-      coefficient: option.coefficient,
-      total: Math.round(baseSalary * option.coefficient),
-      status: note ? `${option.status} - ${note}` : option.status,
-    };
-    const result = await onAction("saveWeeklyAttendance", payload);
-    setSavingAttendance(false);
+      const result = await onAction("saveStaffWeeklyAttendance", {
+        projectCode: activeProjectCode,
+        week: selectedWeek,
+        category: selectedCategory,
+        staffName: staffRow.name,
+        rows: payloadRows,
+        __returnData: false,
+      });
+      setSavingStaffName("");
 
-    if (result !== false) {
-      const patch = typeof result === "object" && result && "patch" in result ? result.patch : undefined;
-      const savedRows = patch?.attendanceUpsert ?? [];
-      const deletedIds = new Set([...(patch?.attendanceDeleteIds ?? []), ...rowsToReplace.map((row) => row.id)]);
-      const savedIds = new Set(savedRows.map((row) => row.id));
+      if (result !== false) {
+        setDirtyStaffNames((current) => {
+          const next = new Set(current);
+          next.delete(staffRow.name);
+          return next;
+        });
+        setDraftCells((current) => {
+          const next = { ...current };
+          for (const date of weekDates) delete next[attendanceCellKey(staffRow.name, date)];
+          return next;
+        });
+        setDraftExtras((current) => {
+          const next = { ...current };
+          delete next[attendanceStaffKey(staffRow.name)];
+          return next;
+        });
+        setDraftParticipants((current) => current.filter((participant) => participant.staff.name !== staffRow.name));
+      }
+    },
+    [
+      activeProjectCode,
+      canManage,
+      getCurrentCellDraft,
+      getCurrentStaffExtras,
+      onAction,
+      savingStaffName,
+      selectedCategory,
+      selectedWeek,
+      weekDates,
+    ],
+  );
 
-      setEditor((current) =>
-        current
-          ? {
-              ...current,
-              rows: [...current.rows.filter((row) => !deletedIds.has(row.id) && !savedIds.has(row.id)), ...savedRows],
-              row: savedRows[0] ?? (current.row && deletedIds.has(current.row.id) ? undefined : current.row),
-            }
-          : current,
-      );
-      setAttendanceNote("");
-    }
-  }
+  const getStaffWorkdays = React.useCallback(
+    (row: AttendanceBoardRow) => {
+      return countAttendanceWorkdays(weekDates.map((date) => getCurrentCellDraft(row.name, date)));
+    },
+    [getCurrentCellDraft, weekDates],
+  );
 
-  async function deleteCurrentAttendance() {
-    const rowsToDelete = editor?.rows.filter((row) => row.id) ?? [];
-    if (!rowsToDelete.length || savingAttendance) return;
+  const getStaffTotal = React.useCallback(
+    (row: AttendanceBoardRow) => {
+      const salaryDay = Number(row.salaryDay || 0);
+      const extras = getCurrentStaffExtras(row.name);
+      return Math.round(getStaffWorkdays(row) * salaryDay + extras.allowance + extras.overtimeHours * (salaryDay / 8));
+    },
+    [getCurrentStaffExtras, getStaffWorkdays],
+  );
 
-    setSavingAttendance(true);
-    const results = await Promise.all(rowsToDelete.map((row) => onAction("deleteAttendanceRow", { id: row.id })));
-    setSavingAttendance(false);
+  const columns = React.useMemo<DataTableColumn<AttendanceBoardRow>[]>(
+    () => [
+      {
+        key: "staff",
+        label: "Nhân sự",
+        sortable: true,
+        searchable: true,
+        accessor: (row) => `${row.name} ${row.team} ${row.position}`,
+        className: "min-w-56",
+        render: (row) => (
+          <div className="min-w-0">
+            <div className="truncate font-semibold">{row.name}</div>
+            <div className="truncate text-muted-foreground text-xs">
+              {[row.team, row.position].filter(Boolean).join(" · ") || "Nhân công"}
+            </div>
+            <div className="text-emerald-700 text-xs">{formatMoney(row.salaryDay)}/ngày</div>
+          </div>
+        ),
+      },
+      ...weekDates.map<DataTableColumn<AttendanceBoardRow>>((date, index) => ({
+        key: `date-${date}`,
+        label: `${weekDayLabels[index]} ${formatShortDate(date)}`,
+        className: "min-w-32",
+        headerClassName: "text-center",
+        render: (row) => {
+          const draft = getCurrentCellDraft(row.name, date);
 
-    if (results.every((ok) => ok !== false)) {
-      setEditor(null);
-      setAttendanceNote("");
-    }
-  }
+          return (
+            <div className="flex justify-center gap-2">
+              {attendanceShiftOptions.map((option) => (
+                <div
+                  key={option.key}
+                  className="flex h-7 items-center gap-1 rounded-md border bg-background px-2 text-xs"
+                >
+                  <span>{option.shortLabel}</span>
+                  <Checkbox
+                    checked={draft[option.key]}
+                    disabled={!canManage}
+                    onCheckedChange={(checked) => updateCell(row.name, date, option.key, checked === true)}
+                  />
+                </div>
+              ))}
+            </div>
+          );
+        },
+      })),
+      {
+        key: "allowance",
+        label: "Phụ cấp",
+        className: "min-w-32",
+        render: (row) => {
+          const extras = getCurrentStaffExtras(row.name);
+
+          return (
+            <Input
+              disabled={!canManage}
+              min={0}
+              type="number"
+              value={extras.allowance}
+              onChange={(event) => updateStaffExtra(row.name, "allowance", Number(event.target.value))}
+              className="h-8 text-right"
+            />
+          );
+        },
+        exportValue: (row) => getCurrentStaffExtras(row.name).allowance,
+      },
+      {
+        key: "overtimeHours",
+        label: "OT giờ",
+        className: "min-w-28",
+        render: (row) => {
+          const extras = getCurrentStaffExtras(row.name);
+
+          return (
+            <Input
+              disabled={!canManage}
+              min={0}
+              step={0.5}
+              type="number"
+              value={extras.overtimeHours}
+              onChange={(event) => updateStaffExtra(row.name, "overtimeHours", Number(event.target.value))}
+              className="h-8 text-right"
+            />
+          );
+        },
+        exportValue: (row) => getCurrentStaffExtras(row.name).overtimeHours,
+      },
+      {
+        key: "total",
+        label: "Tổng",
+        sortable: true,
+        className: "min-w-32 text-right",
+        headerClassName: "text-right",
+        accessor: (row) => getStaffTotal(row),
+        render: (row) => (
+          <div className="text-right">
+            <Badge variant="outline" className="mb-1 rounded-full">
+              {formatCount(getStaffWorkdays(row))} công
+            </Badge>
+            <div className="font-semibold">{formatMoney(getStaffTotal(row))}</div>
+          </div>
+        ),
+        exportValue: (row) => getStaffTotal(row),
+      },
+      {
+        key: "actions",
+        label: "Thao tác",
+        className: "min-w-24 text-right",
+        headerClassName: "text-right",
+        hideable: false,
+        render: (row) => (
+          <Button
+            size="sm"
+            type="button"
+            disabled={!canManage || !dirtyStaffNames.has(row.name) || Boolean(savingStaffName)}
+            onClick={() => saveStaffAttendance(row)}
+          >
+            <Check />
+            {savingStaffName === row.name ? "Đang lưu" : "Lưu"}
+          </Button>
+        ),
+      },
+    ],
+    [
+      canManage,
+      dirtyStaffNames,
+      getCurrentCellDraft,
+      getCurrentStaffExtras,
+      getStaffTotal,
+      getStaffWorkdays,
+      saveStaffAttendance,
+      savingStaffName,
+      updateCell,
+      updateStaffExtra,
+      weekDates,
+    ],
+  );
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3 xl:flex-row xl:items-end xl:justify-between">
-        <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+        <div className="grid gap-3 sm:grid-cols-[160px_224px]">
           <div className="space-y-1.5">
             <div className="font-medium text-muted-foreground text-xs">Tuần</div>
             <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-              <SelectTrigger className="h-9 w-full sm:w-40">
+              <SelectTrigger className="h-9 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -657,28 +787,11 @@ function AttendanceBoard({
           <div className="space-y-1.5">
             <div className="font-medium text-muted-foreground text-xs">Hạng mục</div>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="h-9 w-full sm:w-48">
-                <SelectValue />
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue placeholder="Chọn hạng mục" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={allFilterValue}>Tất cả hạng mục</SelectItem>
                 {categoryOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <div className="font-medium text-muted-foreground text-xs">Ca</div>
-            <Select value={selectedShift} onValueChange={setSelectedShift}>
-              <SelectTrigger className="h-9 w-full sm:w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={allFilterValue}>Tất cả ca</SelectItem>
-                {normalizedShiftOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -688,20 +801,20 @@ function AttendanceBoard({
           </div>
         </div>
 
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end xl:w-auto xl:justify-end">
-          <div className="w-full space-y-1.5 sm:w-80">
+        <div className="grid w-full gap-2 sm:grid-cols-[minmax(16rem,20rem)_auto] sm:items-end xl:w-auto xl:justify-end">
+          <div className="w-full space-y-1.5">
             <div className="font-medium text-muted-foreground text-xs">Thêm nhân công</div>
             <StaffSearchCombobox
               value={selectedStaffName}
               onValueChange={setSelectedStaffName}
               options={availableStaff}
-              disabled={!canManage || availableStaff.length === 0}
+              disabled={!canManage || availableStaff.length === 0 || !selectedCategory}
             />
           </div>
           <Button
             type="button"
             size="sm"
-            disabled={!canManage || !selectedStaffName || !currentCategory || !currentShift}
+            disabled={!canManage || !selectedStaffName || !selectedCategory}
             onClick={addParticipant}
             className="h-9"
           >
@@ -711,246 +824,17 @@ function AttendanceBoard({
         </div>
       </div>
 
-      <ScrollArea className="max-h-[min(68svh,640px)] max-w-full rounded-md border bg-background [&>[data-slot=scroll-area-viewport]]:max-h-[min(68svh,640px)]">
-        <div className="grid min-w-0 grid-cols-[minmax(11rem,14rem)_minmax(0,1fr)_6.75rem] sm:grid-cols-[16rem_minmax(0,1fr)_8rem]">
-          <div className="z-20 border-r bg-background">
-            <div className="sticky top-0 z-30 flex h-11 items-center border-b bg-muted/40 px-3 font-medium text-sm">
-              Nhân sự
-            </div>
-            {loading ? (
-              Array.from({ length: 6 }, (_, index) => `staff-loading-${index}`).map((key) => (
-                <div key={key} className="flex h-[5.25rem] items-center border-b px-3 last:border-b-0">
-                  <div className="h-12 w-full animate-pulse rounded-lg bg-muted" />
-                </div>
-              ))
-            ) : boardRows.length === 0 ? (
-              <div className="h-40" />
-            ) : (
-              boardRows.map((staffRow) => (
-                <div
-                  key={staffRow.id || staffRow.name}
-                  className="flex h-[5.25rem] items-center border-b px-3 last:border-b-0"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold">{staffRow.name}</div>
-                    <div className="truncate text-muted-foreground text-xs">
-                      {[staffRow.team, staffRow.position].filter(Boolean).join(" · ") || "Nhân công"}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <ScrollArea className="h-full min-w-0">
-            <div className="min-w-[42rem] sm:min-w-[56rem]">
-              <div
-                className="sticky top-0 z-20 grid h-11 border-b bg-muted/40"
-                style={{ gridTemplateColumns: `repeat(${weekDates.length}, minmax(6rem, 1fr))` }}
-              >
-                {weekDates.map((date, index) => (
-                  <div
-                    key={date}
-                    className="flex flex-col items-center justify-center border-r px-2 text-center last:border-r-0"
-                  >
-                    <div className="font-semibold text-foreground text-sm">{weekDayLabels[index]}</div>
-                    <div className="text-muted-foreground text-xs">{formatShortDate(date)}</div>
-                  </div>
-                ))}
-              </div>
-
-              {loading ? (
-                Array.from({ length: 6 }, (_, index) => `attendance-loading-${index}`).map((key) => (
-                  <div
-                    key={key}
-                    className="grid h-[5.25rem] border-b last:border-b-0"
-                    style={{ gridTemplateColumns: `repeat(${weekDates.length}, minmax(6rem, 1fr))` }}
-                  >
-                    {weekDates.map((date) => (
-                      <div key={date} className="flex items-center justify-center border-r px-2 last:border-r-0">
-                        <div className="h-16 w-22 animate-pulse rounded-xl bg-muted sm:w-28" />
-                      </div>
-                    ))}
-                  </div>
-                ))
-              ) : boardRows.length === 0 ? (
-                <div className="grid h-40 place-items-center px-4 text-center">
-                  <div className="max-w-sm rounded-xl border border-dashed bg-muted/30 px-4 py-6 text-muted-foreground">
-                    Chưa có nhân công trong tuần này. Chọn nhân công rồi thêm vào bảng chấm công.
-                  </div>
-                </div>
-              ) : (
-                boardRows.map((staffRow) => {
-                  const staffCells = weekDates.map((date) => rowByCell.get(`${staffRow.name}::${date}`) ?? []);
-
-                  return (
-                    <div
-                      key={staffRow.id || staffRow.name}
-                      className="grid h-[5.25rem] border-b last:border-b-0"
-                      style={{ gridTemplateColumns: `repeat(${weekDates.length}, minmax(6rem, 1fr))` }}
-                    >
-                      {weekDates.map((date, index) => {
-                        const cellRows = staffCells[index];
-                        const cellState = getAttendanceCellState(cellRows);
-                        const hasRows = cellRows.length > 0;
-
-                        return (
-                          <div
-                            key={date}
-                            className="flex items-center justify-center border-r px-2 text-center last:border-r-0"
-                          >
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              disabled={!canManage}
-                              onClick={() => openEditor(staffRow, date, cellRows)}
-                              className={cn(
-                                "h-16 w-22 flex-col gap-1 rounded-xl border px-2 py-2 font-semibold shadow-none transition-transform hover:-translate-y-0.5 sm:w-28",
-                                hasRows && cellState
-                                  ? cellState.className
-                                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60",
-                              )}
-                            >
-                              {hasRows ? (
-                                <>
-                                  <span className="text-base">{cellState?.label}</span>
-                                  <span className="text-[11px]">{cellState?.detail}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="text-base">-</span>
-                                  {canManage ? <span className="text-[11px]">Chấm nhanh</span> : null}
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </ScrollArea>
-
-          <div className="z-20 border-l bg-background">
-            <div className="sticky top-0 z-30 flex h-11 items-center justify-end border-b bg-muted/40 px-3 font-medium text-sm">
-              Tổng
-            </div>
-            {loading ? (
-              Array.from({ length: 6 }, (_, index) => `total-loading-${index}`).map((key) => (
-                <div key={key} className="flex h-[5.25rem] items-center justify-end border-b px-3 last:border-b-0">
-                  <div className="h-12 w-full animate-pulse rounded-lg bg-muted" />
-                </div>
-              ))
-            ) : boardRows.length === 0 ? (
-              <div className="h-40" />
-            ) : (
-              boardRows.map((staffRow) => {
-                const staffCells = weekDates.map((date) => rowByCell.get(`${staffRow.name}::${date}`) ?? []);
-                const staffTotal = staffCells.flat().reduce((sum, row) => sum + Number(row.total || 0), 0);
-                const staffWorkdays = staffCells.flat().reduce((sum, row) => sum + Number(row.coefficient || 0), 0);
-
-                return (
-                  <div
-                    key={staffRow.id || staffRow.name}
-                    className="flex h-[5.25rem] flex-col items-end justify-center border-b px-3 text-right last:border-b-0"
-                  >
-                    <Badge
-                      variant="outline"
-                      className="mb-1 rounded-full border-orange-200 bg-orange-50 text-orange-700"
-                    >
-                      {formatCount(staffWorkdays)} công
-                    </Badge>
-                    <div className="font-semibold">{formatMoney(staffTotal)}</div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </ScrollArea>
-
-      {editor ? (
-        <Dialog
-          open={Boolean(editor)}
-          onOpenChange={(open) => {
-            if (!open) {
-              setEditor(null);
-              setAttendanceNote("");
-            }
-          }}
-        >
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Chấm công nhanh</DialogTitle>
-              <DialogDescription>
-                {editor.staff.name} · {formatShortDate(editor.date)} · {editor.category}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid gap-2 sm:grid-cols-2">
-              {attendanceStatusOptions.map((option) => {
-                const isSelected = editor.rows.some((row) => getAttendanceStatusOption(row)?.key === option.key);
-
-                return (
-                  <Button
-                    key={option.key}
-                    type="button"
-                    variant="outline"
-                    disabled={savingAttendance}
-                    onClick={() => saveAttendanceStatus(option)}
-                    className={cn(
-                      "h-auto justify-between rounded-xl border p-3 text-left shadow-none transition-transform hover:-translate-y-0.5",
-                      isSelected ? `shadow-sm ring-2 ${option.activeClassName}` : option.className,
-                    )}
-                  >
-                    <span className="flex items-start gap-2">
-                      {isSelected ? <Check className="mt-0.5 size-4 shrink-0" /> : null}
-                      <span>
-                        <span className="block font-semibold">{option.label}</span>
-                        <span className="block text-xs opacity-80">Hệ số: {formatCount(option.coefficient)}</span>
-                      </span>
-                    </span>
-                    <Badge variant={isSelected ? "default" : "secondary"} className="rounded-md">
-                      {isSelected ? "Đã chấm" : option.helper}
-                    </Badge>
-                  </Button>
-                );
-              })}
-            </div>
-
-            <div className="space-y-2">
-              <div className="font-medium text-sm">Ghi chú vụ việc nếu có</div>
-              <Textarea
-                value={attendanceNote}
-                onChange={(event) => setAttendanceNote(event.target.value)}
-                placeholder="Ví dụ: đi trễ, nghỉ ốm, tăng ca dọn xà bần..."
-              />
-            </div>
-
-            <DialogFooter className="justify-between sm:justify-between">
-              <div>
-                {editor.rows.length > 0 ? (
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    disabled={savingAttendance}
-                    onClick={deleteCurrentAttendance}
-                  >
-                    {editor.rows.length > 1 ? `Xóa ${editor.rows.length} dòng` : "Xóa chấm công"}
-                  </Button>
-                ) : null}
-              </div>
-              <DialogClose asChild>
-                <Button type="button" variant="outline" disabled={savingAttendance}>
-                  Đóng
-                </Button>
-              </DialogClose>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      ) : null}
+      <DataTable
+        columns={columns}
+        rows={boardRows}
+        getRowId={(row) => row.id || row.name}
+        loading={loading}
+        pageSize={10}
+        empty={selectedCategory ? "Chưa có nhân công trong tuần này." : "Chọn hạng mục để chấm công."}
+        searchPlaceholder="Tìm nhân công..."
+        exportFileName="cham-cong-nhan-cong"
+        enableRowDetails={false}
+      />
     </div>
   );
 }
@@ -1046,8 +930,15 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
           { name: "team", label: "Đội" },
           { name: "position", label: "Chức vụ" },
           { name: "salaryDay", label: "Lương/ngày", type: "number" },
-          { name: "offDate", label: "Thời gian nghỉ", type: "date", validate: validateStaffOffDate },
           { name: "resigned", label: "Đã nghỉ việc", type: "checkbox" },
+          {
+            name: "offDate",
+            label: "Thời gian nghỉ",
+            type: "date",
+            validate: validateStaffOffDate,
+            visibleWhen: shouldShowStaffOffDate,
+            defaultValueWhen: defaultStaffOffDate,
+          },
         ]}
       />
     ),
@@ -1112,7 +1003,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
       description: "Ghi nhận chấm công theo tuần, hạng mục và thực hiện khóa hoặc mở kết sổ khi cần.",
       content: (
         <div className="space-y-6">
-          <SectionBlock title="Bảng chấm công tuần">
+          <div className="space-y-3">
             <AttendanceBoard
               rows={scoped.attendance}
               staff={data.staff}
@@ -1123,7 +1014,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
               loading={isSwitchingProject}
               onAction={runAction}
             />
-          </SectionBlock>
+          </div>
         </div>
       ),
     },
@@ -1182,14 +1073,16 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                                 { name: "team", label: "Đội", value: row.team },
                                 { name: "position", label: "Chức vụ", value: row.position },
                                 { name: "salaryDay", label: "Lương/ngày", type: "number", value: row.salaryDay },
+                                { name: "resigned", label: "Đã nghỉ việc", type: "checkbox", value: row.resigned },
                                 {
                                   name: "offDate",
                                   label: "Thời gian nghỉ",
                                   type: "date",
                                   value: row.offDate,
                                   validate: validateStaffOffDate,
+                                  visibleWhen: shouldShowStaffOffDate,
+                                  defaultValueWhen: defaultStaffOffDate,
                                 },
-                                { name: "resigned", label: "Đã nghỉ việc", type: "checkbox", value: row.resigned },
                               ],
                             }}
                           />
@@ -1306,7 +1199,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
       title: "Tiến độ hạng mục",
       description: "Theo dõi kế hoạch và ngày hoàn thành xác nhận của từng hạng mục trong công trình.",
       content: (
-        <SectionBlock title="Tiến độ">
+        <div className="space-y-3">
           <DataTable
             loading={isSwitchingProject}
             columns={[
@@ -1430,7 +1323,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             filters={[{ key: "category", label: "Hạng mục", options: progressCategoryOptions }]}
             initialSorting={[{ id: "startDate", desc: true }]}
           />
-        </SectionBlock>
+        </div>
       ),
     },
   } satisfies Record<

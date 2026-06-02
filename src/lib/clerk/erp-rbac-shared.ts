@@ -131,27 +131,10 @@ export type RoleAccessContext = {
   hasPermission?: ((permission: string) => boolean) | null;
 };
 
-const LEGACY_MEMBER_FULL_ACCESS = new Set<ErpPermissionKey>([
-  ERP_PERMISSIONS.overviewRead,
-  ERP_PERMISSIONS.reportsRead,
-  ERP_PERMISSIONS.crmRead,
-  ERP_PERMISSIONS.crmManage,
-  ERP_PERMISSIONS.materialsRead,
-  ERP_PERMISSIONS.materialsManage,
-  ERP_PERMISSIONS.workforceRead,
-  ERP_PERMISSIONS.workforceManage,
-  ERP_PERMISSIONS.subcontractorsRead,
-  ERP_PERMISSIONS.subcontractorsManage,
-  ERP_PERMISSIONS.documentsRead,
-  ERP_PERMISSIONS.documentsManage,
-  ERP_PERMISSIONS.catalogsRead,
-  ERP_PERMISSIONS.catalogsManage,
-]);
-
 export function canAccessClerkPermission(
   context: RoleAccessContext,
   permission: ErpPermissionKey,
-  options?: { allowLegacyMember?: boolean },
+  _options?: { allowLegacyMember?: boolean },
 ) {
   if (!context.orgRole) {
     return permission !== ERP_PERMISSIONS.rolesManage;
@@ -163,10 +146,6 @@ export function canAccessClerkPermission(
 
   if (context.hasPermission?.(permission)) {
     return true;
-  }
-
-  if (options?.allowLegacyMember !== false && context.orgRole === "org:member") {
-    return LEGACY_MEMBER_FULL_ACCESS.has(permission);
   }
 
   return false;

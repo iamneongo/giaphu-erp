@@ -40,9 +40,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { readActiveProjectCode } from "@/lib/giaphu-erp/project-context";
 import { getProjectRouteInfo, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,8 @@ export interface DataTableColumn<T> {
   exportValue?: (row: T) => string | number;
   className?: string;
   headerClassName?: string;
+  cellClassName?: string;
+  headerCellClassName?: string;
   sortable?: boolean;
   searchable?: boolean;
   hideable?: boolean;
@@ -753,16 +756,20 @@ export function DataTable<T>({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-md border">
-        <Table>
+      <ScrollArea className="w-full rounded-md border pb-2">
+        <table data-slot="table" className="w-full min-w-max caption-bottom text-sm">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
+                {headerGroup.headers.map((header) => {
+                  const column = normalizedColumns.find((item) => item.key === header.column.id);
+
+                  return (
+                    <TableHead key={header.id} className={column?.headerCellClassName}>
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>
@@ -789,9 +796,15 @@ export function DataTable<T>({
                     if (href) router.push(href);
                   }}
                 >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                  ))}
+                  {row.getVisibleCells().map((cell) => {
+                    const column = normalizedColumns.find((item) => item.key === cell.column.id);
+
+                    return (
+                      <TableCell key={cell.id} className={column?.cellClassName}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ))
             ) : (
@@ -802,8 +815,8 @@ export function DataTable<T>({
               </TableRow>
             )}
           </TableBody>
-        </Table>
-      </div>
+        </table>
+      </ScrollArea>
 
       <div className="flex flex-col gap-4 p-1 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-muted-foreground text-sm">

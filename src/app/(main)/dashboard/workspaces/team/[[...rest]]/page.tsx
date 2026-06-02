@@ -10,7 +10,7 @@ import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-
 import { TeamManager } from "../../_components/team-manager";
 
 export const metadata = {
-  title: "Phân quyền | Gia Phú ERP",
+  title: "Thành viên | Gia Phú ERP",
 };
 
 export default async function Page() {
@@ -29,7 +29,7 @@ export default async function Page() {
     return (
       <div className="flex flex-col gap-4 md:gap-6">
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Thành viên và phân quyền</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Thành viên</h1>
         </div>
         <Card className="max-w-2xl">
           <CardHeader className="border-b">
@@ -53,7 +53,7 @@ export default async function Page() {
     return (
       <div className="flex flex-col gap-4 md:gap-6">
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Thành viên và phân quyền</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Thành viên</h1>
         </div>
         <Card className="max-w-2xl">
           <CardHeader className="border-b">

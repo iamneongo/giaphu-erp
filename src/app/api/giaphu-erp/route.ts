@@ -36,6 +36,7 @@ import {
   savePayment,
   saveProgress,
   saveProject,
+  saveStaffWeeklyAttendance,
   saveSubcontractor,
   saveSubcontractorContract,
   saveWeeklyAttendance,
@@ -242,6 +243,13 @@ export async function POST(request: Request) {
       case "saveWeeklyAttendance": {
         const rows = await saveWeeklyAttendance(payload);
         return NextResponse.json({ status: "success", patch: { attendanceUpsert: rows } });
+      }
+      case "saveStaffWeeklyAttendance": {
+        const { savedRows, deletedIds } = await saveStaffWeeklyAttendance(payload);
+        return NextResponse.json({
+          status: "success",
+          patch: { attendanceUpsert: savedRows, attendanceDeleteIds: deletedIds },
+        });
       }
       case "deleteAttendanceRow": {
         const ids = await deleteAttendanceRow(payload);
