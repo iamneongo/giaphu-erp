@@ -1,13 +1,13 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
 import { Banknote, BriefcaseBusiness, FileText, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type { ContractRow, PaymentRow, ProjectRow } from "@/lib/giaphu-erp/types";
 
+import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { todayIso } from "../_lib/date-utils";
@@ -24,7 +24,6 @@ type CrmSection = "projects" | "contracts" | "payments";
 export function CrmWorkspace({ section = "projects" }: { section?: CrmSection }) {
   const { data, activeProject, activeProjectCode, isSwitchingProject, setActiveProjectCode, runAction, scoped } =
     useGiaPhuErp();
-  const { has, orgRole } = useAuth();
   const paginatedProjects = usePaginatedErpRows<ProjectRow>({
     dataset: "projects",
     projectCode: "",
@@ -42,14 +41,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
   });
   const projectStatusOptions = uniqueOptions(data.projects.map((project) => project.status));
   const projectOwnerOptions = uniqueOptions(data.projects.map((project) => project.owner));
-  const canManage = canAccessClerkPermission(
-    {
-      orgRole,
-      hasRole: (role) => has?.({ role }) ?? false,
-      hasPermission: (permission) => has?.({ permission }) ?? false,
-    },
-    ERP_PERMISSIONS.crmManage,
-  );
+  const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.crmManage);
 
   if (!data.projects.length) {
     return null;

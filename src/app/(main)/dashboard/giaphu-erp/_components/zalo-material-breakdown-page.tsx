@@ -5,7 +5,6 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { useAuth } from "@clerk/nextjs";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -48,10 +47,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type { MaterialRow, MaterialType } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
+import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, isoWeekFromDate, todayIso } from "../_lib/date-utils";
@@ -503,7 +503,6 @@ export function ZaloMaterialBreakdownPage({
 }: ZaloMaterialBreakdownPageProps = {}) {
   const pathname = usePathname();
   const { activeProjectCode, data, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
-  const { has, orgRole } = useAuth();
   const materialTypeChoices = React.useMemo(() => {
     if (!allowedMaterialTypes?.length) return zaloMaterialTypeOptions;
     const choices = zaloMaterialTypeOptions.filter((option) => allowedMaterialTypes.includes(option.value));
@@ -520,14 +519,7 @@ export function ZaloMaterialBreakdownPage({
   const [rejected, setRejected] = React.useState<ParsedZalo["rejected"]>([]);
   const [zaloDialogOpen, setZaloDialogOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
-  const canManage = canAccessClerkPermission(
-    {
-      orgRole,
-      hasRole: (role) => has?.({ role }) ?? false,
-      hasPermission: (permission) => has?.({ permission }) ?? false,
-    },
-    ERP_PERMISSIONS.materialsManage,
-  );
+  const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.materialsManage);
   const resolvedBackHref =
     backHref ?? (pathname.replace(/\/(?:create|zalo)\/?$/, "") || "/dashboard/giaphu-erp/catalogs/vat-tu");
   const categorySelectOptions = catalogOptions(data.catalogs.hangMuc);

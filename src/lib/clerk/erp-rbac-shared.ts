@@ -129,6 +129,7 @@ export type RoleAccessContext = {
   orgRole?: string | null;
   hasRole?: ((role: string) => boolean) | null;
   hasPermission?: ((permission: string) => boolean) | null;
+  permissionKeys?: Iterable<string> | null;
 };
 
 export function canAccessClerkPermission(
@@ -136,16 +137,20 @@ export function canAccessClerkPermission(
   permission: ErpPermissionKey,
   _options?: { allowLegacyMember?: boolean },
 ) {
-  if (!context.orgRole) {
-    return permission !== ERP_PERMISSIONS.rolesManage;
-  }
-
   if (context.hasRole?.("org:admin")) {
     return true;
   }
 
   if (context.hasPermission?.(permission)) {
     return true;
+  }
+
+  if (context.permissionKeys) {
+    return new Set(context.permissionKeys).has(permission);
+  }
+
+  if (!context.orgRole) {
+    return permission !== ERP_PERMISSIONS.rolesManage;
   }
 
   return false;

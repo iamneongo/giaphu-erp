@@ -11,6 +11,7 @@ import type {
   GiaPhuDashboardData,
   GiaPhuOverviewInsights,
   GiaPhuPagedDataset,
+  GiaPhuReportsData,
   GiaPhuReportsInsights,
   LaborNormRow,
   MaterialRow,
@@ -18,6 +19,7 @@ import type {
   PaymentRow,
   ProgressRow,
   ProjectRow,
+  ReportTableState,
   StaffRow,
   SubcontractorContractRow,
   SubcontractorRow,
@@ -1329,6 +1331,355 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
         ? (overview.headline.collectedCash / overview.headline.contractValue) * 100
         : 0,
       costCoverage: totalCost ? (overview.headline.collectedCash / totalCost) * 100 : 0,
+    },
+  };
+}
+
+function normalizeReportTableState(state?: ReportTableState) {
+  return {
+    pageIndex: normalizePageIndex(state?.pageIndex),
+    pageSize: normalizePageSize(state?.pageSize),
+    search: text(state?.search).trim(),
+    filters: state?.filters ?? {},
+  };
+}
+
+function reportFilterValue(state: ReturnType<typeof normalizeReportTableState>, key: string) {
+  const value = text(state.filters[key]).trim();
+  return value && value !== "__all" ? value : "";
+}
+
+function optionsFromValues(values: unknown) {
+  return Array.isArray(values)
+    ? values
+        .map((value) => text(value).trim())
+        .filter(Boolean)
+        .map((value) => ({ label: value, value }))
+    : [];
+}
+
+function reportPagedResult<T>(
+  rows: Row[],
+  state: ReturnType<typeof normalizeReportTableState>,
+  mapper: (row: Row) => T,
+  filterOptions: GiaPhuFilterOptionsResult,
+) {
+  return {
+    rows: rows.map(mapper),
+    total: number(rows[0]?.__total),
+    pageIndex: state.pageIndex,
+    pageSize: state.pageSize,
+    filterOptions,
+  };
+}
+
+function emptyReportsInsights(monthlyKeys: string[]): GiaPhuReportsInsights {
+  return {
+    breakdown: [],
+    monthly: monthlyKeys.map(emptyMonthlyPoint),
+    weekly: [],
+    categorySpend: [],
+    headline: {
+      totalCost: 0,
+      contractValue: 0,
+      collectedCash: 0,
+      unpaidMaterials: 0,
+      materialMainCost: 0,
+      laborCost: 0,
+      operationCost: 0,
+      contractCoverage: 0,
+      costCoverage: 0,
+    },
+  };
+}
+
+export async function getGiaPhuReportsData(
+  options: {
+    activeProjectCode?: string;
+    tables?: {
+      labor?: ReportTableState;
+      materials?: ReportTableState;
+      operations?: ReportTableState;
+    };
+  } = {},
+): Promise<GiaPhuReportsData> {
+  const sql = getSql();
+  const activeProjectCode = await resolveActiveProjectCode(options.activeProjectCode);
+  const monthlyKeys = lastMonthKeys(8);
+  const laborState = normalizeReportTableState(options.tables?.labor);
+  const materialState = normalizeReportTableState(options.tables?.materials);
+  const operationState = normalizeReportTableState(options.tables?.operations);
+
+  if (!activeProjectCode) {
+    const emptyTable = {
+      rows: [],
+      total: 0,
+      pageIndex: 0,
+      pageSize: 10,
+      filterOptions: {},
+    };
+
+    return {
+      activeProjectCode: "",
+      insights: emptyReportsInsights(monthlyKeys),
+      tables: {
+        labor: emptyTable,
+        materials: emptyTable,
+        operations: emptyTable,
+      },
+    };
+  }
+
+  const laborOffset = laborState.pageIndex * laborState.pageSize;
+  const materialOffset = materialState.pageIndex * materialState.pageSize;
+  const operationOffset = operationState.pageIndex * operationState.pageSize;
+  const laborPattern = `%${laborState.search}%`;
+  const materialPattern = `%${materialState.search}%`;
+  const operationPattern = `%${operationState.search}%`;
+  const laborWeekFilter = reportFilterValue(laborState, "week");
+  const laborCategoryFilter = reportFilterValue(laborState, "category");
+  const laborStaffFilter = reportFilterValue(laborState, "staffName");
+  const laborPositionFilter = reportFilterValue(laborState, "position");
+  const materialWeekFilter = reportFilterValue(materialState, "week");
+  const materialCategoryFilter = reportFilterValue(materialState, "category");
+  const materialSupplierFilter = reportFilterValue(materialState, "supplier");
+  const operationWeekFilter = reportFilterValue(operationState, "week");
+
+  const laborWhere = sql`
+    project_code = ${activeProjectCode}
+    ${laborState.search ? sql`and lower(concat_ws(' ', week, shift, category, staff_name, position, status)) like lower(${laborPattern})` : sql``}
+    ${laborWeekFilter ? sql`and week = ${laborWeekFilter}` : sql``}
+    ${laborCategoryFilter ? sql`and category = ${laborCategoryFilter}` : sql``}
+    ${laborStaffFilter ? sql`and staff_name = ${laborStaffFilter}` : sql``}
+    ${laborPositionFilter ? sql`and position = ${laborPositionFilter}` : sql``}
+  `;
+  const materialWhere = sql`
+    project_code = ${activeProjectCode}
+    and material_type = 'VT Chính'
+    ${materialState.search ? sql`and lower(concat_ws(' ', week, shift, category, material_code, material_name, unit, debt, status, payment_status, payment_info, supplier)) like lower(${materialPattern})` : sql``}
+    ${materialWeekFilter ? sql`and week = ${materialWeekFilter}` : sql``}
+    ${materialCategoryFilter ? sql`and category = ${materialCategoryFilter}` : sql``}
+    ${materialSupplierFilter ? sql`and supplier = ${materialSupplierFilter}` : sql``}
+  `;
+  const operationWhere = sql`
+    project_code = ${activeProjectCode}
+    ${operationState.search ? sql`and lower(concat_ws(' ', week, description)) like lower(${operationPattern})` : sql``}
+    ${operationWeekFilter ? sql`and week = ${operationWeekFilter}` : sql``}
+  `;
+
+  const [
+    materialTypeRows,
+    laborTotalRows,
+    operationTotalRows,
+    contractRows,
+    paymentRows,
+    unpaidRows,
+    monthlyMaterialRows,
+    monthlyLaborRows,
+    monthlyOperationRows,
+    monthlyPaymentRows,
+    weeklyMaterialRows,
+    weeklyLaborRows,
+    weeklyOperationRows,
+    categoryMaterialRows,
+    categoryLaborRows,
+    categoryOperationRows,
+    laborRows,
+    materialRows,
+    operationRows,
+    laborOptionRows,
+    materialOptionRows,
+    operationOptionRows,
+  ] = await Promise.all([
+    sql`select material_type, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where project_code = ${activeProjectCode} group by material_type`,
+    sql`select count(*)::int as rows, coalesce(sum(total), 0)::float8 as value from gp_attendance where project_code = ${activeProjectCode}`,
+    sql`select count(*)::int as rows, coalesce(sum(amount), 0)::float8 as value from gp_operations where project_code = ${activeProjectCode}`,
+    sql`select coalesce(sum(value), 0)::float8 as total from gp_contracts where project_code = ${activeProjectCode}`,
+    sql`select coalesce(sum(amount), 0)::float8 as total from gp_payments where project_code = ${activeProjectCode}`,
+    sql`select coalesce(sum(quantity * price), 0)::float8 as total from gp_materials where project_code = ${activeProjectCode} and payment_status <> 'Đã TT'`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_operations where project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(payment_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_payments where project_code = ${activeProjectCode} group by 1`,
+    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
+    sql`select week, coalesce(sum(total), 0)::float8 as labor from gp_attendance where project_code = ${activeProjectCode} group by 1`,
+    sql`select week, coalesce(sum(amount), 0)::float8 as operations from gp_operations where project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(description, 'Khác') as category, coalesce(sum(amount), 0)::float8 as operations from gp_operations where project_code = ${activeProjectCode} group by 1`,
+    sql`
+      select *, count(*) over()::int as __total
+      from gp_attendance
+      where ${laborWhere}
+      order by coalesce(work_date, created_at::date) desc, id desc
+      limit ${laborState.pageSize}
+      offset ${laborOffset}
+    `,
+    sql`
+      select *, count(*) over()::int as __total
+      from gp_materials
+      where ${materialWhere}
+      order by coalesce(work_date, created_at::date) desc, id desc
+      limit ${materialState.pageSize}
+      offset ${materialOffset}
+    `,
+    sql`
+      select *, count(*) over()::int as __total
+      from gp_operations
+      where ${operationWhere}
+      order by coalesce(work_date, created_at::date) desc, id desc
+      limit ${operationState.pageSize}
+      offset ${operationOffset}
+    `,
+    sql`
+      select
+        ARRAY(select distinct week from gp_attendance where project_code = ${activeProjectCode} and week <> '' order by week desc limit 300) as week,
+        ARRAY(select distinct category from gp_attendance where project_code = ${activeProjectCode} and category <> '' order by category asc limit 300) as category,
+        ARRAY(select distinct staff_name from gp_attendance where project_code = ${activeProjectCode} and staff_name <> '' order by staff_name asc limit 300) as staff_name,
+        ARRAY(select distinct position from gp_attendance where project_code = ${activeProjectCode} and position <> '' order by position asc limit 300) as position
+    `,
+    sql`
+      select
+        ARRAY(select distinct week from gp_materials where project_code = ${activeProjectCode} and material_type = 'VT Chính' and week <> '' order by week desc limit 300) as week,
+        ARRAY(select distinct category from gp_materials where project_code = ${activeProjectCode} and material_type = 'VT Chính' and category <> '' order by category asc limit 300) as category,
+        ARRAY(select distinct supplier from gp_materials where project_code = ${activeProjectCode} and material_type = 'VT Chính' and supplier <> '' order by supplier asc limit 300) as supplier
+    `,
+    sql`
+      select ARRAY(select distinct week from gp_operations where project_code = ${activeProjectCode} and week <> '' order by week desc limit 300) as week
+    `,
+  ]);
+
+  const monthlyMap = new Map(monthlyKeys.map((month) => [month, emptyMonthlyPoint(month)]));
+  const addMonthly = (rows: unknown, key: "materials" | "labor" | "operations" | "cashIn") => {
+    for (const row of rows as Row[]) {
+      const entry = monthlyMap.get(text(row.month));
+      if (entry) entry[key] += number(row.value);
+    }
+  };
+  addMonthly(monthlyMaterialRows, "materials");
+  addMonthly(monthlyLaborRows, "labor");
+  addMonthly(monthlyOperationRows, "operations");
+  addMonthly(monthlyPaymentRows, "cashIn");
+
+  const weeklyMap = new Map<
+    string,
+    { week: string; materials: number; labor: number; subcontractors: number; operations: number; total: number }
+  >();
+  const ensureWeek = (week: unknown) => {
+    const key = normalizeWeek(week);
+    const current = weeklyMap.get(key) ?? {
+      week: key,
+      materials: 0,
+      labor: 0,
+      subcontractors: 0,
+      operations: 0,
+      total: 0,
+    };
+    weeklyMap.set(key, current);
+    return current;
+  };
+  for (const row of weeklyMaterialRows as Row[]) ensureWeek(row.week).materials += number(row.materials);
+  for (const row of weeklyLaborRows as Row[]) ensureWeek(row.week).labor += number(row.labor);
+  for (const row of weeklyOperationRows as Row[]) ensureWeek(row.week).operations += number(row.operations);
+  const weekly = [...weeklyMap.values()]
+    .map((row) => ({ ...row, total: row.materials + row.labor + row.operations }))
+    .sort((a, b) => compareWeekDesc(a.week, b.week))
+    .slice(0, 8)
+    .reverse();
+
+  const categoryMap = new Map<
+    string,
+    { category: string; total: number; materials: number; labor: number; subcontractors: number; operations: number }
+  >();
+  const ensureCategory = (category: string) => {
+    const key = category || "Khác";
+    const current = categoryMap.get(key) ?? {
+      category: key,
+      total: 0,
+      materials: 0,
+      labor: 0,
+      subcontractors: 0,
+      operations: 0,
+    };
+    categoryMap.set(key, current);
+    return current;
+  };
+  for (const row of categoryMaterialRows as Row[]) {
+    const entry = ensureCategory(text(row.category));
+    entry.materials += number(row.materials);
+    entry.total += number(row.materials);
+  }
+  for (const row of categoryLaborRows as Row[]) {
+    const entry = ensureCategory(text(row.category));
+    entry.labor += number(row.labor);
+    entry.total += number(row.labor);
+  }
+  for (const row of categoryOperationRows as Row[]) {
+    const entry = ensureCategory(text(row.category));
+    entry.operations += number(row.operations);
+    entry.total += number(row.operations);
+  }
+
+  const materialMainCost = (materialTypeRows as Row[])
+    .filter((row) => text(row.material_type) === "VT Chính")
+    .reduce((sum, row) => sum + number(row.value), 0);
+  const laborCost = number((laborTotalRows as Row[])[0]?.value);
+  const operationCost = number((operationTotalRows as Row[])[0]?.value);
+  const totalCost = materialMainCost + laborCost + operationCost;
+  const contractValue = number((contractRows as Row[])[0]?.total);
+  const collectedCash = number((paymentRows as Row[])[0]?.total);
+  const reportCostRows = [
+    { key: "materials", label: "VT Chính", value: materialMainCost, rows: 0 },
+    { key: "labor", label: "Nhân công", value: laborCost, rows: number((laborTotalRows as Row[])[0]?.rows) },
+    {
+      key: "operations",
+      label: "Vận hành",
+      value: operationCost,
+      rows: number((operationTotalRows as Row[])[0]?.rows),
+    },
+  ];
+  const breakdown = reportCostRows.map((row) => ({
+    ...row,
+    share: totalCost ? (row.value / totalCost) * 100 : 0,
+  }));
+  const [laborOptions = {}] = laborOptionRows as Row[];
+  const [materialOptions = {}] = materialOptionRows as Row[];
+  const [operationOptions = {}] = operationOptionRows as Row[];
+
+  return {
+    activeProjectCode,
+    insights: {
+      breakdown,
+      monthly: monthlyKeys.map((month) => monthlyMap.get(month) ?? emptyMonthlyPoint(month)),
+      weekly,
+      categorySpend: [...categoryMap.values()].sort((a, b) => b.total - a.total).slice(0, 8),
+      headline: {
+        totalCost,
+        contractValue,
+        collectedCash,
+        unpaidMaterials: number((unpaidRows as Row[])[0]?.total),
+        materialMainCost,
+        laborCost,
+        operationCost,
+        contractCoverage: contractValue ? (collectedCash / contractValue) * 100 : 0,
+        costCoverage: totalCost ? (collectedCash / totalCost) * 100 : 0,
+      },
+    },
+    tables: {
+      labor: reportPagedResult(laborRows as Row[], laborState, attendanceFromRow, {
+        week: optionsFromValues(laborOptions.week),
+        category: optionsFromValues(laborOptions.category),
+        staffName: optionsFromValues(laborOptions.staff_name),
+        position: optionsFromValues(laborOptions.position),
+      }),
+      materials: reportPagedResult(materialRows as Row[], materialState, materialFromRow, {
+        week: optionsFromValues(materialOptions.week),
+        category: optionsFromValues(materialOptions.category),
+        supplier: optionsFromValues(materialOptions.supplier),
+      }),
+      operations: reportPagedResult(operationRows as Row[], operationState, operationFromRow, {
+        week: optionsFromValues(operationOptions.week),
+      }),
     },
   };
 }

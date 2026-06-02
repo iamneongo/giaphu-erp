@@ -2,7 +2,6 @@
 
 import * as React from "react";
 
-import { useAuth } from "@clerk/nextjs";
 import {
   CalendarCheck,
   Check,
@@ -22,10 +21,11 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type { AttendanceRow, LaborNormRow, ProgressRow, StaffRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
+import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, todayIso } from "../_lib/date-utils";
@@ -841,7 +841,6 @@ function AttendanceBoard({
 
 export function WorkforceWorkspace({ section = "attendance" }: { section?: WorkforceSection }) {
   const { data, activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
-  const { has, orgRole } = useAuth();
   const paginatedStaff = usePaginatedErpRows<StaffRow>({
     dataset: "staff",
     projectCode: "",
@@ -863,14 +862,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
   const staffPositionOptions = uniqueOptions(data.staff.map((row) => row.position));
   const laborNormCategoryOptions = uniqueOptions(scoped.laborNorms.map((row) => row.category));
   const progressCategoryOptions = uniqueOptions(scoped.progress.map((row) => row.category));
-  const canManage = canAccessClerkPermission(
-    {
-      orgRole,
-      hasRole: (role) => has?.({ role }) ?? false,
-      hasPermission: (permission) => has?.({ permission }) ?? false,
-    },
-    ERP_PERMISSIONS.workforceManage,
-  );
+  const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.workforceManage);
 
   async function runLaborNormAction(action: string, payload: Record<string, unknown>) {
     const result = await runAction(action, { ...payload, __returnData: false });

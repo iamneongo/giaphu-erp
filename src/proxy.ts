@@ -6,8 +6,15 @@ import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
 import { getProjectRouteInfo, legacyErpPathForProject } from "@/lib/giaphu-erp/project-routes";
 import { getAppOrigin } from "@/lib/site-url";
 
-const isProtectedRoute = createRouteMatcher(["/dashboard(.*)", "/api/giaphu-erp(.*)", "/api/clerk-rbac(.*)"]);
+const isProtectedRoute = createRouteMatcher([
+  "/dashboard(.*)",
+  "/create-project(.*)",
+  "/api/giaphu-erp(.*)",
+  "/api/clerk-rbac(.*)",
+]);
 const isDashboardRoute = createRouteMatcher(["/dashboard(.*)"]);
+const isCreateProjectRoute = createRouteMatcher(["/create-project(.*)"]);
+const isOrganizationSetupRoute = createRouteMatcher(["/dashboard/workspaces(.*)", "/dashboard/profile(.*)"]);
 const isApiRoute = createRouteMatcher(["/api/giaphu-erp(.*)"]);
 
 export default clerkMiddleware(async (auth, request) => {
@@ -16,9 +23,10 @@ export default clerkMiddleware(async (auth, request) => {
     return;
   }
 
-  const { isAuthenticated } = await auth();
+  const session = await auth();
+  const { isAuthenticated, orgId } = session;
 
-  if (!isAuthenticated && isDashboardRoute(request)) {
+  if (!isAuthenticated && (isDashboardRoute(request) || isCreateProjectRoute(request))) {
     const origin = getAppOrigin(request.headers, request.url);
     const signInUrl = new URL("/auth/sign-in", request.url);
     signInUrl.searchParams.set("redirect_url", `${origin}${request.nextUrl.pathname}${request.nextUrl.search}`);
@@ -27,6 +35,28 @@ export default clerkMiddleware(async (auth, request) => {
 
   if (!isAuthenticated && isApiRoute(request)) {
     return NextResponse.json({ status: "error", message: "Unauthorized" }, { status: 401 });
+  }
+
+  if (
+    isAuthenticated &&
+    !orgId &&
+    ((isDashboardRoute(request) && !isOrganizationSetupRoute(request)) || isCreateProjectRoute(request))
+  ) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/dashboard/workspaces";
+    redirectUrl.search = "";
+
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  if (isAuthenticated && !orgId && isApiRoute(request)) {
+    return NextResponse.json(
+      {
+        status: "error",
+        message: "Vui lòng chọn tổ chức được mời hoặc tạo tổ chức mới trước khi dùng ERP.",
+      },
+      { status: 403 },
+    );
   }
 
   const projectRoute = getProjectRouteInfo(request.nextUrl.pathname);
@@ -56,6 +86,8 @@ export default clerkMiddleware(async (auth, request) => {
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/create-project/:path*",
+    "/create-project",
     "/api/giaphu-erp",
     "/api/giaphu-erp/:path*",
     "/api/clerk-rbac",

@@ -2,15 +2,15 @@
 
 import * as React from "react";
 
-import { useAuth } from "@clerk/nextjs";
 import { CheckCircle2, CircleDollarSign, Receipt, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type { MaterialRow } from "@/lib/giaphu-erp/types";
 
+import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { uniqueOptions } from "../_lib/form-options";
@@ -176,15 +176,7 @@ function buildColumns({
 
 export function MaterialDebtWorkspace() {
   const { activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
-  const { has, orgRole } = useAuth();
-  const canManage = canAccessClerkPermission(
-    {
-      orgRole,
-      hasRole: (role) => has?.({ role }) ?? false,
-      hasPermission: (permission) => has?.({ permission }) ?? false,
-    },
-    ERP_PERMISSIONS.materialsManage,
-  );
+  const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.materialsManage);
   const debtFixedFilters = React.useMemo(() => ({ paymentStatus: "Chưa TT" }), []);
   const paginatedDebt = usePaginatedErpRows<MaterialRow>({
     dataset: "materials",

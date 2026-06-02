@@ -4,7 +4,6 @@ import * as React from "react";
 
 import Image from "next/image";
 
-import { useAuth } from "@clerk/nextjs";
 import { AlertCircle, Download, Eye, FileText, Loader2, Pencil, RefreshCw, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,9 +23,10 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type { DocumentRow } from "@/lib/giaphu-erp/types";
 
+import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { uniqueOptions } from "../_lib/form-options";
@@ -220,7 +220,7 @@ function WordDocumentPreview({ buffer }: { buffer: ArrayBuffer }) {
         </div>
       ) : null}
       <div
-        className="max-w-none p-6 text-sm leading-7 [&_.docx-preview-content]:!p-0 [&_a]:text-primary [&_h1]:font-semibold [&_h1]:text-2xl [&_h2]:font-semibold [&_h2]:text-xl [&_h3]:font-semibold [&_h3]:text-lg [&_li]:ml-5 [&_ol]:list-decimal [&_p]:mb-3 [&_table]:w-full [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:p-2 [&_ul]:list-disc"
+        className="[&_.docx-preview-content]:!p-0 max-w-none p-6 text-sm leading-7 [&_a]:text-primary [&_h1]:font-semibold [&_h1]:text-2xl [&_h2]:font-semibold [&_h2]:text-xl [&_h3]:font-semibold [&_h3]:text-lg [&_li]:ml-5 [&_ol]:list-decimal [&_p]:mb-3 [&_table]:w-full [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:p-2 [&_ul]:list-disc"
         ref={containerRef}
       />
     </ScrollArea>
@@ -566,7 +566,6 @@ function DocumentPreviewDialog({
 
 export function DocumentsWorkspace() {
   const { activeProjectCode, isSwitchingProject, runAction } = useGiaPhuErp();
-  const { has, orgRole } = useAuth();
   const emptyDocuments = React.useMemo<DocumentRow[]>(() => [], []);
   const paginatedDocuments = usePaginatedErpRows<DocumentRow>({
     dataset: "documents",
@@ -576,14 +575,7 @@ export function DocumentsWorkspace() {
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editingDocument, setEditingDocument] = React.useState<DocumentRow | null>(null);
   const [previewDocument, setPreviewDocument] = React.useState<DocumentRow | null>(null);
-  const canManage = canAccessClerkPermission(
-    {
-      orgRole,
-      hasRole: (role) => has?.({ role }) ?? false,
-      hasPermission: (permission) => has?.({ permission }) ?? false,
-    },
-    ERP_PERMISSIONS.documentsManage,
-  );
+  const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.documentsManage);
 
   async function runDocumentAction(action: string, payload: Record<string, unknown>) {
     const saved = await runAction(action, { ...payload, __returnData: false });

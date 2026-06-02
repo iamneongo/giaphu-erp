@@ -102,6 +102,31 @@ export interface GiaPhuReportsInsights {
   };
 }
 
+export type ReportTableState = {
+  pageIndex?: number;
+  pageSize?: number;
+  search?: string;
+  filters?: Record<string, string>;
+};
+
+export type ReportTablePayload<T> = {
+  rows: T[];
+  total: number;
+  pageIndex: number;
+  pageSize: number;
+  filterOptions: Record<string, Array<{ label: string; value: string }>>;
+};
+
+export type GiaPhuReportsData = {
+  activeProjectCode: string;
+  insights: GiaPhuReportsInsights;
+  tables: {
+    labor: ReportTablePayload<AttendanceRow>;
+    materials: ReportTablePayload<MaterialRow>;
+    operations: ReportTablePayload<OperationRow>;
+  };
+};
+
 export interface ProjectRow {
   code: string;
   name: string;

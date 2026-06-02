@@ -27,6 +27,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import type { ErpPermissionKey } from "@/lib/clerk/erp-rbac-shared";
 import { canAccessClerkPermission } from "@/lib/clerk/erp-rbac-shared";
 import {
   ACTIVE_PROJECT_CHANGE_EVENT,
@@ -38,6 +39,7 @@ import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
 interface NavMainProps {
   readonly items: readonly NavGroup[];
+  readonly effectivePermissions?: readonly ErpPermissionKey[];
 }
 
 const IsComingSoon = () => (
@@ -150,11 +152,12 @@ const NavItemCollapsed = ({
   );
 };
 
-export function NavMain({ items }: NavMainProps) {
+export function NavMain({ items, effectivePermissions = [] }: NavMainProps) {
   const path = usePathname();
   const { state, isMobile } = useSidebar();
   const { has, orgRole } = useAuth();
   const [activeProjectCode, setActiveProjectCode] = React.useState("");
+  const effectivePermissionSet = React.useMemo(() => new Set(effectivePermissions), [effectivePermissions]);
 
   React.useEffect(() => {
     setActiveProjectCode(readActiveProjectCode());
@@ -185,6 +188,7 @@ export function NavMain({ items }: NavMainProps) {
                   orgRole,
                   hasRole: (role) => has?.({ role }) ?? false,
                   hasPermission: (permission) => has?.({ permission }) ?? false,
+                  permissionKeys: effectivePermissionSet,
                 },
                 subItem.permission,
               ),
@@ -205,6 +209,7 @@ export function NavMain({ items }: NavMainProps) {
                 orgRole,
                 hasRole: (role) => has?.({ role }) ?? false,
                 hasPermission: (permission) => has?.({ permission }) ?? false,
+                permissionKeys: effectivePermissionSet,
               },
               item.permission,
             )

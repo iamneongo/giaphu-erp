@@ -15,13 +15,11 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import type { AttendanceRow, MaterialRow, OperationRow } from "@/lib/giaphu-erp/types";
 
 import { ReportsContentSkeleton } from "../../_components/loading-skeletons";
-import { useErpInsights } from "../_hooks/use-erp-insights";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
-import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
-import { formatVnd, getReportsInsights } from "../_lib/dashboard-insights";
+import { useReportsData } from "../_hooks/use-reports-data";
+import { formatVnd } from "../_lib/dashboard-insights";
 import { formatCount } from "../_lib/formatters";
 import { DataTable } from "./data-table";
 
@@ -48,35 +46,16 @@ const ReuiPie = Pie as unknown as React.ComponentType<
 >;
 
 export function ReportsWorkspace() {
-  const { activeProject, activeProjectCode, isSwitchingProject, scoped } = useGiaPhuErp();
+  const { activeProject, activeProjectCode, isSwitchingProject } = useGiaPhuErp();
   const chartId = React.useId().replace(/\W/g, "");
-  const mainMaterialFilters = React.useMemo(() => ({ materialType: "VT Chính" }), []);
-  const mainMaterialRows = React.useMemo(
-    () => scoped.materials.filter((row) => row.materialType === "VT Chính"),
-    [scoped.materials],
-  );
-  const paginatedLabor = usePaginatedErpRows<AttendanceRow>({
-    dataset: "attendance",
-    projectCode: activeProjectCode,
-    initialRows: scoped.attendance,
-  });
-  const paginatedMainMaterials = usePaginatedErpRows<MaterialRow>({
-    dataset: "materials",
-    projectCode: activeProjectCode,
-    initialRows: mainMaterialRows,
-    fixedFilters: mainMaterialFilters,
-  });
-  const paginatedOperations = usePaginatedErpRows<OperationRow>({
-    dataset: "operations",
-    projectCode: activeProjectCode,
-    initialRows: scoped.operations,
-  });
-  const fallbackInsights = React.useMemo(() => getReportsInsights(scoped), [scoped]);
-  const { insights, loading } = useErpInsights({
-    type: "reports",
-    projectCode: activeProjectCode,
-    fallback: fallbackInsights,
-  });
+  const {
+    data: reportData,
+    laborServerSide,
+    loading,
+    materialsServerSide,
+    operationsServerSide,
+  } = useReportsData(activeProjectCode);
+  const insights = reportData.insights;
 
   const totalFocusedCost =
     insights.headline.materialMainCost + insights.headline.laborCost + insights.headline.operationCost;
@@ -407,9 +386,9 @@ export function ReportsWorkspace() {
                     className: "text-right",
                   },
                 ]}
-                rows={paginatedLabor.rows}
+                rows={reportData.tables.labor.rows}
                 getRowId={(row) => row.id}
-                serverSide={paginatedLabor.serverSide}
+                serverSide={laborServerSide}
                 selectable
                 exportFileName="bao-cao-chi-phi-nhan-cong"
                 filters={[
@@ -467,9 +446,9 @@ export function ReportsWorkspace() {
                     className: "text-right",
                   },
                 ]}
-                rows={paginatedMainMaterials.rows}
+                rows={reportData.tables.materials.rows}
                 getRowId={(row) => row.id}
-                serverSide={paginatedMainMaterials.serverSide}
+                serverSide={materialsServerSide}
                 selectable
                 exportFileName="bao-cao-chi-phi-vat-tu-chinh"
                 filters={[
@@ -507,9 +486,9 @@ export function ReportsWorkspace() {
                     className: "text-right",
                   },
                 ]}
-                rows={paginatedOperations.rows}
+                rows={reportData.tables.operations.rows}
                 getRowId={(row) => row.id}
-                serverSide={paginatedOperations.serverSide}
+                serverSide={operationsServerSide}
                 selectable
                 exportFileName="bao-cao-chi-phi-van-hanh"
                 filters={[{ key: "week", label: "Tuần", options: [] }]}

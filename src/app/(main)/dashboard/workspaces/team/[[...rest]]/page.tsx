@@ -5,6 +5,7 @@ import { ShieldCheck, UsersRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getEffectiveErpPermissions } from "@/lib/clerk/erp-rbac";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 
 import { TeamManager } from "../../_components/team-manager";
@@ -14,12 +15,15 @@ export const metadata = {
 };
 
 export default async function Page() {
-  const { orgId, orgRole, has } = await auth();
+  const session = await auth();
+  const { orgId, orgRole, has } = session;
+  const permissionKeys = await getEffectiveErpPermissions(session);
   const canManageRoles = canAccessClerkPermission(
     {
       orgRole,
       hasRole: (role) => has({ role }),
       hasPermission: (permission) => has({ permission }),
+      permissionKeys,
     },
     ERP_PERMISSIONS.rolesManage,
     { allowLegacyMember: false },
@@ -29,7 +33,7 @@ export default async function Page() {
     return (
       <div className="flex flex-col gap-4 md:gap-6">
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Thành viên</h1>
+          <h1 className="font-semibold text-3xl tracking-tight">Thành viên</h1>
         </div>
         <Card className="max-w-2xl">
           <CardHeader className="border-b">
@@ -53,7 +57,7 @@ export default async function Page() {
     return (
       <div className="flex flex-col gap-4 md:gap-6">
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Thành viên</h1>
+          <h1 className="font-semibold text-3xl tracking-tight">Thành viên</h1>
         </div>
         <Card className="max-w-2xl">
           <CardHeader className="border-b">
@@ -62,7 +66,7 @@ export default async function Page() {
               Không đủ quyền quản trị
             </CardTitle>
             <CardDescription>
-              Hãy nhờ một quản trị viên tổ chức cấp vai trò `org:admin` nếu bạn cần mời thành viên hoặc chỉnh quyền.
+              Hãy nhờ quản trị viên cấp quyền Thành viên hoặc Vai trò nếu bạn cần mời thành viên hay chỉnh quyền.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
@@ -84,7 +88,7 @@ export default async function Page() {
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Thành viên</h1>
+        <h1 className="font-semibold text-3xl tracking-tight">Thành viên</h1>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline">

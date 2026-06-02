@@ -53,8 +53,7 @@ export function OrganizationManager() {
 
   const memberships = userMemberships?.data ?? [];
   const invitations = userInvitations?.data ?? [];
-  const activeMembership =
-    memberships.find((membership) => membership.organization.id === orgId) ?? memberships[0] ?? null;
+  const activeMembership = memberships.find((membership) => membership.organization.id === orgId) ?? null;
   const clerkUpdating = !isLoaded && hasLoadedClerk;
 
   async function handleCreateOrganization(event: React.FormEvent<HTMLFormElement>) {

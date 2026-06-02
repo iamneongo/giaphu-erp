@@ -17,6 +17,7 @@ import {
   updateOrganizationMembershipRole,
   updateRolePermissions,
 } from "@/lib/clerk/clerk-bapi";
+import { getEffectiveErpPermissions } from "@/lib/clerk/erp-rbac";
 import {
   canAccessClerkPermission,
   ERP_PERMISSION_CATALOG,
@@ -54,12 +55,15 @@ function formatClerkApiError(error: unknown) {
   }
 }
 
-function canManageRoles(session: Awaited<ReturnType<typeof auth>>) {
+async function canManageRoles(session: Awaited<ReturnType<typeof auth>>) {
+  const permissionKeys = await getEffectiveErpPermissions(session);
+
   return canAccessClerkPermission(
     {
       orgRole: session.orgRole,
       hasRole: (role) => session.has({ role }),
       hasPermission: (permission) => session.has({ permission }),
+      permissionKeys,
     },
     ERP_PERMISSIONS.rolesManage,
     { allowLegacyMember: false },
@@ -81,7 +85,7 @@ export async function GET() {
     return NextResponse.json({ status: "error", message: "Không có tổ chức đang hoạt động." }, { status: 400 });
   }
 
-  if (!canManageRoles(session)) {
+  if (!(await canManageRoles(session))) {
     return NextResponse.json({ status: "error", message: "Bạn không có quyền quản lý vai trò." }, { status: 403 });
   }
 
@@ -116,7 +120,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "error", message: "Không có tổ chức đang hoạt động." }, { status: 400 });
   }
 
-  if (!canManageRoles(session)) {
+  if (!(await canManageRoles(session))) {
     return NextResponse.json({ status: "error", message: "Bạn không có quyền quản lý vai trò." }, { status: 403 });
   }
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SignOutButton } from "@clerk/nextjs";
 import { Lock } from "lucide-react";
 
 export default function Page() {
@@ -12,7 +13,7 @@ export default function Page() {
           Tài khoản của bạn chưa được cấp quyền để xem nội dung này. Vui lòng liên hệ quản trị viên nếu bạn cần truy cập
           chức năng này.
         </p>
-        <div className="mt-6">
+        <div className="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
           <Link
             href="/dashboard"
             className="inline-flex items-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm shadow-xs transition-colors hover:bg-primary/90 focus:outline-hidden focus:ring-2 focus:ring-primary focus:ring-offset-2"
@@ -20,6 +21,14 @@ export default function Page() {
           >
             Quay về bảng điều khiển
           </Link>
+          <SignOutButton redirectUrl="/auth/sign-in">
+            <button
+              type="button"
+              className="inline-flex items-center rounded-md border border-border bg-background px-4 py-2 font-medium text-foreground text-sm shadow-xs transition-colors hover:bg-muted focus:outline-hidden focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            >
+              Đăng xuất
+            </button>
+          </SignOutButton>
         </div>
       </div>
     </div>

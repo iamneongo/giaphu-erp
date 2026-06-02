@@ -44,7 +44,13 @@ async function fetchProjects() {
   return result.projects;
 }
 
-export function ProjectSwitcher({ initialProjects = [] }: { initialProjects?: ProjectRow[] }) {
+export function ProjectSwitcher({
+  initialProjects = [],
+  organizationReady = true,
+}: {
+  initialProjects?: ProjectRow[];
+  organizationReady?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const routeProjectCode = getProjectRouteInfo(pathname)?.projectCode ?? "";
@@ -95,10 +101,10 @@ export function ProjectSwitcher({ initialProjects = [] }: { initialProjects?: Pr
   }, [initialProjects, routeProjectCode]);
 
   React.useEffect(() => {
-    if (!initialProjects.length) {
+    if (organizationReady && !initialProjects.length) {
       loadProjects();
     }
-  }, [initialProjects.length, loadProjects]);
+  }, [initialProjects.length, loadProjects, organizationReady]);
 
   React.useEffect(() => {
     function handleProjectChange(event: Event) {
@@ -109,13 +115,40 @@ export function ProjectSwitcher({ initialProjects = [] }: { initialProjects?: Pr
     }
 
     window.addEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
-    window.addEventListener(PROJECTS_REFRESH_EVENT, loadProjects);
+    if (organizationReady) {
+      window.addEventListener(PROJECTS_REFRESH_EVENT, loadProjects);
+    }
 
     return () => {
       window.removeEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
       window.removeEventListener(PROJECTS_REFRESH_EVENT, loadProjects);
     };
-  }, [loadProjects]);
+  }, [loadProjects, organizationReady]);
+
+  if (!organizationReady) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="lg"
+            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            tooltip="Chọn tổ chức"
+            asChild
+          >
+            <Link prefetch={false} href="/dashboard/workspaces">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-background">
+                <BriefcaseBusiness className="size-4" />
+              </div>
+              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">Chọn tổ chức</span>
+                <span className="truncate text-muted-foreground text-xs">Trước khi dùng ERP</span>
+              </div>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    );
+  }
 
   function selectProject(project: ProjectRow) {
     setActiveProjectCode(project.code);

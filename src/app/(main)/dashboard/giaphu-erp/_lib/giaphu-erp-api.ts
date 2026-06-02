@@ -3,7 +3,9 @@ import type {
   GiaPhuDashboardData,
   GiaPhuOverviewInsights,
   GiaPhuPagedDataset,
+  GiaPhuReportsData,
   GiaPhuReportsInsights,
+  ReportTableState,
 } from "@/lib/giaphu-erp/types";
 
 export type GiaPhuActionPayload = Record<string, unknown>;
@@ -38,6 +40,24 @@ async function parseResponse(response: Response): Promise<GiaPhuActionResult> {
 
   if (!response.ok || result.status !== "success") {
     throw new Error(result.message || "Thao tác GiaPhu ERP thất bại.");
+  }
+
+  return result;
+}
+
+async function parseReportsResponse(response: Response): Promise<{
+  status: "success" | "error";
+  message?: string;
+  data?: GiaPhuReportsData;
+}> {
+  const result = (await response.json()) as {
+    status: "success" | "error";
+    message?: string;
+    data?: GiaPhuReportsData;
+  };
+
+  if (!response.ok || result.status !== "success") {
+    throw new Error(result.message || "Không tải được dữ liệu báo cáo.");
   }
 
   return result;
@@ -154,6 +174,33 @@ export async function fetchGiaPhuInsights<T extends GiaPhuOverviewInsights | Gia
   if (!result.insights) throw new Error("API không trả về dữ liệu báo cáo.");
 
   return result.insights as T;
+}
+
+export async function fetchGiaPhuReportsData({
+  projectCode,
+  tables,
+  signal,
+}: {
+  projectCode: string;
+  tables?: {
+    labor?: ReportTableState;
+    materials?: ReportTableState;
+    operations?: ReportTableState;
+  };
+  signal?: AbortSignal;
+}) {
+  const params = new URLSearchParams({ projectCode });
+
+  if (tables) {
+    params.set("tables", JSON.stringify(tables));
+  }
+
+  const result = await parseReportsResponse(
+    await fetch(`/api/giaphu-erp/reports?${params.toString()}`, { cache: "no-store", signal }),
+  );
+
+  if (!result.data) throw new Error("API không trả về dữ liệu báo cáo.");
+  return result.data as GiaPhuReportsData;
 }
 
 export async function uploadGiaPhuDocument(formData: FormData) {

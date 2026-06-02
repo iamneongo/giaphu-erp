@@ -2,15 +2,15 @@
 
 import * as React from "react";
 
-import { useAuth } from "@clerk/nextjs";
 import { BookOpen, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import { buildNextCatalogCode } from "@/lib/giaphu-erp/catalog-codes";
 import { isValidPhoneNumber } from "@/lib/giaphu-erp/phone";
 import type { CatalogItem } from "@/lib/giaphu-erp/types";
 
+import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import type { CatalogKind } from "../_lib/catalog-config";
@@ -24,7 +24,6 @@ import { TableRowActions } from "./table-row-actions";
 
 export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
   const { data, isSwitchingProject, runAction } = useGiaPhuErp();
-  const { has, orgRole } = useAuth();
   const section = getCatalogSectionByKind(kind);
   const rows = data.catalogs[kind];
   const catalogFixedFilters = React.useMemo(() => ({ kind }), [kind]);
@@ -47,14 +46,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
       return isValidPhoneNumber(value) ? undefined : "Liên hệ phải là số điện thoại hợp lệ.";
     },
   };
-  const canManage = canAccessClerkPermission(
-    {
-      orgRole,
-      hasRole: (role) => has?.({ role }) ?? false,
-      hasPermission: (permission) => has?.({ permission }) ?? false,
-    },
-    ERP_PERMISSIONS.catalogsManage,
-  );
+  const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.catalogsManage);
   const fields: FormFieldDefinition[] = [
     { name: "kind", label: "Loại danh mục", type: "hidden", value: section.kind },
     {

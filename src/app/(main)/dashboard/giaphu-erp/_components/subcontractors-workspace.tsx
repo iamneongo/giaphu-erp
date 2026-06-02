@@ -1,13 +1,13 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
 import { Banknote, Download, FileText, Hammer, ShieldCheck, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type { OperationRow, SubcontractorContractRow, SubcontractorRow } from "@/lib/giaphu-erp/types";
 
+import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, todayIso } from "../_lib/date-utils";
@@ -24,7 +24,6 @@ type SubcontractorsSection = "advances" | "contracts" | "operations";
 
 export function SubcontractorsWorkspace({ section = "advances" }: { section?: SubcontractorsSection }) {
   const { data, activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
-  const { has, orgRole } = useAuth();
   const paginatedSubcontractors = usePaginatedErpRows<SubcontractorRow>({
     dataset: "subcontractors",
     projectCode: activeProjectCode,
@@ -47,14 +46,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
   const subcontractorNameOptions = uniqueOptions(scoped.subcontractors.map((row) => row.contractorName));
   const subcontractorStatusOptions = uniqueOptions(scoped.subcontractorContracts.map((row) => row.status));
   const operationWeekOptions = uniqueOptions(scoped.operations.map((row) => row.week));
-  const canManage = canAccessClerkPermission(
-    {
-      orgRole,
-      hasRole: (role) => has?.({ role }) ?? false,
-      hasPermission: (permission) => has?.({ permission }) ?? false,
-    },
-    ERP_PERMISSIONS.subcontractorsManage,
-  );
+  const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.subcontractorsManage);
 
   async function saveSubcontractorWithAttachment(
     action: string,
