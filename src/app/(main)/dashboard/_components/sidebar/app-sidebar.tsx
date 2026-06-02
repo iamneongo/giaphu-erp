@@ -13,7 +13,7 @@ export function AppSidebar({
 }: React.ComponentProps<typeof Sidebar> & { initialProjects?: ProjectRow[] }) {
   return (
     <Sidebar {...props}>
-      <SidebarHeader className="group-data-[collapsible=icon]:pt-4">
+      <SidebarHeader className="gap-2 group-data-[collapsible=icon]:pt-4">
         <ProjectSwitcher initialProjects={initialProjects} />
       </SidebarHeader>
       <SidebarContent className="overflow-x-hidden">

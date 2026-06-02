@@ -1,12 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import * as React from "react";
+
+import Link from "next/link";
 
 import { Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { DataTable, type DataTableColumn, type DataTableFilter } from "@/app/(main)/dashboard/giaphu-erp/_components/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from "@/app/(main)/dashboard/giaphu-erp/_components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +34,8 @@ type RoleRow = {
   type: "system" | "custom";
 };
 
-const systemRoleKeys = new Set(["org:admin", "org:member"]);
+const hiddenRoleKeys = new Set(["org:member"]);
+const systemRoleKeys = new Set(["org:admin"]);
 
 async function readRoleManagerResponse(response: Response): Promise<RoleManagerResponse> {
   const text = await response.text();
@@ -53,6 +59,7 @@ async function readRoleManagerResponse(response: Response): Promise<RoleManagerR
 
 function buildRoleRows(roles: ClerkOrganizationRole[]) {
   return roles
+    .filter((role) => !hiddenRoleKeys.has(role.key))
     .map((role) => {
       const groups = Array.from(
         new Set(
@@ -111,34 +118,37 @@ export function RoleManager() {
     void loadData();
   }, [loadData]);
 
-  const deleteRole = React.useCallback(async (role: RoleRow) => {
-    if (!window.confirm(`Xóa vai trò "${role.name}"?`)) {
-      return;
-    }
-
-    setSubmitting(true);
-
-    try {
-      const response = await fetch("/api/clerk-rbac", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "deleteRole", roleId: role.id }),
-      });
-
-      const payload = await readRoleManagerResponse(response);
-
-      if (!response.ok || payload.status !== "success") {
-        throw new Error(payload.message || "Xóa vai trò thất bại.");
+  const deleteRole = React.useCallback(
+    async (role: RoleRow) => {
+      if (!window.confirm(`Xóa vai trò "${role.name}"?`)) {
+        return;
       }
 
-      toast.success("Đã xóa vai trò.");
-      await loadData();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [loadData]);
+      setSubmitting(true);
+
+      try {
+        const response = await fetch("/api/clerk-rbac", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "deleteRole", roleId: role.id }),
+        });
+
+        const payload = await readRoleManagerResponse(response);
+
+        if (!response.ok || payload.status !== "success") {
+          throw new Error(payload.message || "Xóa vai trò thất bại.");
+        }
+
+        toast.success("Đã xóa vai trò.");
+        await loadData();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [loadData],
+  );
 
   const columns = React.useMemo<DataTableColumn<RoleRow>[]>(
     () => [
@@ -211,7 +221,13 @@ export function RoleManager() {
               <Badge variant="outline">Khóa</Badge>
             )}
             {row.type === "custom" ? (
-              <Button type="button" size="sm" variant="outline" onClick={() => void deleteRole(row)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={submitting}
+                onClick={() => void deleteRole(row)}
+              >
                 <Trash2 />
                 Xóa
               </Button>
@@ -220,7 +236,7 @@ export function RoleManager() {
         ),
       },
     ],
-    [deleteRole],
+    [deleteRole, submitting],
   );
 
   const filters = React.useMemo<DataTableFilter<RoleRow>[]>(
@@ -256,7 +272,9 @@ export function RoleManager() {
                 <ShieldCheck className="size-5" />
                 Danh sách vai trò
               </CardTitle>
-              <CardDescription>Xem role hiện có trước, sau đó vào trang riêng để tạo mới hoặc chỉnh quyền chi tiết.</CardDescription>
+              <CardDescription>
+                Xem role hiện có trước, sau đó vào trang riêng để tạo mới hoặc chỉnh quyền chi tiết.
+              </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button asChild size="sm">

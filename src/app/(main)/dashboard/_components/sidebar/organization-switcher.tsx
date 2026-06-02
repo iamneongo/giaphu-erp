@@ -17,6 +17,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 
+function formatMembershipRole(role?: string | null) {
+  if (!role || role === "org:member") return "Chưa phân quyền";
+  if (role === "org:admin") return "Admin";
+  return role.replace(/^org:/, "");
+}
+
 export function OrganizationSwitcher() {
   const router = useRouter();
   const { isMobile, state } = useSidebar();
@@ -70,7 +76,11 @@ export function OrganizationSwitcher() {
             <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
               <Plus className="size-4" />
             </div>
-            <div className="grid flex-1 text-left text-sm leading-tight">
+            <div
+              className={`grid flex-1 text-left text-sm leading-tight transition-all duration-200 ease-in-out ${
+                state === "collapsed" ? "invisible max-w-0 overflow-hidden opacity-0" : "visible max-w-full opacity-100"
+              }`}
+            >
               <span className="truncate font-medium">Tạo tổ chức</span>
               <span className="truncate text-muted-foreground text-xs">Bắt đầu workspace</span>
             </div>
@@ -113,8 +123,9 @@ export function OrganizationSwitcher() {
               >
                 <span className="truncate font-medium">{displayOrganization.name}</span>
                 <span className="truncate text-muted-foreground text-xs">
-                  {memberships.find((membership) => membership.organization.id === displayOrganization.id)?.role ??
-                    "Tổ chức"}
+                  {formatMembershipRole(
+                    memberships.find((membership) => membership.organization.id === displayOrganization.id)?.role,
+                  )}
                 </span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />

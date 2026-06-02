@@ -606,7 +606,7 @@ export function ZaloMaterialBreakdownPage({
       return;
     }
 
-    if (warnings.length) {
+    if (materialType === "VT Chính" && warnings.length) {
       toast.error(`Có ${warnings.length} cảnh báo chưa xử lý. Vật tư chính phải khớp danh mục công ty.`);
       return;
     }
@@ -843,7 +843,7 @@ export function ZaloMaterialBreakdownPage({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-56">Hạng mục</TableHead>
-                    <TableHead>Vật tư đối chiếu DM</TableHead>
+                    <TableHead>{materialType === "VT Chính" ? "Vật tư đối chiếu DM" : "Vật tư"}</TableHead>
                     <TableHead className="w-64">Nhà CC</TableHead>
                     <TableHead className="w-24">SL</TableHead>
                     <TableHead className="w-24">ĐV</TableHead>
@@ -868,32 +868,42 @@ export function ZaloMaterialBreakdownPage({
                           {row.rawMaterialName ? (
                             <div className="mb-1 text-destructive text-xs italic">Gốc: {row.rawMaterialName}</div>
                           ) : null}
-                          <SearchableCellPicker
-                            className={
-                              status?.tone === "success"
-                                ? "border-emerald-500"
-                                : status?.tone === "warning" || status?.tone === "error"
-                                  ? "border-destructive"
-                                  : "border-primary"
-                            }
-                            options={materialType === "VT Chính" ? mainMaterials : []}
-                            placeholder="Tìm vật tư"
-                            value={row.materialName}
-                            onChange={(value) =>
-                              setRows((current) => updateRow(current, row.id, { materialName: value }))
-                            }
-                          />
-                          <div
-                            className={
-                              status?.tone === "success"
-                                ? "mt-1 font-medium text-emerald-600 text-xs"
-                                : status?.tone === "info"
-                                  ? "mt-1 font-medium text-primary text-xs"
-                                  : "mt-1 font-medium text-destructive text-xs"
-                            }
-                          >
-                            {status?.message}
-                          </div>
+                          {materialType === "VT Chính" ? (
+                            <>
+                              <SearchableCellPicker
+                                className={
+                                  status?.tone === "success"
+                                    ? "border-emerald-500"
+                                    : status?.tone === "warning" || status?.tone === "error"
+                                      ? "border-destructive"
+                                      : "border-primary"
+                                }
+                                options={mainMaterials}
+                                placeholder="Tìm vật tư"
+                                value={row.materialName}
+                                onChange={(value) =>
+                                  setRows((current) => updateRow(current, row.id, { materialName: value }))
+                                }
+                              />
+                              <div
+                                className={
+                                  status?.tone === "success"
+                                    ? "mt-1 font-medium text-emerald-600 text-xs"
+                                    : "mt-1 font-medium text-destructive text-xs"
+                                }
+                              >
+                                {status?.message}
+                              </div>
+                            </>
+                          ) : (
+                            <Input
+                              value={row.materialName}
+                              placeholder="Nhập vật tư"
+                              onChange={(event) =>
+                                setRows((current) => updateRow(current, row.id, { materialName: event.target.value }))
+                              }
+                            />
+                          )}
                         </TableCell>
                         <TableCell>
                           <SearchableCellPicker

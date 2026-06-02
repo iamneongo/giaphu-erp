@@ -30,6 +30,8 @@ type TeamManagerResponse = {
   invitations?: ClerkOrganizationInvitation[];
 };
 
+const hiddenRoleKeys = new Set(["org:member"]);
+
 async function readTeamManagerResponse(response: Response): Promise<TeamManagerResponse> {
   const text = await response.text();
 
@@ -94,13 +96,15 @@ export function TeamManager() {
   const availableRoleKeys = React.useMemo(() => new Set(roleSet?.roles.map((role) => role.key) ?? []), [roleSet]);
 
   const availableRoles = React.useMemo(() => {
-    const source = roles.filter((role) => availableRoleKeys.has(role.key));
+    const source = roles.filter((role) => availableRoleKeys.has(role.key) && !hiddenRoleKeys.has(role.key));
     return source.sort((a, b) => {
       if (a.key === "org:admin") return -1;
       if (b.key === "org:admin") return 1;
       return a.name.localeCompare(b.name, "vi");
     });
   }, [availableRoleKeys, roles]);
+
+  const availableRoleKeySet = React.useMemo(() => new Set(availableRoles.map((role) => role.key)), [availableRoles]);
 
   const roleNameMap = React.useMemo(() => new Map(roles.map((role) => [role.key, role.name])), [roles]);
 
@@ -150,7 +154,18 @@ export function TeamManager() {
       setInvitations(payload.invitations ?? []);
       setRoleSet(payload.roleSet ?? null);
       setCurrentUserId(payload.currentUserId ?? null);
-      setInviteRole((current) => current || payload.roleSet?.default_role.key || "org:member");
+      setInviteRole((current) => {
+        if (current && !hiddenRoleKeys.has(current)) return current;
+
+        const nextDefaultRole = payload.roleSet?.default_role.key;
+        if (nextDefaultRole && !hiddenRoleKeys.has(nextDefaultRole)) return nextDefaultRole;
+
+        const nextRole = (payload.roles ?? [])
+          .filter((role) => new Set(payload.roleSet?.roles.map((entry) => entry.key) ?? []).has(role.key))
+          .find((role) => !hiddenRoleKeys.has(role.key));
+
+        return nextRole?.key ?? "";
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -308,6 +323,7 @@ export function TeamManager() {
                 const isCurrentUser = membership.publicUserData.userId === currentUserId;
                 const isLastAdmin = membership.role === "org:admin" && adminCount <= 1;
                 const disableRemoval = isCurrentUser || isLastAdmin;
+                const hasVisibleRole = availableRoleKeySet.has(membership.role);
 
                 return (
                   <div
@@ -340,7 +356,7 @@ export function TeamManager() {
 
                     <div className="flex w-full flex-col gap-2 md:w-auto md:min-w-[320px] md:flex-row md:items-center">
                       <Select
-                        value={membership.role}
+                        value={hasVisibleRole ? membership.role : undefined}
                         onValueChange={(value) => void updateMemberRole(membership.publicUserData.userId, value)}
                       >
                         <SelectTrigger className="min-w-60">
@@ -451,7 +467,9 @@ export function TeamManager() {
                   <div className="space-y-1">
                     <div className="font-medium">{invitation.emailAddress}</div>
                     <div className="text-muted-foreground text-sm">
-                      {roleNameMap.get(invitation.role) ?? invitation.roleName ?? invitation.role}
+                      {hiddenRoleKeys.has(invitation.role)
+                        ? "Chưa phân quyền"
+                        : (roleNameMap.get(invitation.role) ?? invitation.roleName ?? invitation.role)}
                     </div>
                     <div className="text-muted-foreground text-xs">Hết hạn {formatDate(invitation.expiresAt)}</div>
                   </div>
