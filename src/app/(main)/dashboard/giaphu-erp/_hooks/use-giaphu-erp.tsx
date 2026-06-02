@@ -52,7 +52,6 @@ interface GiaPhuErpContextValue {
     contracts: GiaPhuDashboardData["contracts"];
     payments: PaymentRow[];
     progress: GiaPhuDashboardData["progress"];
-    materialNorms: GiaPhuDashboardData["materialNorms"];
     laborNorms: GiaPhuDashboardData["laborNorms"];
   };
 }
@@ -233,7 +232,6 @@ export function GiaPhuErpProvider({
       contracts: data.contracts.filter((row) => row.projectCode === normalizedProjectCode),
       payments: data.payments.filter((row) => row.projectCode === normalizedProjectCode),
       progress: data.progress.filter((row) => row.projectCode === normalizedProjectCode),
-      materialNorms: data.materialNorms.filter((row) => row.projectCode === normalizedProjectCode),
       laborNorms: data.laborNorms.filter((row) => row.projectCode === normalizedProjectCode),
     }),
     [data, normalizedProjectCode],

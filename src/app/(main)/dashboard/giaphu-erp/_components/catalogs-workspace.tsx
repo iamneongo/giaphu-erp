@@ -149,14 +149,16 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
         icon={BookOpen}
         actions={
           canManage ? (
-            <ActionDialog
-              title={`Thêm ${section.navigationTitle.toLowerCase()}`}
-              button={section.navigationTitle}
-              icon={Plus}
-              action="manageCatalog"
-              onAction={runAction}
-              fields={fields}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <ActionDialog
+                title={`Thêm ${section.navigationTitle.toLowerCase()}`}
+                button={section.navigationTitle}
+                icon={Plus}
+                action="manageCatalog"
+                onAction={runAction}
+                fields={fields}
+              />
+            </div>
           ) : undefined
         }
       />

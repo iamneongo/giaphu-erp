@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function Page() {
-  redirect("/dashboard/giaphu-erp/materials/entries");
+  redirect("/dashboard/giaphu-erp/materials/vat-tu-chinh");
 }

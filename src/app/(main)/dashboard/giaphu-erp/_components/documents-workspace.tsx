@@ -676,7 +676,7 @@ export function DocumentsWorkspace() {
                                 icon: Eye,
                                 disabled: !row.has_file,
                                 onSelect: () => {
-                                  setPreviewDocument(row);
+                                  window.open(getDocumentFileUrl(row), "_blank", "noopener,noreferrer");
                                   return undefined;
                                 },
                               },

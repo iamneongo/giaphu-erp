@@ -13,7 +13,6 @@ const projectScopedDatasets = new Set<GiaPhuPagedDataset>([
   "documents",
   "materials",
   "attendance",
-  "materialNorms",
   "laborNorms",
   "progress",
   "subcontractors",

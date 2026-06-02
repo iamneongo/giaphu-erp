@@ -38,7 +38,6 @@ const detailPermissions = {
   contracts: ERP_PERMISSIONS.crmRead,
   payments: ERP_PERMISSIONS.crmRead,
   materials: ERP_PERMISSIONS.materialsRead,
-  "material-norms": ERP_PERMISSIONS.materialsRead,
   staff: ERP_PERMISSIONS.workforceRead,
   attendance: ERP_PERMISSIONS.workforceRead,
   "labor-norms": ERP_PERMISSIONS.workforceRead,
@@ -108,7 +107,7 @@ export default async function DetailPage({ params }: { params: Promise<{ type: s
           {record.badge ? <Badge variant="secondary">{record.badge}</Badge> : null}
           {record.externalHref ? (
             <Button asChild size="sm">
-              <Link href={record.externalHref}>
+              <Link href={record.externalHref} rel="noreferrer" target="_blank">
                 <ExternalLink />
                 {record.externalLabel ?? "Mở"}
               </Link>
@@ -235,13 +234,17 @@ function getDashboardRecord(
     case "materials": {
       const row = data.materials.find((item) => item.id === numberId(id));
       if (!row) return null;
+      const backHref =
+        row.materialType === "VT Phụ" || row.materialType === "VT MEP-HVAC"
+          ? "/dashboard/giaphu-erp/materials/vat-tu-phu"
+          : "/dashboard/giaphu-erp/materials/vat-tu-chinh";
 
       return {
         title: row.materialName || `Vật tư #${row.id}`,
-        subtitle: "Phát sinh vật tư",
+        subtitle: "Dòng nhập vật tư",
         badge: row.materialType,
-        backHref: "/dashboard/giaphu-erp/materials/entries",
-        backLabel: "Quay lại vật tư",
+        backHref,
+        backLabel: "Quay lại phân rã Zalo",
         fields: [
           field("projectCode", "Công trình", row.projectCode),
           field("date", "Ngày", row.date),
@@ -259,28 +262,6 @@ function getDashboardRecord(
           field("paymentInfo", "Thông tin TT", row.paymentInfo, true),
           field("debt", "Công nợ", row.debt),
           field("status", "Trạng thái", row.status),
-        ],
-      };
-    }
-    case "material-norms": {
-      const row = data.materialNorms.find((item) => item.id === numberId(id));
-      if (!row) return null;
-
-      return {
-        title: row.materialName,
-        subtitle: "Định mức vật tư",
-        badge: row.materialType,
-        backHref: "/dashboard/giaphu-erp/materials/norms",
-        backLabel: "Quay lại định mức vật tư",
-        fields: [
-          field("projectCode", "Công trình", row.projectCode),
-          field("category", "Hạng mục", row.category),
-          field("materialName", "Vật tư", row.materialName),
-          field("unit", "Đơn vị", row.unit),
-          field("dailyNorm", "Định mức ngày", row.dailyNorm),
-          field("weeklyNorm", "Định mức tuần", row.weeklyNorm),
-          field("warningPercent", "Cảnh báo %", row.warningPercent),
-          field("materialType", "Loại vật tư", row.materialType),
         ],
       };
     }

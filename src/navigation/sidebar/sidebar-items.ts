@@ -1,7 +1,8 @@
 import {
-  Building2,
   BookOpen,
+  Building2,
   ChartBar,
+  CircleDollarSign,
   FileText,
   Hammer,
   HardHat,
@@ -15,6 +16,7 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
+
 import { ERP_PERMISSIONS, type ErpPermissionKey } from "@/lib/clerk/erp-rbac-shared";
 
 export interface NavSubItem {
@@ -94,19 +96,25 @@ export const sidebarItems: NavGroup[] = [
       },
       {
         title: "Vật tư",
-        url: "/dashboard/giaphu-erp/materials",
+        url: "/dashboard/giaphu-erp/materials/vat-tu-chinh",
         icon: PackagePlus,
         subItems: [
           {
-            title: "Phát sinh",
-            url: "/dashboard/giaphu-erp/materials/entries",
+            title: "Vật tư chính",
+            url: "/dashboard/giaphu-erp/materials/vat-tu-chinh",
             icon: PackagePlus,
-            permission: ERP_PERMISSIONS.materialsRead,
+            permission: ERP_PERMISSIONS.materialsManage,
           },
           {
-            title: "Định mức",
-            url: "/dashboard/giaphu-erp/materials/norms",
-            icon: ListTree,
+            title: "Vật tư phụ",
+            url: "/dashboard/giaphu-erp/materials/vat-tu-phu",
+            icon: PackagePlus,
+            permission: ERP_PERMISSIONS.materialsManage,
+          },
+          {
+            title: "Công nợ vật tư",
+            url: "/dashboard/giaphu-erp/materials/debt",
+            icon: CircleDollarSign,
             permission: ERP_PERMISSIONS.materialsRead,
           },
         ],

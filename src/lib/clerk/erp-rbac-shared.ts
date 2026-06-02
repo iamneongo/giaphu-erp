@@ -54,13 +54,13 @@ export const ERP_PERMISSION_CATALOG: PermissionCatalogItem[] = [
   {
     key: ERP_PERMISSIONS.materialsRead,
     name: "Xem vật tư",
-    description: "Cho phép xem phát sinh vật tư và định mức vật tư.",
+    description: "Cho phép xem dữ liệu vật tư nhập từ phân rã Zalo.",
     group: "Vật tư",
   },
   {
     key: ERP_PERMISSIONS.materialsManage,
     name: "Quản lý vật tư",
-    description: "Cho phép nhập vật tư, cập nhật giá và quản lý định mức.",
+    description: "Cho phép phân rã Zalo và chốt lưu dữ liệu vật tư.",
     group: "Vật tư",
   },
   {

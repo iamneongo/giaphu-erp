@@ -10,7 +10,6 @@ export type GiaPhuPagedDataset =
   | "documents"
   | "materials"
   | "attendance"
-  | "materialNorms"
   | "laborNorms"
   | "progress"
   | "subcontractors"
@@ -182,6 +181,7 @@ export interface SubcontractorRow {
   note: string;
   advance: number;
   fileUrl: string;
+  fileId: string;
   cumulative: number;
   status: string;
 }
@@ -207,18 +207,7 @@ export interface OperationRow {
   description: string;
   amount: number;
   fileUrl: string;
-}
-
-export interface MaterialNormRow {
-  id: number;
-  projectCode: string;
-  category: string;
-  materialName: string;
-  unit: string;
-  dailyNorm: number;
-  weeklyNorm: number;
-  warningPercent: number;
-  materialType: MaterialType;
+  fileId: string;
 }
 
 export interface LaborNormRow {
@@ -302,7 +291,6 @@ export interface GiaPhuDashboardData {
   subcontractors: SubcontractorRow[];
   subcontractorContracts: SubcontractorContractRow[];
   operations: OperationRow[];
-  materialNorms: MaterialNormRow[];
   laborNorms: LaborNormRow[];
   progress: ProgressRow[];
   payments: PaymentRow[];

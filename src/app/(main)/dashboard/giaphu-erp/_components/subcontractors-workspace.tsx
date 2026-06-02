@@ -1,9 +1,10 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { Banknote, FileText, Hammer, ShieldCheck, Trash2 } from "lucide-react";
+import { Banknote, Download, FileText, Hammer, ShieldCheck, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type { OperationRow, SubcontractorContractRow, SubcontractorRow } from "@/lib/giaphu-erp/types";
 
@@ -12,6 +13,7 @@ import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, todayIso } from "../_lib/date-utils";
 import { catalogOptions, uniqueOptions } from "../_lib/form-options";
 import { formatMoney } from "../_lib/formatters";
+import { uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable } from "./data-table";
 import { ModuleHeader } from "./module-header";
@@ -54,6 +56,85 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
     ERP_PERMISSIONS.subcontractorsManage,
   );
 
+  async function saveSubcontractorWithAttachment(
+    action: string,
+    payload: Record<string, unknown>,
+    existingRow?: SubcontractorRow,
+  ) {
+    const attachment = payload.attachment instanceof File && payload.attachment.size > 0 ? payload.attachment : null;
+    const nextPayload = { ...payload };
+    delete nextPayload.attachment;
+
+    nextPayload.fileUrl = existingRow?.fileUrl ?? "";
+    nextPayload.fileId = existingRow?.fileId ?? "";
+
+    if (attachment) {
+      const formData = new FormData();
+      const projectCode = String(payload.projectCode || activeProjectCode);
+      const contractorName = String(payload.contractorName ?? "").trim();
+      const category = String(payload.category ?? "").trim();
+      const date = String(payload.date ?? "").trim();
+
+      formData.set("projectCode", projectCode);
+      formData.set("docType", "Tạm ứng thầu phụ");
+      formData.set("fileName", attachment.name);
+      formData.set("note", String(payload.note ?? "").trim());
+      formData.set("previewText", [`Tạm ứng thầu phụ`, contractorName, category, date].filter(Boolean).join(" · "));
+      formData.set("file", attachment);
+
+      const uploaded = await uploadGiaPhuDocument(formData);
+      const documentId = Number(uploaded.documentId ?? 0);
+
+      if (documentId > 0) {
+        nextPayload.fileId = String(documentId);
+        nextPayload.fileUrl = `/api/giaphu-erp/documents/${documentId}/file`;
+      }
+    }
+
+    const result = await runAction(action, nextPayload);
+    paginatedSubcontractors.refresh();
+    return result;
+  }
+
+  async function saveOperationWithAttachment(
+    action: string,
+    payload: Record<string, unknown>,
+    existingRow?: OperationRow,
+  ) {
+    const attachment = payload.attachment instanceof File && payload.attachment.size > 0 ? payload.attachment : null;
+    const nextPayload = { ...payload };
+    delete nextPayload.attachment;
+
+    nextPayload.fileUrl = existingRow?.fileUrl ?? "";
+    nextPayload.fileId = existingRow?.fileId ?? "";
+
+    if (attachment) {
+      const formData = new FormData();
+      const projectCode = String(payload.projectCode || activeProjectCode);
+      const description = String(payload.description ?? "").trim();
+      const date = String(payload.date ?? "").trim();
+
+      formData.set("projectCode", projectCode);
+      formData.set("docType", "Chi phí vận hành");
+      formData.set("fileName", attachment.name);
+      formData.set("note", description);
+      formData.set("previewText", ["Chi phí vận hành", description, date].filter(Boolean).join(" · "));
+      formData.set("file", attachment);
+
+      const uploaded = await uploadGiaPhuDocument(formData);
+      const documentId = Number(uploaded.documentId ?? 0);
+
+      if (documentId > 0) {
+        nextPayload.fileId = String(documentId);
+        nextPayload.fileUrl = `/api/giaphu-erp/documents/${documentId}/file`;
+      }
+    }
+
+    const result = await runAction(action, nextPayload);
+    paginatedOperations.refresh();
+    return result;
+  }
+
   const actions = {
     advances: (
       <ActionDialog
@@ -61,7 +142,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
         button="Tạm ứng"
         icon={Hammer}
         action="saveSubcontractor"
-        onAction={runAction}
+        onAction={saveSubcontractorWithAttachment}
         fields={[
           { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
           { name: "date", label: "Ngày", type: "date", value: todayIso() },
@@ -70,6 +151,12 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
           { name: "contractorName", label: "Thầu phụ", type: "select", options: contractorOptions },
           { name: "advance", label: "Tạm ứng", type: "number" },
           { name: "note", label: "Diễn giải", type: "textarea" },
+          {
+            name: "attachment",
+            label: "Hồ sơ / hình ảnh",
+            type: "file",
+            accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,image/*",
+          },
         ]}
       />
     ),
@@ -95,13 +182,19 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
         button="Vận hành"
         icon={Banknote}
         action="saveOperation"
-        onAction={runAction}
+        onAction={saveOperationWithAttachment}
         fields={[
           { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
           { name: "date", label: "Ngày", type: "date", value: todayIso() },
           { name: "week", label: "Tuần", value: currentIsoWeek() },
           { name: "description", label: "Diễn giải", required: true },
           { name: "amount", label: "Số tiền", type: "number" },
+          {
+            name: "attachment",
+            label: "Hồ sơ / hình ảnh",
+            type: "file",
+            accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,image/*",
+          },
         ]}
       />
     ),
@@ -144,6 +237,26 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                 render: (row) => formatMoney(row.cumulative),
               },
               { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" },
+              {
+                key: "fileUrl",
+                label: "Hồ sơ",
+                accessor: (row) => (row.fileUrl ? "Có hồ sơ" : "Không"),
+                searchable: false,
+                sortable: false,
+                render: (row) =>
+                  row.fileUrl ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(row.fileUrl, "_blank", "noopener,noreferrer")}
+                    >
+                      <Download />
+                      Xem tệp
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  ),
+              },
               ...(canManage
                 ? [
                     {
@@ -158,7 +271,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                             edit={{
                               title: "Sửa tạm ứng thầu phụ",
                               action: "saveSubcontractor",
-                              onAction: runAction,
+                              onAction: (action, payload) => saveSubcontractorWithAttachment(action, payload, row),
                               fields: [
                                 { name: "id", label: "ID", type: "hidden", value: row.id },
                                 { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
@@ -180,6 +293,12 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                 },
                                 { name: "advance", label: "Tạm ứng", type: "number", value: row.advance },
                                 { name: "note", label: "Diễn giải", type: "textarea", value: row.note },
+                                {
+                                  name: "attachment",
+                                  label: row.fileUrl ? "Hồ sơ / hình ảnh mới" : "Hồ sơ / hình ảnh",
+                                  type: "file",
+                                  accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,image/*",
+                                },
                               ],
                             }}
                             actions={[
@@ -343,6 +462,26 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                 accessor: (row) => row.amount,
                 render: (row) => formatMoney(row.amount),
               },
+              {
+                key: "fileUrl",
+                label: "Hồ sơ",
+                accessor: (row) => (row.fileUrl ? "Có hồ sơ" : "Không"),
+                searchable: false,
+                sortable: false,
+                render: (row) =>
+                  row.fileUrl ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(row.fileUrl, "_blank", "noopener,noreferrer")}
+                    >
+                      <Download />
+                      Xem tệp
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  ),
+              },
               ...(canManage
                 ? [
                     {
@@ -357,7 +496,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                             edit={{
                               title: "Sửa chi phí vận hành",
                               action: "saveOperation",
-                              onAction: runAction,
+                              onAction: (action, payload) => saveOperationWithAttachment(action, payload, row),
                               fields: [
                                 { name: "id", label: "ID", type: "hidden", value: row.id },
                                 { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
@@ -365,6 +504,12 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                 { name: "week", label: "Tuần", value: row.week || currentIsoWeek() },
                                 { name: "description", label: "Diễn giải", required: true, value: row.description },
                                 { name: "amount", label: "Số tiền", type: "number", value: row.amount },
+                                {
+                                  name: "attachment",
+                                  label: row.fileUrl ? "Hồ sơ / hình ảnh mới" : "Hồ sơ / hình ảnh",
+                                  type: "file",
+                                  accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,image/*",
+                                },
                               ],
                             }}
                             actions={[

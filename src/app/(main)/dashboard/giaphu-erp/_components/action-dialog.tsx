@@ -2,11 +2,12 @@
 
 import * as React from "react";
 
-import { Plus, RefreshCw, Save } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -19,17 +20,19 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 import { DatePickerField } from "./date-picker-field";
 
 export interface FormFieldDefinition {
   name: string;
   label: string;
-  type?: "text" | "tel" | "number" | "date" | "textarea" | "select" | "checkbox" | "hidden";
+  type?: "text" | "tel" | "number" | "date" | "textarea" | "select" | "checkbox" | "hidden" | "file";
   value?: string | number | boolean;
   placeholder?: string;
+  accept?: string;
   options?: Array<{ label: string; value: string }>;
   required?: boolean;
   disabled?: boolean;
@@ -46,7 +49,7 @@ export function collectFormPayload(form: HTMLFormElement) {
   const payload: FormPayload = {};
 
   for (const [key, value] of data.entries()) {
-    payload[key] = value instanceof File ? value.name : value;
+    payload[key] = value instanceof File ? (value.size > 0 ? value : "") : value;
   }
 
   for (const input of Array.from(form.querySelectorAll<HTMLInputElement>("input[type=checkbox]"))) {
@@ -79,6 +82,84 @@ function buildInitialValues(fields: FormFieldDefinition[]) {
   }
 
   return payload;
+}
+
+function getResolvedFieldType(field: FormFieldDefinition) {
+  if (field.type) return field.type;
+  if (field.name === "description" || field.label.toLowerCase().includes("diễn giải")) return "textarea";
+  return "text";
+}
+
+function SearchableFormSelect({
+  id,
+  name,
+  label,
+  value,
+  options,
+  placeholder,
+  disabled,
+  required,
+  onValueChange,
+}: {
+  id: string;
+  name: string;
+  label: string;
+  value: string;
+  options: Array<{ label: string; value: string }>;
+  placeholder?: string;
+  disabled?: boolean;
+  required?: boolean;
+  onValueChange: (value: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const selectedOption = options.find((option) => option.value === value);
+  const displayValue = selectedOption?.label ?? value;
+  const resolvedPlaceholder = placeholder ?? `Chọn ${label.toLowerCase()}`;
+
+  return (
+    <>
+      <input disabled={disabled} name={name} readOnly required={required} type="hidden" value={value} />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            aria-expanded={open}
+            className={cn("h-9 w-full justify-between rounded-md px-3 font-normal", !value && "text-muted-foreground")}
+            disabled={disabled}
+            id={id}
+            role="combobox"
+            type="button"
+            variant="outline"
+          >
+            <span className="truncate">{displayValue || resolvedPlaceholder}</span>
+            <ChevronsUpDown className="ml-2 size-4 shrink-0 text-muted-foreground" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+          <Command shouldFilter>
+            <CommandInput placeholder={`Tìm ${label.toLowerCase()}...`} />
+            <CommandList>
+              <CommandEmpty>Không có dữ liệu phù hợp.</CommandEmpty>
+              <CommandGroup>
+                {options.map((option) => (
+                  <CommandItem
+                    key={`${name}-${option.value}`}
+                    value={`${option.label} ${option.value}`}
+                    onSelect={() => {
+                      onValueChange(option.value);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check className={cn("size-4", value === option.value ? "opacity-100" : "opacity-0")} />
+                    <span className="truncate">{option.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </>
+  );
 }
 
 export function ActionDialog({
@@ -216,11 +297,13 @@ export function ActionDialog({
         <Form onSubmit={submit} noValidate className="space-y-4">
           <FieldGroup className="grid gap-4 md:grid-cols-2">
             {fields.map((field) => {
-              if (field.type === "hidden") {
+              const fieldType = getResolvedFieldType(field);
+
+              if (fieldType === "hidden") {
                 return <Input key={field.name} type="hidden" name={field.name} value={String(field.value ?? "")} />;
               }
 
-              if (field.type === "checkbox") {
+              if (fieldType === "checkbox") {
                 return (
                   <Field key={field.name} orientation="horizontal" className="rounded-lg border p-3">
                     <Checkbox name={field.name} defaultChecked={Boolean(field.value)} disabled={field.disabled} />
@@ -230,9 +313,9 @@ export function ActionDialog({
               }
 
               return (
-                <Field key={field.name} className={field.type === "textarea" ? "md:col-span-2" : undefined}>
+                <Field key={field.name} className={fieldType === "textarea" ? "md:col-span-2" : undefined}>
                   <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
-                  {field.type === "textarea" ? (
+                  {fieldType === "textarea" ? (
                     <Textarea
                       id={field.name}
                       name={field.name}
@@ -243,7 +326,7 @@ export function ActionDialog({
                       readOnly={field.readOnly}
                       onChange={(event) => updateFieldValue(field.name, event.target.value)}
                     />
-                  ) : field.type === "date" ? (
+                  ) : fieldType === "date" ? (
                     <DatePickerField
                       name={field.name}
                       value={fieldValues[field.name] as string | number | boolean | undefined}
@@ -251,30 +334,32 @@ export function ActionDialog({
                       required={field.required}
                       onValueChange={(value) => updateFieldValue(field.name, value)}
                     />
-                  ) : field.type === "select" ? (
-                    <Select
+                  ) : fieldType === "file" ? (
+                    <Input
+                      accept={field.accept}
+                      disabled={field.disabled}
+                      id={field.name}
+                      name={field.name}
+                      required={field.required}
+                      type="file"
+                    />
+                  ) : fieldType === "select" ? (
+                    <SearchableFormSelect
+                      id={field.name}
                       name={field.name}
                       value={String(fieldValues[field.name] ?? "")}
+                      label={field.label}
+                      placeholder={field.placeholder}
+                      options={field.options ?? []}
                       required={field.required}
                       disabled={field.disabled}
                       onValueChange={(value) => updateFieldValue(field.name, value)}
-                    >
-                      <SelectTrigger id={field.name} className="w-full">
-                        <SelectValue placeholder={field.placeholder ?? `Chọn ${field.label.toLowerCase()}`} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(field.options ?? []).map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    />
                   ) : (
                     <Input
                       id={field.name}
                       name={field.name}
-                      type={field.type ?? "text"}
+                      type={fieldType}
                       value={String(fieldValues[field.name] ?? "")}
                       placeholder={field.placeholder}
                       required={field.required}

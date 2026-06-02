@@ -17,6 +17,7 @@ export interface GiaPhuActionResult {
     attendanceDeleteIds?: number[];
   };
   rows?: Record<string, unknown>[];
+  documentId?: number;
   total?: number;
   pageIndex?: number;
   pageSize?: number;

@@ -13,7 +13,6 @@ import type {
   GiaPhuPagedDataset,
   GiaPhuReportsInsights,
   LaborNormRow,
-  MaterialNormRow,
   MaterialRow,
   OperationRow,
   PaymentRow,
@@ -50,7 +49,6 @@ export type GiaPhuPagedRowsResult =
   | { dataset: "documents"; rows: DocumentRow[]; total: number; pageIndex: number; pageSize: number }
   | { dataset: "materials"; rows: MaterialRow[]; total: number; pageIndex: number; pageSize: number }
   | { dataset: "attendance"; rows: AttendanceRow[]; total: number; pageIndex: number; pageSize: number }
-  | { dataset: "materialNorms"; rows: MaterialNormRow[]; total: number; pageIndex: number; pageSize: number }
   | { dataset: "laborNorms"; rows: LaborNormRow[]; total: number; pageIndex: number; pageSize: number }
   | { dataset: "progress"; rows: ProgressRow[]; total: number; pageIndex: number; pageSize: number }
   | { dataset: "subcontractors"; rows: SubcontractorRow[]; total: number; pageIndex: number; pageSize: number }
@@ -106,6 +104,10 @@ function dateTime(value: unknown) {
   if (!value) return "";
   if (value instanceof Date) return value.toISOString();
   return String(value);
+}
+
+function materialCatalogKey(value: unknown) {
+  return text(value).replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function weekFromDate(value: string) {
@@ -315,6 +317,7 @@ function subcontractorFromRow(row: Row): SubcontractorRow {
     note: text(row.note),
     advance: number(row.advance),
     fileUrl: text(row.file_url),
+    fileId: text(row.file_id),
     cumulative: number(row.cumulative),
     status: text(row.status),
   };
@@ -344,20 +347,7 @@ function operationFromRow(row: Row): OperationRow {
     description: text(row.description),
     amount: number(row.amount),
     fileUrl: text(row.file_url),
-  };
-}
-
-function materialNormFromRow(row: Row): MaterialNormRow {
-  return {
-    id: number(row.id),
-    projectCode: text(row.project_code),
-    category: text(row.category),
-    materialName: text(row.material_name),
-    unit: text(row.unit),
-    dailyNorm: number(row.daily_norm),
-    weeklyNorm: number(row.weekly_norm),
-    warningPercent: number(row.warning_percent),
-    materialType: (text(row.material_type) || "VT Chính") as MaterialNormRow["materialType"],
+    fileId: text(row.file_id),
   };
 }
 
@@ -665,21 +655,6 @@ async function createGiaPhuSchemaInternal() {
     created_at timestamptz not null default now()
   )`;
 
-  await sql`create table if not exists gp_material_norms (
-    id bigserial primary key,
-    project_code text not null references gp_projects(code) on delete cascade,
-    category text not null default '',
-    material_name text not null default '',
-    unit text not null default '',
-    daily_norm numeric not null default 0,
-    weekly_norm numeric not null default 0,
-    warning_percent numeric not null default 0,
-    material_type text not null default 'VT Chính',
-    updated_at timestamptz not null default now()
-  )`;
-
-  await sql`create unique index if not exists gp_material_norms_scope_idx on gp_material_norms (project_code, category, lower(material_name), material_type)`;
-
   await sql`create table if not exists gp_labor_norms (
     id bigserial primary key,
     project_code text not null references gp_projects(code) on delete cascade,
@@ -718,12 +693,11 @@ export async function createGiaPhuSchema() {
   const readinessRows = await sql`
     select
       to_regclass('public.gp_projects') as projects_table,
-      to_regclass('public.gp_material_norms') as material_norms_table,
       to_regclass('public.gp_progress') as progress_table
   `;
   const readiness = (readinessRows as Row[])[0] ?? {};
 
-  if (readiness.projects_table && readiness.material_norms_table && readiness.progress_table) {
+  if (readiness.projects_table && readiness.progress_table) {
     state.__giaPhuSchemaReady = true;
     return;
   }
@@ -780,7 +754,6 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     subcontractorRows,
     subcontractorContractRows,
     operationRows,
-    materialNormRows,
     laborNormRows,
     progressRows,
     paymentRows,
@@ -802,9 +775,6 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     activeProjectCode
       ? sql`select * from gp_operations where project_code = ${activeProjectCode} or project_code = 'CHUNG DOANH NGHIỆP' order by coalesce(work_date, created_at::date) desc, id desc limit 160`
       : sql`select * from gp_operations order by coalesce(work_date, created_at::date) desc, id desc limit 60`,
-    activeProjectCode
-      ? sql`select * from gp_material_norms where project_code = ${activeProjectCode} order by category asc, material_name asc`
-      : sql`select * from gp_material_norms order by category asc, material_name asc limit 60`,
     activeProjectCode
       ? sql`select * from gp_labor_norms where project_code = ${activeProjectCode} order by category asc`
       : sql`select * from gp_labor_norms order by category asc limit 60`,
@@ -848,7 +818,6 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     subcontractors,
     subcontractorContracts: (subcontractorContractRows as Row[]).map(subcontractorContractFromRow),
     operations,
-    materialNorms: (materialNormRows as Row[]).map(materialNormFromRow),
     laborNorms: (laborNormRows as Row[]).map(laborNormFromRow),
     progress: (progressRows as Row[]).map(progressFromRow),
     payments: (paymentRows as Row[]).map(paymentFromRow),
@@ -1596,37 +1565,6 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     };
   }
 
-  if (options.dataset === "materialNorms") {
-    const whereSearch = search
-      ? sql`and lower(concat_ws(' ', category, material_name, unit, material_type)) like lower(${pattern})`
-      : sql``;
-    const categoryFilter = filterValue("category");
-    const materialTypeFilter = filterValue("materialType");
-    const whereFilters = sql`
-      ${categoryFilter ? sql`and category = ${categoryFilter}` : sql``}
-      ${materialTypeFilter ? sql`and material_type = ${materialTypeFilter}` : sql``}
-    `;
-    const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_material_norms where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
-      sql`
-        select *
-        from gp_material_norms
-        where project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by category asc, material_name asc, id desc
-        limit ${pageSize}
-        offset ${offset}
-      `,
-    ]);
-
-    return {
-      dataset: "materialNorms",
-      rows: (rows as Row[]).map(materialNormFromRow),
-      total: totalFromCountRows(countRows),
-      pageIndex,
-      pageSize,
-    };
-  }
-
   if (options.dataset === "laborNorms") {
     const whereSearch = search ? sql`and lower(concat_ws(' ', category)) like lower(${pattern})` : sql``;
     const categoryFilter = filterValue("category");
@@ -1867,18 +1805,6 @@ export async function getGiaPhuFilterOptions(options: {
       staffName: distinctOptions(staffRows),
       position: distinctOptions(positionRows),
       shift: distinctOptions(shiftRows),
-    };
-  }
-
-  if (options.dataset === "materialNorms") {
-    const [categoryRows, materialTypeRows] = await Promise.all([
-      sql`select distinct category as value from gp_material_norms where project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`,
-      sql`select distinct material_type as value from gp_material_norms where project_code = ${activeProjectCode} and material_type <> '' order by material_type asc limit 300`,
-    ]);
-
-    return {
-      category: distinctOptions(categoryRows),
-      materialType: distinctOptions(materialTypeRows),
     };
   }
 
@@ -2217,6 +2143,69 @@ export async function saveMaterial(payload: Record<string, unknown>) {
   `;
 }
 
+export async function saveZaloMaterialBreakdown(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const projectCode = text(payload.projectCode).trim();
+  const materialType = text(payload.materialType).trim() || "VT Chính";
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!rows.length) throw new Error("Chưa có dòng phân rã Zalo hợp lệ.");
+  if (rows.length > 500) throw new Error("Mỗi lần chỉ nên nhập tối đa 500 dòng để hệ thống xử lý ổn định.");
+
+  if (materialType === "VT Chính") {
+    const catalogRows = await sql`select name from gp_catalog_items where kind = 'vatTu'`;
+    const catalogKeys = new Set((catalogRows as Row[]).map((row) => materialCatalogKey(row.name)).filter(Boolean));
+    const missingMaterials = rows
+      .map((rawRow) => (rawRow && typeof rawRow === "object" ? (rawRow as Record<string, unknown>) : {}))
+      .map((row) => text(row.materialName).trim())
+      .filter((materialName) => materialName && !catalogKeys.has(materialCatalogKey(materialName)));
+
+    if (missingMaterials.length) {
+      throw new Error(`Vật tư chính chưa khớp danh mục công ty: ${missingMaterials.slice(0, 5).join(", ")}`);
+    }
+  }
+
+  for (const rawRow of rows) {
+    const row = rawRow && typeof rawRow === "object" ? (rawRow as Record<string, unknown>) : {};
+    const date = dateOnly(row.date) || dateOnly(payload.date) || dateOnly(new Date());
+    const materialName = text(row.materialName).trim();
+    const quantity = decimal(row.quantity);
+    const category = text(row.category) || text(payload.category);
+    const unit = text(row.unit) || text(payload.unit);
+
+    if (!materialName) continue;
+    if (quantity <= 0) continue;
+    if (!category) throw new Error(`Thiếu hạng mục cho vật tư ${materialName}.`);
+    if (!unit) throw new Error(`Thiếu đơn vị cho vật tư ${materialName}.`);
+
+    await sql`
+      insert into gp_materials (
+        work_date, week, shift, project_code, category, material_code, material_name, quantity, unit, price,
+        debt, status, payment_status, payment_info, material_type, supplier
+      )
+      values (
+        ${date},
+        ${text(row.week) || text(payload.week) || weekFromDate(date)},
+        ${text(row.shift) || text(payload.shift)},
+        ${projectCode},
+        ${category},
+        ${text(row.materialCode)},
+        ${materialName},
+        ${quantity},
+        ${unit},
+        ${money(row.price)},
+        ${text(row.debt)},
+        ${text(row.status) || "Nhập từ phân rã Zalo"},
+        ${text(row.paymentStatus) || text(payload.paymentStatus) || "Chưa TT"},
+        ${text(row.paymentInfo) || text(payload.paymentInfo)},
+        ${materialType},
+        ${text(row.supplier) || text(payload.supplier)}
+      )
+    `;
+  }
+}
+
 export async function deleteMaterial(payload: Record<string, unknown>) {
   const sql = getSql();
   await sql`delete from gp_materials where id = ${number(payload.id)}`;
@@ -2507,57 +2496,6 @@ export async function saveOperation(payload: Record<string, unknown>) {
 export async function deleteOperation(payload: Record<string, unknown>) {
   const sql = getSql();
   await sql`delete from gp_operations where id = ${number(payload.id)}`;
-}
-
-export async function saveMaterialNorm(payload: Record<string, unknown>) {
-  const sql = getSql();
-  const id = number(payload.id);
-  const projectCode = text(payload.projectCode).trim();
-  const category = text(payload.category).trim();
-  const materialName = text(payload.materialName).trim();
-  const unit = text(payload.unit).trim();
-  const materialType = text(payload.materialType).trim() || "VT Chính";
-  const dailyNorm = requireNumericInput(payload.dailyNorm, "Định mức ngày");
-  const weeklyNorm = requireNumericInput(payload.weeklyNorm, "Định mức tuần");
-  const warningPercent = requireNumericInput(payload.warningPercent, "Cảnh báo %");
-
-  if (!projectCode) throw new Error("Thiếu công trình.");
-  if (!category) throw new Error("Thiếu hạng mục.");
-  if (!materialName) throw new Error("Thiếu vật tư.");
-  if (!unit) throw new Error("Thiếu đơn vị.");
-
-  if (id > 0) {
-    await sql`
-      update gp_material_norms
-      set project_code = ${projectCode},
-          category = ${category},
-          material_name = ${materialName},
-          unit = ${unit},
-          daily_norm = ${dailyNorm},
-          weekly_norm = ${weeklyNorm},
-          warning_percent = ${warningPercent},
-          material_type = ${materialType},
-          updated_at = now()
-      where id = ${id}
-    `;
-    return;
-  }
-
-  await sql`
-    insert into gp_material_norms (project_code, category, material_name, unit, daily_norm, weekly_norm, warning_percent, material_type, updated_at)
-    values (${projectCode}, ${category}, ${materialName}, ${unit}, ${dailyNorm}, ${weeklyNorm}, ${warningPercent}, ${materialType}, now())
-    on conflict (project_code, category, lower(material_name), material_type) do update set
-      unit = excluded.unit,
-      daily_norm = excluded.daily_norm,
-      weekly_norm = excluded.weekly_norm,
-      warning_percent = excluded.warning_percent,
-      updated_at = now()
-  `;
-}
-
-export async function deleteMaterialNorm(payload: Record<string, unknown>) {
-  const sql = getSql();
-  await sql`delete from gp_material_norms where id = ${number(payload.id)}`;
 }
 
 export async function saveLaborNorm(payload: Record<string, unknown>) {

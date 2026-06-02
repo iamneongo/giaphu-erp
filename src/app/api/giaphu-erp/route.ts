@@ -10,7 +10,6 @@ import {
   deleteDocument,
   deleteLaborNorm,
   deleteMaterial,
-  deleteMaterialNorm,
   deleteOperation,
   deletePayment,
   deleteProgress,
@@ -33,7 +32,6 @@ import {
   saveDocument,
   saveLaborNorm,
   saveMaterial,
-  saveMaterialNorm,
   saveOperation,
   savePayment,
   saveProgress,
@@ -41,6 +39,7 @@ import {
   saveSubcontractor,
   saveSubcontractorContract,
   saveWeeklyAttendance,
+  saveZaloMaterialBreakdown,
   updateMaterialPrice,
 } from "@/lib/giaphu-erp/db";
 import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
@@ -57,13 +56,18 @@ const pagedDatasets = [
   "documents",
   "materials",
   "attendance",
-  "materialNorms",
   "laborNorms",
   "progress",
   "subcontractors",
   "subcontractorContracts",
   "operations",
 ] satisfies GiaPhuPagedDataset[];
+
+type AllowedPagedDataset = (typeof pagedDatasets)[number];
+
+function isPagedDataset(value: string | null): value is AllowedPagedDataset {
+  return pagedDatasets.includes(value as AllowedPagedDataset);
+}
 
 type ActionBody = {
   action?: string;
@@ -116,8 +120,8 @@ export async function GET(request: Request) {
     }
 
     if (searchParams.get("view") === "rows") {
-      const dataset = searchParams.get("dataset") as GiaPhuPagedDataset | null;
-      if (!dataset || !pagedDatasets.includes(dataset)) {
+      const dataset = searchParams.get("dataset");
+      if (!isPagedDataset(dataset)) {
         return NextResponse.json({ status: "error", message: "Dataset không hợp lệ." }, { status: 400 });
       }
 
@@ -134,8 +138,8 @@ export async function GET(request: Request) {
     }
 
     if (searchParams.get("view") === "filter-options") {
-      const dataset = searchParams.get("dataset") as GiaPhuPagedDataset | null;
-      if (!dataset || !pagedDatasets.includes(dataset)) {
+      const dataset = searchParams.get("dataset");
+      if (!isPagedDataset(dataset)) {
         return NextResponse.json({ status: "error", message: "Dataset không hợp lệ." }, { status: 400 });
       }
 
@@ -217,6 +221,9 @@ export async function POST(request: Request) {
       case "saveMaterial":
         await saveMaterial(payload);
         break;
+      case "saveZaloMaterialBreakdown":
+        await saveZaloMaterialBreakdown(payload);
+        break;
       case "deleteMaterial":
         await deleteMaterial(payload);
         break;
@@ -260,12 +267,6 @@ export async function POST(request: Request) {
         break;
       case "deleteOperation":
         await deleteOperation(payload);
-        break;
-      case "saveMaterialNorm":
-        await saveMaterialNorm(payload);
-        break;
-      case "deleteMaterialNorm":
-        await deleteMaterialNorm(payload);
         break;
       case "saveLaborNorm":
         await saveLaborNorm(payload);

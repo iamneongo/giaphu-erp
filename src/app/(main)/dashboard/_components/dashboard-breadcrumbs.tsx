@@ -43,7 +43,6 @@ const segmentLabels: Record<string, string> = {
   details: "Chi tiết",
   contracts: "Hợp đồng",
   payments: "Thu tiền",
-  entries: "Phát sinh",
   norms: "Định mức",
   attendance: "Chấm công",
   staff: "Nhân sự",
@@ -54,6 +53,10 @@ const segmentLabels: Record<string, string> = {
   "hang-muc": "Hạng mục",
   "vat-tu": "Vật tư",
   "vat-tu-phu": "Vật tư phụ",
+  "vat-tu-chinh": "Vật tư chính",
+  "vat-tu-mep-hvac": "Vật tư phụ",
+  debt: "Công nợ vật tư",
+  zalo: "Phân rã Zalo",
   "nha-cung-cap": "Nhà cung cấp",
   "thau-phu": "Thầu phụ",
 };
@@ -129,6 +132,10 @@ export function DashboardBreadcrumbs() {
     if (segment.startsWith("role_")) return "Chi tiết vai trò";
 
     const previousSegment = visibleSegments[index - 1]?.segment;
+    if (segment === "create" && previousSegment === "roles") {
+      return "Tạo vai trò";
+    }
+
     if (previousSegment === "projects") {
       const decodedProjectCode = decodeURIComponent(segment);
       return projects.find((project) => project.code === decodedProjectCode)?.name ?? decodedProjectCode;

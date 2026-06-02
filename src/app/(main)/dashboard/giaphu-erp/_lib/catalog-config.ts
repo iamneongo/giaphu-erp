@@ -42,7 +42,7 @@ export const catalogSections: CatalogSection[] = [
     slug: "vat-tu-phu",
     title: "Danh mục vật tư phụ",
     navigationTitle: "Vật tư phụ",
-    description: "Quản lý vật tư phụ và vật tư phát sinh để theo dõi chi phí riêng biệt.",
+    description: "Quản lý vật tư phụ để theo dõi chi phí riêng biệt.",
     codeLabel: "Mã vật tư phụ",
     nameLabel: "Tên vật tư phụ",
     showUnit: true,
