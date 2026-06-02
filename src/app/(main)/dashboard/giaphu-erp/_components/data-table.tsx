@@ -106,7 +106,20 @@ function isInteractiveTarget(target: EventTarget | null) {
 
   return Boolean(
     target.closest(
-      'button, a, input, select, textarea, [role="button"], [role="checkbox"], [role="menuitem"], [data-row-action="true"]',
+      [
+        "button",
+        "a",
+        "input",
+        "select",
+        "textarea",
+        '[role="button"]',
+        '[role="checkbox"]',
+        '[role="menuitem"]',
+        '[data-row-action="true"]',
+        '[data-slot="dialog-content"]',
+        '[data-slot="dropdown-menu-content"]',
+        '[data-slot="popover-content"]',
+      ].join(", "),
     ),
   );
 }

@@ -37,7 +37,7 @@ export function TableRowActions({ edit, actions = [] }: { edit?: EditActionConfi
   const isPending = pendingAction != null;
 
   return (
-    <>
+    <span data-row-action="true">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -106,6 +106,6 @@ export function TableRowActions({ edit, actions = [] }: { edit?: EditActionConfi
           hideTrigger
         />
       ) : null}
-    </>
+    </span>
   );
 }
