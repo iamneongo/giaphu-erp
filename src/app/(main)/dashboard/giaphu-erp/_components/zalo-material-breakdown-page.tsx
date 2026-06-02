@@ -143,6 +143,30 @@ function appScriptDateToIso(value: string) {
   return `${year}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
 }
 
+function parseZaloHeaderLine(line: string) {
+  const dateMatch = line.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+  const date = dateMatch?.[1] ? appScriptDateToIso(dateMatch[1]) : "";
+  let category = "";
+
+  if (dateMatch?.[1] && line.includes(".")) {
+    const dotParts = line.split(".").map(normalizeText).filter(Boolean);
+    const dateIndex = dotParts.findIndex((part) => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(part));
+    if (dateIndex >= 0) {
+      category = normalizeText(dotParts.slice(dateIndex + 2).join(".") || dotParts.slice(dateIndex + 1).join("."));
+    }
+  }
+
+  const categoryMatch = line.match(/(?:hạng\s*mục|hm|buổi\s*:?\s*\w+)\s*[:.]?\s*(.+)$/i);
+  if (!category && categoryMatch?.[1]) {
+    category = normalizeText(categoryMatch[1]).replace(/^[-:.\s]+/, "");
+  }
+
+  return {
+    date,
+    category,
+  };
+}
+
 function findMaterialSuggestion(value: string, options: string[]) {
   const key = catalogKey(value);
   if (!key) return "";
@@ -163,24 +187,13 @@ function parseAppScriptZalo(value: string): ParsedZalo {
     if (/^(stt|vật tư|vat tu|tên|ten|ghi chú|ghi chu)/i.test(line)) return;
 
     if (index === 0) {
-      const dateMatch = line.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
-      if (dateMatch?.[1]) {
-        header.date = appScriptDateToIso(dateMatch[1]);
+      const parsedHeader = parseZaloHeaderLine(line);
+      if (parsedHeader.date) {
+        header.date = parsedHeader.date;
         header.week = isoWeekFromDate(header.date);
       }
-
-      if (line.includes(".")) {
-        const dotParts = line.split(".").map(normalizeText).filter(Boolean);
-        const dateIndex = dotParts.findIndex((part) => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(part));
-        if (dateIndex >= 0) {
-          category = normalizeText(dotParts.slice(dateIndex + 2).join("."));
-          header.category = category;
-        }
-      }
-
-      const categoryMatch = line.match(/(?:hạng\s*mục|hm|buổi\s*:?\s*\w+)\s*[:.]?\s*(.+)$/i);
-      if (!category && categoryMatch?.[1]) {
-        category = normalizeText(categoryMatch[1]).replace(/^[-:.\s]+/, "");
+      if (parsedHeader.category) {
+        category = parsedHeader.category;
         header.category = category;
       }
     }
@@ -681,7 +694,7 @@ export function ZaloMaterialBreakdownPage({
                     <div className="rounded-lg border border-dashed bg-muted/40 p-3 text-sm">
                       <div className="font-semibold">Cú pháp chuẩn Zalo {materialType}</div>
                       <div className="mt-2 space-y-1 text-muted-foreground text-xs">
-                        <div>Dòng 1: Công trình.ngày/tháng/năm.buổi.hạng mục</div>
+                        <div>Dòng 1: ngày/tháng/năm.buổi.hạng mục</div>
                         <div>Dòng 2+: 1. vật tư a: số lượng.đơn vị</div>
                         <div>Tuỳ chọn: NCC: Nhà cung cấp A</div>
                       </div>
@@ -697,7 +710,7 @@ export function ZaloMaterialBreakdownPage({
                       id="zalo-text"
                       className="min-h-[320px] resize-y font-mono text-sm"
                       value={text}
-                      placeholder={`GP.26.01.16/04/2026.Sáng.Láng trại\nNCC: Nhà cung cấp A\n1. Xi măng PCB40: 20.bao\n2. Cát tô: 3.m3`}
+                      placeholder={`16/04/2026.Sáng.Láng trại\nNCC: Nhà cung cấp A\n1. Xi măng PCB40: 20.bao\n2. Cát tô: 3.m3`}
                       onChange={(event) => setText(event.target.value)}
                     />
 
