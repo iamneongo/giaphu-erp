@@ -175,7 +175,7 @@ export function OverviewDashboard() {
         <div className="space-y-2">
           <h1 className="font-semibold text-3xl tracking-tight">{activeProject?.name ?? "Tổng quan công trình"}</h1>
           <p className="max-w-3xl text-muted-foreground text-sm leading-6">
-            Theo dõi dòng tiền, nhóm chi phí và vận hành gần nhất của công trình đang chọn.
+            Dòng tiền, chi phí và hoạt động mới nhất của công trình đang chọn.
           </p>
         </div>
       </div>
@@ -222,7 +222,7 @@ export function OverviewDashboard() {
                   {formatPercent(insights.headline.cashTrend)}
                 </Badge>
               </CardTitle>
-              <CardDescription>6 tháng gần nhất để nhìn nhanh áp lực chi ra và tốc độ thu tiền.</CardDescription>
+              <CardDescription>Chi phí và tiền thu trong 6 tháng gần nhất.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-1 items-end pt-0">
               <ChartContainer config={monthlyChartConfig} className="aspect-auto h-[260px] w-full xl:h-[285px]">
@@ -258,7 +258,7 @@ export function OverviewDashboard() {
           <Card className="flex min-w-0 flex-col xl:min-h-[390px]">
             <CardHeader className="items-center pb-0">
               <CardTitle>Tổng chi thực tế</CardTitle>
-              <CardDescription>Tỷ trọng các nhóm chi phí trong tổng chi thực tế.</CardDescription>
+              <CardDescription>Tổng chi chia theo nhóm nghiệp vụ.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-1 items-center justify-center pt-1 pb-0">
               <ChartContainer config={pieChartConfig} className="aspect-square h-[285px] w-full max-w-[330px]">
@@ -321,7 +321,7 @@ export function OverviewDashboard() {
                 Cơ cấu chi phí theo tháng
                 <Badge variant="outline">{formatCount(insights.headline.activeWeeks)} tuần</Badge>
               </CardTitle>
-              <CardDescription>Phân rã chi phí để dễ thấy tháng nào lệch trọng tâm thi công.</CardDescription>
+              <CardDescription>Chi phí từng tháng theo vật tư, nhân công, thầu phụ và vận hành.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-1 items-end pt-0">
               <ChartContainer config={areaChartConfig} className="aspect-auto h-[260px] w-full xl:h-[285px]">

@@ -203,7 +203,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
   const sections = {
     advances: {
       title: "Tạm ứng thầu phụ",
-      description: "Theo dõi tạm ứng theo tuần, hạng mục và nhà thầu phụ của công trình đang chọn.",
+      description: "Tạm ứng theo tuần, hạng mục và đội thầu phụ.",
       content: (
         <SectionBlock title="Tạm ứng thầu phụ">
           <DataTable
@@ -344,7 +344,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
     },
     contracts: {
       title: "Hợp đồng thầu phụ",
-      description: "Quản lý chi phí dự kiến, trạng thái phê duyệt và danh sách hợp đồng thầu phụ.",
+      description: "Chi phí dự kiến, phê duyệt và hợp đồng thầu phụ.",
       content: (
         <SectionBlock title="Hợp đồng thầu phụ">
           <DataTable
@@ -449,7 +449,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
     },
     operations: {
       title: "Chi phí vận hành",
-      description: "Tập trung toàn bộ các khoản vận hành phát sinh theo ngày và tuần cho công trình.",
+      description: "Khoản vận hành phát sinh theo ngày và tuần.",
       content: (
         <SectionBlock title="Chi phí vận hành">
           <DataTable

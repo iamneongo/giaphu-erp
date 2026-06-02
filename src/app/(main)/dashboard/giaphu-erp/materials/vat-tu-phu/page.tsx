@@ -10,7 +10,7 @@ export default async function Page() {
       allowedMaterialTypes={["VT Phụ"]}
       initialMaterialType="VT Phụ"
       title="Vật tư phụ"
-      description="Nhập vật tư phụ bằng phân rã Zalo hoặc thêm tay thủ công theo format AppScript."
+      description="Nhập vật tư phụ từ tin nhắn Zalo hoặc thêm thủ công."
     />
   );
 }

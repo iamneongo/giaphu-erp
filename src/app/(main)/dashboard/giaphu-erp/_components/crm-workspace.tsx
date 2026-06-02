@@ -70,7 +70,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
   > = {
     projects: {
       title: "CRM công trình",
-      description: "Theo dõi danh sách công trình và chọn đúng công trình đang làm việc.",
+      description: "Danh sách công trình và công trình đang làm việc.",
       actions: (
         <ActionDialog
           title="Thông tin công trình"
@@ -228,7 +228,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
     },
     contracts: {
       title: "Hợp đồng công trình",
-      description: "Quản lý hợp đồng theo công trình đang chọn, tập trung vào giá trị và ghi chú ký kết.",
+      description: "Hợp đồng, giá trị ký và ghi chú.",
       actions: (
         <ActionDialog
           title="Hợp đồng"
@@ -332,7 +332,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
     },
     payments: {
       title: "Thu tiền công trình",
-      description: "Theo dõi các đợt thanh toán theo công trình, ngày thu và ghi chú đối chiếu.",
+      description: "Đợt thanh toán, ngày thu và ghi chú đối chiếu.",
       actions: (
         <ActionDialog
           title="Thu tiền"

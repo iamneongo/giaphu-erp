@@ -81,8 +81,8 @@ export function ClerkWorkspacesPage() {
   return (
     <OrganizationList
       hidePersonal
-      afterCreateOrganizationUrl="/dashboard/workspaces/team"
-      afterSelectOrganizationUrl="/dashboard/workspaces/team"
+      afterCreateOrganizationUrl="/dashboard"
+      afterSelectOrganizationUrl="/dashboard"
       appearance={{
         elements: {
           ...clerkCardAppearance.elements,

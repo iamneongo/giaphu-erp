@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { auth } from "@clerk/nextjs/server";
+
 import {
   approveSubcontractorContract,
   closeAttendance,
@@ -117,10 +119,21 @@ function parseFilters(searchParams: URLSearchParams) {
 export async function GET(request: Request) {
   try {
     await createGiaPhuSchema();
+    const session = await auth();
+    if (!session.userId) {
+      return NextResponse.json({ status: "error", message: "Unauthorized" }, { status: 401 });
+    }
+    if (!session.orgId) {
+      return NextResponse.json(
+        { status: "error", message: "Vui lòng chọn tổ chức trước khi dùng ERP." },
+        { status: 403 },
+      );
+    }
+    const organizationId = session.orgId;
     const { searchParams } = new URL(request.url);
 
     if (searchParams.get("view") === "projects") {
-      const projects = await getGiaPhuProjectList();
+      const projects = await getGiaPhuProjectList({ organizationId });
       return NextResponse.json({ status: "success", projects });
     }
 
@@ -132,6 +145,7 @@ export async function GET(request: Request) {
 
       const result = await getGiaPhuPagedRows({
         dataset,
+        organizationId,
         activeProjectCode: searchParams.get("projectCode") || readActiveProjectCode(request),
         pageIndex: Number(searchParams.get("pageIndex") ?? 0),
         pageSize: Number(searchParams.get("pageSize") ?? 20),
@@ -150,6 +164,7 @@ export async function GET(request: Request) {
 
       const filterOptions = await getGiaPhuFilterOptions({
         dataset,
+        organizationId,
         activeProjectCode: searchParams.get("projectCode") || readActiveProjectCode(request),
         filters: parseFilters(searchParams),
       });
@@ -162,12 +177,12 @@ export async function GET(request: Request) {
       const activeProjectCode = searchParams.get("projectCode") || readActiveProjectCode(request);
 
       if (type === "overview") {
-        const insights = await getGiaPhuOverviewInsights({ activeProjectCode });
+        const insights = await getGiaPhuOverviewInsights({ activeProjectCode, organizationId });
         return NextResponse.json({ status: "success", insights });
       }
 
       if (type === "reports") {
-        const insights = await getGiaPhuReportsInsights({ activeProjectCode });
+        const insights = await getGiaPhuReportsInsights({ activeProjectCode, organizationId });
         return NextResponse.json({ status: "success", insights });
       }
 
@@ -175,6 +190,7 @@ export async function GET(request: Request) {
     }
 
     const data = await getGiaPhuDashboardData({
+      organizationId,
       activeProjectCode: readActiveProjectCode(request),
     });
     return NextResponse.json({ status: "success", data });
@@ -189,10 +205,20 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await createGiaPhuSchema();
+    const session = await auth();
+    if (!session.userId) {
+      return NextResponse.json({ status: "error", message: "Unauthorized" }, { status: 401 });
+    }
+    if (!session.orgId) {
+      return NextResponse.json(
+        { status: "error", message: "Vui lòng chọn tổ chức trước khi dùng ERP." },
+        { status: 403 },
+      );
+    }
     const body = (await request.json()) as ActionBody;
     const rawPayload = body.payload ?? {};
     const shouldReturnData = rawPayload.__returnData !== false;
-    const payload = sanitizeActionPayload(rawPayload);
+    const payload = { ...sanitizeActionPayload(rawPayload), organizationId: session.orgId };
 
     switch (body.action) {
       case "saveProject":
@@ -313,6 +339,7 @@ export async function POST(request: Request) {
     }
 
     const data = await getGiaPhuDashboardData({
+      organizationId: session.orgId,
       activeProjectCode: readActiveProjectCode(request, payload),
     });
     return NextResponse.json({ status: "success", data });

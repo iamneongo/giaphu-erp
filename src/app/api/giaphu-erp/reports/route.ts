@@ -54,6 +54,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const data = await getGiaPhuReportsData({
+      organizationId: session.orgId,
       activeProjectCode: searchParams.get("projectCode") ?? undefined,
       tables: parseTableStates(searchParams.get("tables")),
     });

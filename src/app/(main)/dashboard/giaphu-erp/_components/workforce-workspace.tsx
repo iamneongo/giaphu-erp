@@ -382,6 +382,7 @@ function AttendanceBoard({
   const [draftExtras, setDraftExtras] = React.useState<Record<string, AttendanceExtraDraft>>({});
   const [dirtyStaffNames, setDirtyStaffNames] = React.useState<Set<string>>(new Set());
   const [savingStaffName, setSavingStaffName] = React.useState("");
+  const [deletingStaffName, setDeletingStaffName] = React.useState("");
 
   React.useEffect(() => {
     if (normalizedWeekOptions.length > 0 && !normalizedWeekOptions.some((option) => option.value === selectedWeek)) {
@@ -611,6 +612,71 @@ function AttendanceBoard({
     ],
   );
 
+  const clearStaffDraft = React.useCallback(
+    (staffName: string) => {
+      setDirtyStaffNames((current) => {
+        const next = new Set(current);
+        next.delete(staffName);
+        return next;
+      });
+      setDraftCells((current) => {
+        const next = { ...current };
+        for (const date of weekDates) delete next[attendanceCellKey(staffName, date)];
+        return next;
+      });
+      setDraftExtras((current) => {
+        const next = { ...current };
+        delete next[attendanceStaffKey(staffName)];
+        return next;
+      });
+      setDraftParticipants((current) => current.filter((participant) => participant.staff.name !== staffName));
+    },
+    [weekDates],
+  );
+
+  const deleteStaffAttendance = React.useCallback(
+    async (staffRow: AttendanceBoardRow) => {
+      if (!canManage || !selectedCategory || deletingStaffName || savingStaffName) return;
+
+      const existingRows = rowByStaff.get(staffRow.name) ?? [];
+      const hasDraftRow = visibleDraftParticipants.some((participant) => participant.staff.name === staffRow.name);
+      if (!existingRows.length && hasDraftRow) {
+        clearStaffDraft(staffRow.name);
+        return;
+      }
+
+      if (!existingRows.length) return;
+      if (!window.confirm(`Xóa chấm công của "${staffRow.name}" trong tuần ${selectedWeek}?`)) return;
+
+      setDeletingStaffName(staffRow.name);
+      const result = await onAction("saveStaffWeeklyAttendance", {
+        projectCode: activeProjectCode,
+        week: selectedWeek,
+        category: selectedCategory,
+        staffName: staffRow.name,
+        rows: [],
+        __returnData: false,
+      });
+      setDeletingStaffName("");
+
+      if (result !== false) {
+        clearStaffDraft(staffRow.name);
+      }
+    },
+    [
+      activeProjectCode,
+      canManage,
+      clearStaffDraft,
+      deletingStaffName,
+      onAction,
+      rowByStaff,
+      savingStaffName,
+      selectedCategory,
+      selectedWeek,
+      visibleDraftParticipants,
+    ],
+  );
+
   const getStaffWorkdays = React.useCallback(
     (row: AttendanceBoardRow) => {
       return countAttendanceWorkdays(weekDates.map((date) => getCurrentCellDraft(row.name, date)));
@@ -734,24 +800,38 @@ function AttendanceBoard({
       {
         key: "actions",
         label: "Thao tác",
-        className: "min-w-24 text-right",
+        className: "min-w-40 text-right",
         headerClassName: "text-right",
         hideable: false,
         render: (row) => (
-          <Button
-            size="sm"
-            type="button"
-            disabled={!canManage || !dirtyStaffNames.has(row.name) || Boolean(savingStaffName)}
-            onClick={() => saveStaffAttendance(row)}
-          >
-            <Check />
-            {savingStaffName === row.name ? "Đang lưu" : "Lưu"}
-          </Button>
+          <div className="flex justify-end gap-2">
+            <Button
+              size="sm"
+              type="button"
+              disabled={!canManage || !dirtyStaffNames.has(row.name) || Boolean(savingStaffName || deletingStaffName)}
+              onClick={() => saveStaffAttendance(row)}
+            >
+              <Check />
+              {savingStaffName === row.name ? "Đang lưu" : "Lưu"}
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              variant="outline"
+              disabled={!canManage || Boolean(savingStaffName || deletingStaffName)}
+              onClick={() => deleteStaffAttendance(row)}
+            >
+              {deletingStaffName === row.name ? <RefreshCw className="animate-spin" /> : <Trash2 />}
+              Xóa
+            </Button>
+          </div>
         ),
       },
     ],
     [
       canManage,
+      deleteStaffAttendance,
+      deletingStaffName,
       dirtyStaffNames,
       getCurrentCellDraft,
       getCurrentStaffExtras,
@@ -992,7 +1072,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
   const sections = {
     attendance: {
       title: "Chấm công nhân công",
-      description: "Ghi nhận chấm công theo tuần, hạng mục và thực hiện khóa hoặc mở kết sổ khi cần.",
+      description: "Chấm công theo tuần, hạng mục và trạng thái kết sổ.",
       content: (
         <div className="space-y-6">
           <div className="space-y-3">
@@ -1012,7 +1092,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
     },
     staff: {
       title: "Nhân sự",
-      description: "Quản lý danh sách nhân sự dùng chung cho ERP, đội nhóm, mức lương và trạng thái nghỉ việc.",
+      description: "Nhân sự, đội nhóm, mức lương và trạng thái nghỉ việc.",
       content: (
         <SectionBlock title="Danh sách nhân sự">
           <DataTable
@@ -1101,7 +1181,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
     },
     laborNorms: {
       title: "Định mức nhân công",
-      description: "Thiết lập số công và chi phí định mức theo từng hạng mục của công trình đang chọn.",
+      description: "Số công và chi phí định mức theo hạng mục.",
       content: (
         <SectionBlock title="Định mức nhân công">
           <DataTable
@@ -1189,7 +1269,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
     },
     progress: {
       title: "Tiến độ hạng mục",
-      description: "Theo dõi kế hoạch và ngày hoàn thành xác nhận của từng hạng mục trong công trình.",
+      description: "Kế hoạch và ngày hoàn thành của từng hạng mục.",
       content: (
         <div className="space-y-3">
           <DataTable

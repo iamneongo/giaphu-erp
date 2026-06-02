@@ -26,7 +26,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   const [variant, collapsible, initialProjects, effectivePermissions] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
-    organizationReady ? getGiaPhuProjectList() : Promise.resolve([]),
+    organizationReady ? getGiaPhuProjectList({ organizationId: session.orgId ?? "" }) : Promise.resolve([]),
     getEffectiveErpPermissions(session),
   ]);
 
@@ -66,7 +66,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             <div className="flex min-w-0 items-center gap-2 px-4">
               <SidebarTrigger variant="outline" className="-ml-1 bg-background shadow-none" />
               <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-              <DashboardBreadcrumbs />
+              <DashboardBreadcrumbs initialProjects={initialProjects} />
             </div>
             <div className="hidden items-center gap-2 px-4 md:flex">
               <SearchDialog />

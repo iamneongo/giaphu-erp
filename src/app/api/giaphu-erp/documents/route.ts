@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { auth } from "@clerk/nextjs/server";
+
 import { createGiaPhuSchema, saveDocument } from "@/lib/giaphu-erp/db";
 
 export const runtime = "nodejs";
@@ -14,6 +16,16 @@ function formText(formData: FormData, key: string) {
 export async function POST(request: Request) {
   try {
     await createGiaPhuSchema();
+    const session = await auth();
+    if (!session.userId) {
+      return NextResponse.json({ status: "error", message: "Unauthorized" }, { status: 401 });
+    }
+    if (!session.orgId) {
+      return NextResponse.json(
+        { status: "error", message: "Vui lòng chọn tổ chức trước khi dùng ERP." },
+        { status: 403 },
+      );
+    }
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -26,6 +38,7 @@ export async function POST(request: Request) {
 
     const payload: Record<string, unknown> = {
       id,
+      organizationId: session.orgId,
       projectCode: formText(formData, "projectCode"),
       docType: formText(formData, "docType"),
       fileName: formText(formData, "fileName"),

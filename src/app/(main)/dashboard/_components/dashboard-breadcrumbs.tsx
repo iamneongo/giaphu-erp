@@ -78,10 +78,10 @@ async function fetchProjects() {
   return result.projects ?? [];
 }
 
-export function DashboardBreadcrumbs() {
+export function DashboardBreadcrumbs({ initialProjects = [] }: { initialProjects?: ProjectRow[] }) {
   const pathname = usePathname();
   const [activeProjectCode, setActiveProjectCode] = React.useState("");
-  const [projects, setProjects] = React.useState<ProjectRow[]>([]);
+  const [projects, setProjects] = React.useState<ProjectRow[]>(initialProjects);
   const segments = pathname.split("/").filter(Boolean);
   const visibleSegments = segments
     .map((segment, index) => ({
@@ -89,6 +89,12 @@ export function DashboardBreadcrumbs() {
       segment,
     }))
     .filter((item) => item.segment !== "dashboard");
+
+  React.useEffect(() => {
+    if (initialProjects.length) {
+      setProjects(initialProjects);
+    }
+  }, [initialProjects]);
 
   React.useEffect(() => {
     setActiveProjectCode(readActiveProjectCode());
@@ -119,14 +125,16 @@ export function DashboardBreadcrumbs() {
       }
     }
 
-    void loadProjects();
+    if (!initialProjects.length) {
+      void loadProjects();
+    }
     window.addEventListener(PROJECTS_REFRESH_EVENT, loadProjects);
 
     return () => {
       cancelled = true;
       window.removeEventListener(PROJECTS_REFRESH_EVENT, loadProjects);
     };
-  }, []);
+  }, [initialProjects.length]);
 
   function getSegmentLabel(segment: string, index: number) {
     if (segment.startsWith("role_")) return "Chi tiết vai trò";

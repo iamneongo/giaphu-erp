@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { auth } from "@clerk/nextjs/server";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -77,12 +78,17 @@ export default async function DetailPage({ params }: { params: Promise<{ type: s
   if (!isDetailType(type)) notFound();
 
   await enforceErpRoutePermission(detailPermissions[type]);
+  const session = await auth();
+  const organizationId = session.orgId ?? "";
 
   const cookieStore = await cookies();
   const activeProjectCode = cookieStore.get(ACTIVE_PROJECT_COOKIE_NAME)?.value ?? "";
   const decodedId = decodeURIComponent(id);
-  const data = await getGiaPhuDashboardData({ activeProjectCode });
-  const record = type === "documents" ? await getDocumentRecord(decodedId) : getDashboardRecord(type, decodedId, data);
+  const data = await getGiaPhuDashboardData({ activeProjectCode, organizationId });
+  const record =
+    type === "documents"
+      ? await getDocumentRecord(decodedId, organizationId)
+      : getDashboardRecord(type, decodedId, data);
 
   if (!record) notFound();
 
@@ -138,8 +144,8 @@ export default async function DetailPage({ params }: { params: Promise<{ type: s
   );
 }
 
-async function getDocumentRecord(id: string): Promise<DetailRecord | null> {
-  const row = await getDocumentDetail({ id });
+async function getDocumentRecord(id: string, organizationId: string): Promise<DetailRecord | null> {
+  const row = await getDocumentDetail({ id, organizationId });
   if (!row) return null;
 
   const fileName = String(row.file_name ?? "Hồ sơ");

@@ -10,7 +10,7 @@ export default async function Page() {
       allowedMaterialTypes={["VT Chính"]}
       initialMaterialType="VT Chính"
       title="Vật tư chính"
-      description="Nhập vật tư chính bằng phân rã Zalo hoặc thêm tay thủ công, sau đó đối soát và chốt lưu ERP."
+      description="Nhập vật tư chính từ tin nhắn Zalo hoặc thêm thủ công."
     />
   );
 }

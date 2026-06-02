@@ -589,7 +589,7 @@ export function DocumentsWorkspace() {
     <div className="flex flex-col gap-4 md:gap-6">
       <ModuleHeader
         title="Hồ sơ công trình"
-        description="Tải lên, xem, chỉnh sửa và tìm kiếm hồ sơ trực tiếp trong web app."
+        description="Tải lên, xem, sửa và tìm hồ sơ công trình."
         icon={FileText}
         actions={
           canManage ? (

@@ -499,7 +499,7 @@ export function ZaloMaterialBreakdownPage({
   allowedMaterialTypes,
   backHref,
   title = "Phân rã Zalo vật tư",
-  description = "Bóc tách nhanh theo format AppScript và đối soát trước khi chốt lưu ERP.",
+  description = "Đọc vật tư từ tin nhắn Zalo, kiểm tra lại rồi lưu ERP.",
 }: ZaloMaterialBreakdownPageProps = {}) {
   const pathname = usePathname();
   const { activeProjectCode, data, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
@@ -658,10 +658,7 @@ export function ZaloMaterialBreakdownPage({
               <DialogContent className="sm:max-w-4xl">
                 <DialogHeader>
                   <DialogTitle>Phân rã Zalo {materialType}</DialogTitle>
-                  <DialogDescription>
-                    Dán nội dung Zalo theo format AppScript. Sau khi phân rã, hệ thống sẽ đưa dữ liệu ra bảng đối soát
-                    bên dưới.
-                  </DialogDescription>
+                  <DialogDescription>Dán nội dung Zalo. Bảng đối soát sẽ nhận các dòng đọc được.</DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-5 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.7fr)]">
@@ -696,7 +693,7 @@ export function ZaloMaterialBreakdownPage({
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <Label htmlFor="zalo-text">Nội dung Zalo</Label>
-                      <div className="text-muted-foreground text-xs">Có thể paste nhiều dòng cùng lúc.</div>
+                      <div className="text-muted-foreground text-xs">Dán nhiều dòng cùng lúc.</div>
                     </div>
                     <Textarea
                       id="zalo-text"
@@ -728,7 +725,7 @@ export function ZaloMaterialBreakdownPage({
             </Dialog>
             <ActionDialog
               title={`Thêm ${materialType}`}
-              description="Nhập một dòng vật tư thủ công và lưu thẳng vào ERP."
+              description="Nhập một dòng vật tư và lưu vào ERP."
               button="Thêm tay"
               icon={Plus}
               action="saveMaterial"
@@ -819,9 +816,7 @@ export function ZaloMaterialBreakdownPage({
               <CheckCircle2 className="size-4" />
               Bước 2: Rà soát dữ liệu phân rã - {materialType}
             </CardTitle>
-            <CardDescription>
-              Kiểm tra hạng mục, vật tư, nhà cung cấp, số lượng và công nợ trước khi chốt.
-            </CardDescription>
+            <CardDescription>Kiểm tra hạng mục, vật tư, nhà cung cấp, số lượng và công nợ.</CardDescription>
             <CardAction>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={errors.length ? "destructive" : "secondary"}>{errors.length} lỗi</Badge>

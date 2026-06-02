@@ -201,21 +201,21 @@ export function MaterialDebtWorkspace() {
           title="Tổng công nợ"
           value={formatMoney(debtTotal)}
           hint="Tổng vật tư đang Chưa TT"
-          footer="Tổng giá trị vật tư còn mở theo dữ liệu công trình hiện tại."
+          footer="Tổng giá trị vật tư chưa thanh toán."
           icon={CircleDollarSign}
         />
         <DebtMetricCard
           title="Dòng chưa thanh toán"
           value={formatCount(debtRowsForStats.length)}
-          hint="Theo dữ liệu công trình hiện tại"
-          footer="Số dòng vật tư chưa hoàn tất thanh toán trong công trình."
+          hint="Dữ liệu công trình hiện tại"
+          footer="Số dòng vật tư chưa thanh toán."
           icon={Receipt}
         />
         <DebtMetricCard
           title="Nhà cung cấp"
           value={formatCount(supplierCount)}
           hint="Số NCC còn công nợ mở"
-          footer="Nhà cung cấp đang có ít nhất một dòng vật tư chưa thanh toán."
+          footer="Nhà cung cấp còn dòng vật tư chưa thanh toán."
           icon={CheckCircle2}
         />
       </div>

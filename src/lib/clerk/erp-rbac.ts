@@ -7,6 +7,8 @@ import { canAccessClerkPermission, ERP_PERMISSIONS, type ErpPermissionKey } from
 
 type ClerkAuthSession = Awaited<ReturnType<typeof auth>>;
 
+const useBackendPermissionLookup = process.env.CLERK_PERMISSION_SYNC_MODE === "backend";
+
 function buildContext(session: ClerkAuthSession, permissionKeys?: Iterable<string>) {
   return {
     orgRole: session.orgRole,
@@ -35,6 +37,10 @@ export async function getEffectiveErpPermissions(session?: ClerkAuthSession) {
     if (currentSession.has({ permission })) {
       permissionKeys.add(permission);
     }
+  }
+
+  if (!useBackendPermissionLookup) {
+    return Array.from(permissionKeys);
   }
 
   try {

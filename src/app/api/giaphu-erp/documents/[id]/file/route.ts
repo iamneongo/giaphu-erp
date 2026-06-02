@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { auth } from "@clerk/nextjs/server";
+
 import { createGiaPhuSchema, getDocumentFile } from "@/lib/giaphu-erp/db";
 
 export const runtime = "nodejs";
@@ -11,10 +13,14 @@ function encodeFileName(fileName: string) {
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await createGiaPhuSchema();
+    const session = await auth();
+    if (!session.userId || !session.orgId) {
+      return NextResponse.json({ status: "error", message: "Unauthorized" }, { status: 401 });
+    }
 
     const { id } = await params;
     const { searchParams } = new URL(request.url);
-    const document = await getDocumentFile({ id });
+    const document = await getDocumentFile({ id, organizationId: session.orgId });
     const bytes = Buffer.from(document.fileData, "base64");
     const dispositionType = searchParams.get("download") === "1" ? "attachment" : "inline";
     const encodedFileName = encodeFileName(document.fileName);

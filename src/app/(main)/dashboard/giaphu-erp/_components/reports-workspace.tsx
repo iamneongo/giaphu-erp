@@ -138,7 +138,7 @@ export function ReportsWorkspace() {
         <div className="space-y-2">
           <h1 className="font-semibold text-3xl tracking-tight">Báo cáo chi phí công trình</h1>
           <p className="max-w-3xl text-muted-foreground text-sm leading-6">
-            Tập trung vào chi phí nhân công, vật tư chính và vận hành của {activeProject?.name ?? "công trình"}.
+            Nhân công, vật tư chính và vận hành của {activeProject?.name ?? "công trình"}.
           </p>
         </div>
         <Button size="sm" onClick={exportReport}>
@@ -179,7 +179,7 @@ export function ReportsWorkspace() {
           <Card className="lg:col-span-4">
             <CardHeader className="pb-3">
               <CardTitle>Chi phí theo tháng</CardTitle>
-              <CardDescription>So sánh 3 nhóm chi phí chính theo từng tháng.</CardDescription>
+              <CardDescription>Nhân công, VT Chính và vận hành theo tháng.</CardDescription>
             </CardHeader>
             <CardContent className="pt-0">
               <ChartContainer config={costChartConfig} className="aspect-auto h-[230px] w-full">
@@ -225,7 +225,7 @@ export function ReportsWorkspace() {
           <Card className="lg:col-span-3">
             <CardHeader className="items-center pb-0">
               <CardTitle>Cơ cấu 3 nhóm</CardTitle>
-              <CardDescription>Tỷ trọng nhân công, VT Chính và vận hành trong tổng báo cáo.</CardDescription>
+              <CardDescription>Tỷ trọng của 3 nhóm chi phí.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-1 items-center justify-center pt-1 pb-0">
               <ChartContainer config={costChartConfig} className="mx-auto aspect-square h-[285px] w-full max-w-[330px]">
@@ -285,7 +285,7 @@ export function ReportsWorkspace() {
           <Card className="lg:col-span-7">
             <CardHeader className="pb-3">
               <CardTitle>Nhịp chi phí theo tuần</CardTitle>
-              <CardDescription>8 tuần gần nhất của nhân công, VT Chính và vận hành.</CardDescription>
+              <CardDescription>Chi phí theo tuần gần nhất.</CardDescription>
             </CardHeader>
             <CardContent className="pt-0">
               <ChartContainer config={costChartConfig} className="aspect-auto h-[230px] w-full">
@@ -346,7 +346,7 @@ export function ReportsWorkspace() {
           <Card className="lg:col-span-7">
             <CardHeader>
               <CardTitle>Bảng chi phí nhân công</CardTitle>
-              <CardDescription>Theo dõi nhân sự, tuần, hạng mục và tổng tiền chấm công.</CardDescription>
+              <CardDescription>Nhân sự, tuần, hạng mục và tiền công.</CardDescription>
             </CardHeader>
             <CardContent>
               <DataTable
@@ -406,7 +406,7 @@ export function ReportsWorkspace() {
           <Card className="lg:col-span-7">
             <CardHeader>
               <CardTitle>Bảng chi phí vật tư chính</CardTitle>
-              <CardDescription>Chỉ hiển thị vật tư loại VT Chính của công trình.</CardDescription>
+              <CardDescription>Vật tư chính của công trình.</CardDescription>
             </CardHeader>
             <CardContent>
               <DataTable
@@ -465,7 +465,7 @@ export function ReportsWorkspace() {
           <Card className="lg:col-span-7">
             <CardHeader>
               <CardTitle>Bảng chi phí vận hành</CardTitle>
-              <CardDescription>Các khoản vận hành phát sinh theo ngày và tuần.</CardDescription>
+              <CardDescription>Khoản vận hành theo ngày và tuần.</CardDescription>
             </CardHeader>
             <CardContent>
               <DataTable

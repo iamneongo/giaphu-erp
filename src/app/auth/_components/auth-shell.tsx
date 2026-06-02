@@ -53,13 +53,13 @@ export function AuthShell({ children, mode }: AuthShellProps) {
             <h1 className="font-semibold text-2xl tracking-tight">{isSignIn ? "Đăng nhập" : "Tạo tài khoản"}</h1>
             <p className="text-muted-foreground text-sm">
               {isSignIn
-                ? "Sau khi đăng nhập, nếu chưa có công trình hệ thống sẽ đưa bạn vào màn tạo công trình đầu tiên."
+                ? "Đăng nhập để tiếp tục làm việc với dữ liệu trong tổ chức của bạn."
                 : "Tạo tài khoản để bắt đầu quản lý các công trình trên dashboard."}
             </p>
           </div>
           {children}
           <p className="px-8 text-center text-muted-foreground text-sm">
-            Tài khoản được bảo vệ bằng Clerk. Dữ liệu ERP sẽ bắt đầu ngay khi bạn tạo công trình đầu tiên.
+            Tài khoản được bảo vệ bằng Clerk. Dữ liệu ERP được phân tách theo từng tổ chức.
           </p>
         </div>
       </section>
