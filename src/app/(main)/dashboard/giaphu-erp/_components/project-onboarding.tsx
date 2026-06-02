@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
+import { InteractiveGrid } from "@/app/auth/_components/interactive-grid";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
@@ -40,10 +41,17 @@ export function ProjectOnboarding() {
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-background">
-      <div className="flex min-h-dvh items-center justify-center bg-background p-4 md:p-8 xl:p-12">
-        <section className="w-full">
+      <div className="grid min-h-dvh bg-background xl:grid-cols-[1.1fr_0.9fr]">
+        <section
+          aria-hidden="true"
+          className="relative hidden overflow-hidden border-r bg-sidebar p-10 text-sidebar-foreground xl:flex xl:flex-col"
+        >
+          <InteractiveGrid className="mask-[radial-gradient(560px_circle_at_center,white,transparent)] inset-0 h-full skew-y-6" />
+        </section>
+
+        <section className="flex items-center justify-center p-4 md:p-8 xl:p-12">
           <div className="w-full max-w-xl space-y-8">
-            <div className="space-y-3 text-center">
+            <div className="space-y-3 text-center xl:text-left">
               <h1 className="font-semibold text-3xl tracking-tight">Tạo công trình</h1>
             </div>
 
