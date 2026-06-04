@@ -925,16 +925,19 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
     dataset: "staff",
     projectCode: "",
     initialRows: data.staff,
+    enabled: section === "staff",
   });
   const paginatedLaborNorms = usePaginatedErpRows<LaborNormRow>({
     dataset: "laborNorms",
     projectCode: activeProjectCode,
     initialRows: scoped.laborNorms,
+    enabled: section === "laborNorms",
   });
   const paginatedProgress = usePaginatedErpRows<ProgressRow>({
     dataset: "progress",
     projectCode: activeProjectCode,
     initialRows: scoped.progress,
+    enabled: section === "progress",
   });
   const categoryOptions = catalogOptions(data.catalogs.hangMuc);
   const attendanceWeekOptions = uniqueOptions(scoped.attendance.map((row) => row.week));

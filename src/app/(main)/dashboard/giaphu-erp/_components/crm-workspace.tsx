@@ -28,16 +28,19 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
     dataset: "projects",
     projectCode: "",
     initialRows: data.projects,
+    enabled: section === "projects",
   });
   const paginatedContracts = usePaginatedErpRows<ContractRow>({
     dataset: "contracts",
     projectCode: activeProjectCode,
     initialRows: scoped.contracts,
+    enabled: section === "contracts",
   });
   const paginatedPayments = usePaginatedErpRows<PaymentRow>({
     dataset: "payments",
     projectCode: activeProjectCode,
     initialRows: scoped.payments,
+    enabled: section === "payments",
   });
   const projectStatusOptions = uniqueOptions(data.projects.map((project) => project.status));
   const projectOwnerOptions = uniqueOptions(data.projects.map((project) => project.owner));

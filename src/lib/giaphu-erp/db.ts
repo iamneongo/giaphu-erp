@@ -838,15 +838,19 @@ async function ensureGiaPhuPerformanceIndexes() {
     await sql`create index if not exists gp_materials_project_date_idx on gp_materials (project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_materials_org_project_date_idx on gp_materials (organization_id, project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_materials_project_filters_idx on gp_materials (project_code, material_type, payment_status, week, category, supplier)`;
+    await sql`create index if not exists gp_materials_org_project_filters_idx on gp_materials (organization_id, project_code, material_type, payment_status, week, category, supplier)`;
     await sql`create index if not exists gp_attendance_project_date_idx on gp_attendance (project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_attendance_org_project_date_idx on gp_attendance (organization_id, project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_attendance_project_filters_idx on gp_attendance (project_code, week, category, staff_name, position, shift)`;
+    await sql`create index if not exists gp_attendance_org_project_filters_idx on gp_attendance (organization_id, project_code, week, category, staff_name, position, shift)`;
     await sql`create index if not exists gp_subcontractors_project_date_idx on gp_subcontractors (project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_subcontractors_org_project_date_idx on gp_subcontractors (organization_id, project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_subcontractors_project_filters_idx on gp_subcontractors (project_code, week, category, contractor_name)`;
+    await sql`create index if not exists gp_subcontractors_org_project_filters_idx on gp_subcontractors (organization_id, project_code, week, category, contractor_name)`;
     await sql`create index if not exists gp_operations_project_date_idx on gp_operations (project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_operations_org_project_date_idx on gp_operations (organization_id, project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_operations_project_week_idx on gp_operations (project_code, week)`;
+    await sql`create index if not exists gp_operations_org_project_week_idx on gp_operations (organization_id, project_code, week)`;
     await sql`create index if not exists gp_documents_project_date_idx on gp_documents (project_code, created_at desc, id desc)`;
     await sql`create index if not exists gp_documents_org_project_date_idx on gp_documents (organization_id, project_code, created_at desc, id desc)`;
     await sql`create index if not exists gp_documents_project_type_idx on gp_documents (project_code, doc_type)`;
@@ -907,19 +911,19 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     summaries,
   ] = await Promise.all([
     activeProjectCode
-      ? sql`select * from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 80`
+      ? sql`select * from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 80`
       : sql`select * from gp_materials where false`,
     activeProjectCode
-      ? sql`select * from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 280`
+      ? sql`select * from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 280`
       : sql`select * from gp_attendance where false`,
     activeProjectCode
-      ? sql`select * from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 80`
+      ? sql`select * from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 80`
       : sql`select * from gp_subcontractors where false`,
     activeProjectCode
       ? sql`select * from gp_subcontractor_contracts where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by updated_at desc, id desc limit 80`
       : sql`select * from gp_subcontractor_contracts where false`,
     activeProjectCode
-      ? sql`select * from gp_operations where organization_id = ${organizationId} and (project_code = ${activeProjectCode} or project_code = 'CHUNG DOANH NGHIỆP') order by coalesce(work_date, created_at::date) desc, id desc limit 80`
+      ? sql`select * from gp_operations where organization_id = ${organizationId} and (project_code = ${activeProjectCode} or project_code = 'CHUNG DOANH NGHIỆP') order by work_date desc nulls last, id desc limit 80`
       : sql`select * from gp_operations where false`,
     activeProjectCode
       ? sql`select * from gp_labor_norms where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by category asc`
@@ -1167,10 +1171,10 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
     sql`select coalesce(category, 'KhÃ¡c') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select coalesce(category, 'KhÃ¡c') as category, coalesce(sum(advance), 0)::float8 as subcontractors from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select coalesce(description, 'KhÃ¡c') as category, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select id, material_name, material_code, supplier, category, quantity, price, work_date from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 5`,
-    sql`select id, note, amount, payment_date from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by coalesce(payment_date, created_at::date) desc, id desc limit 5`,
-    sql`select id, contractor_name, category, note, advance, work_date from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 5`,
-    sql`select id, description, amount, work_date from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by coalesce(work_date, created_at::date) desc, id desc limit 5`,
+    sql`select id, material_name, material_code, supplier, category, quantity, price, work_date from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 5`,
+    sql`select id, note, amount, payment_date from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by payment_date desc nulls last, id desc limit 5`,
+    sql`select id, contractor_name, category, note, advance, work_date from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 5`,
+    sql`select id, description, amount, work_date from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 5`,
   ]);
 
   const breakdown = buildBreakdownFromRows([
@@ -1630,7 +1634,7 @@ export async function getGiaPhuReportsData(
       select *, count(*) over()::int as __total
       from gp_attendance
       where ${laborWhere}
-      order by coalesce(work_date, created_at::date) desc, id desc
+      order by work_date desc nulls last, id desc
       limit ${laborState.pageSize}
       offset ${laborOffset}
     `,
@@ -1638,7 +1642,7 @@ export async function getGiaPhuReportsData(
       select *, count(*) over()::int as __total
       from gp_materials
       where ${materialWhere}
-      order by coalesce(work_date, created_at::date) desc, id desc
+      order by work_date desc nulls last, id desc
       limit ${materialState.pageSize}
       offset ${materialOffset}
     `,
@@ -1646,7 +1650,7 @@ export async function getGiaPhuReportsData(
       select *, count(*) over()::int as __total
       from gp_operations
       where ${operationWhere}
-      order by coalesce(work_date, created_at::date) desc, id desc
+      order by work_date desc nulls last, id desc
       limit ${operationState.pageSize}
       offset ${operationOffset}
     `,
@@ -2026,7 +2030,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_materials
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by coalesce(work_date, created_at::date) desc, id desc
+        order by work_date desc nulls last, id desc
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2063,7 +2067,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_attendance
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by coalesce(work_date, created_at::date) desc, id desc
+        order by work_date desc nulls last, id desc
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2146,7 +2150,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_subcontractors
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by coalesce(work_date, created_at::date) desc, id desc
+        order by work_date desc nulls last, id desc
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2197,7 +2201,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
       select *
       from gp_operations
       where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-      order by coalesce(work_date, created_at::date) desc, id desc
+      order by work_date desc nulls last, id desc
       limit ${pageSize}
       offset ${offset}
     `,
@@ -2713,6 +2717,23 @@ export async function saveZaloMaterialBreakdown(payload: Record<string, unknown>
     }
   }
 
+  const preparedRows: Array<{
+    date: string;
+    week: string;
+    shift: string;
+    category: string;
+    material_code: string;
+    material_name: string;
+    quantity: number;
+    unit: string;
+    price: number;
+    debt: string;
+    status: string;
+    payment_status: string;
+    payment_info: string;
+    supplier: string;
+  }> = [];
+
   for (const rawRow of rows) {
     const row = rawRow && typeof rawRow === "object" ? (rawRow as Record<string, unknown>) : {};
     const date = dateOnly(row.date) || dateOnly(payload.date) || dateOnly(new Date());
@@ -2726,32 +2747,66 @@ export async function saveZaloMaterialBreakdown(payload: Record<string, unknown>
     if (!category) throw new Error(`Thiáº¿u háº¡ng má»¥c cho váº­t tÆ° ${materialName}.`);
     if (!unit) throw new Error(`Thiáº¿u Ä‘Æ¡n vá»‹ cho váº­t tÆ° ${materialName}.`);
 
-    await sql`
-      insert into gp_materials (
-        work_date, week, shift, organization_id, project_code, category, material_code, material_name, quantity, unit, price,
-        debt, status, payment_status, payment_info, material_type, supplier
-      )
-      values (
-        ${date},
-        ${text(row.week) || text(payload.week) || weekFromDate(date)},
-        ${text(row.shift) || text(payload.shift)},
-        ${organizationId},
-        ${projectCode},
-        ${category},
-        ${text(row.materialCode)},
-        ${materialName},
-        ${quantity},
-        ${unit},
-        ${money(row.price)},
-        ${text(row.debt)},
-        ${text(row.status) || "Nháº­p tá»« phÃ¢n rÃ£ Zalo"},
-        ${text(row.paymentStatus) || text(payload.paymentStatus) || "ChÆ°a TT"},
-        ${text(row.paymentInfo) || text(payload.paymentInfo)},
-        ${materialType},
-        ${text(row.supplier) || text(payload.supplier)}
-      )
-    `;
+    preparedRows.push({
+      date,
+      week: text(row.week) || text(payload.week) || weekFromDate(date),
+      shift: text(row.shift) || text(payload.shift),
+      category,
+      material_code: text(row.materialCode),
+      material_name: materialName,
+      quantity,
+      unit,
+      price: money(row.price),
+      debt: text(row.debt),
+      status: text(row.status) || "Nháº­p tá»« phÃ¢n rÃ£ Zalo",
+      payment_status: text(row.paymentStatus) || text(payload.paymentStatus) || "ChÆ°a TT",
+      payment_info: text(row.paymentInfo) || text(payload.paymentInfo),
+      supplier: text(row.supplier) || text(payload.supplier),
+    });
   }
+
+  if (!preparedRows.length) return;
+
+  await sql`
+    insert into gp_materials (
+      work_date, week, shift, organization_id, project_code, category, material_code, material_name, quantity, unit, price,
+      debt, status, payment_status, payment_info, material_type, supplier
+    )
+    select
+      x.date,
+      x.week,
+      x.shift,
+      ${organizationId},
+      ${projectCode},
+      x.category,
+      x.material_code,
+      x.material_name,
+      x.quantity,
+      x.unit,
+      x.price,
+      x.debt,
+      x.status,
+      x.payment_status,
+      x.payment_info,
+      ${materialType},
+      x.supplier
+    from jsonb_to_recordset(${JSON.stringify(preparedRows)}::jsonb) as x(
+      date date,
+      week text,
+      shift text,
+      category text,
+      material_code text,
+      material_name text,
+      quantity numeric,
+      unit text,
+      price numeric,
+      debt text,
+      status text,
+      payment_status text,
+      payment_info text,
+      supplier text
+    )
+  `;
 }
 
 export async function deleteMaterial(payload: Record<string, unknown>) {
@@ -2776,15 +2831,15 @@ export async function markMaterialPaid(payload: Record<string, unknown>) {
   const ids = Array.isArray(payload.ids)
     ? payload.ids.map(number).filter(Boolean)
     : [number(payload.id)].filter(Boolean);
-  for (const id of ids) {
-    await sql`
-      update gp_materials
-      set payment_status = 'ÄÃ£ TT',
-          payment_info = ${text(payload.paymentInfo) || `ÄÃ£ TT Â· ${dateOnly(new Date())}`},
-          updated_at = now()
-      where organization_id = ${organizationId} and id = ${id}
-    `;
-  }
+  if (!ids.length) return;
+
+  await sql`
+    update gp_materials
+    set payment_status = 'ÄÃ£ TT',
+        payment_info = ${text(payload.paymentInfo) || `ÄÃ£ TT Â· ${dateOnly(new Date())}`},
+        updated_at = now()
+    where organization_id = ${organizationId} and id = any(${ids})
+  `;
 }
 
 export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
@@ -2947,21 +3002,58 @@ export async function saveStaffWeeklyAttendance(payload: Record<string, unknown>
       and staff_name = ${staffName}
   `;
 
-  for (const row of preparedRows) {
-    const [savedRow] = (await sql`
-      insert into gp_attendance (
-        work_date, week, shift, organization_id, project_code, category, staff_name, position, half_day_salary,
-        allowance, overtime_hours, overtime_amount, total, status, coefficient
-      )
-      values (
-        ${row.date}, ${week}, ${row.shift}, ${organizationId}, ${projectCode}, ${category}, ${staffName}, ${row.position},
-        ${row.halfDaySalary}, ${row.allowance}, ${row.overtimeHours}, ${row.overtimeAmount}, ${row.total},
-        ${row.status}, ${row.coefficient}
-      )
-      returning *
-    `) as Row[];
-    if (savedRow) savedRows.push(attendanceFromRow(savedRow));
-  }
+  if (!preparedRows.length) return { savedRows, deletedIds };
+
+  const insertRows = preparedRows.map((row) => ({
+    date: row.date,
+    shift: row.shift,
+    position: row.position,
+    half_day_salary: row.halfDaySalary,
+    allowance: row.allowance,
+    overtime_hours: row.overtimeHours,
+    overtime_amount: row.overtimeAmount,
+    total: row.total,
+    status: row.status,
+    coefficient: row.coefficient,
+  }));
+
+  const insertedRows = (await sql`
+    insert into gp_attendance (
+      work_date, week, shift, organization_id, project_code, category, staff_name, position, half_day_salary,
+      allowance, overtime_hours, overtime_amount, total, status, coefficient
+    )
+    select
+      x.date,
+      ${week},
+      x.shift,
+      ${organizationId},
+      ${projectCode},
+      ${category},
+      ${staffName},
+      x.position,
+      x.half_day_salary,
+      x.allowance,
+      x.overtime_hours,
+      x.overtime_amount,
+      x.total,
+      x.status,
+      x.coefficient
+    from jsonb_to_recordset(${JSON.stringify(insertRows)}::jsonb) as x(
+      date date,
+      shift text,
+      position text,
+      half_day_salary numeric,
+      allowance numeric,
+      overtime_hours numeric,
+      overtime_amount numeric,
+      total numeric,
+      status text,
+      coefficient numeric
+    )
+    returning *
+  `) as Row[];
+
+  savedRows.push(...insertedRows.map(attendanceFromRow));
 
   return { savedRows, deletedIds };
 }
@@ -3053,18 +3145,23 @@ export async function saveSubcontractor(payload: Record<string, unknown>) {
 
 async function recomputeSubcontractorCumulative(projectCode: string, contractorName: string, organizationId: string) {
   const sql = getSql();
-  const rows = (await sql`
-    select id, advance
-    from gp_subcontractors
-    where organization_id = ${organizationId} and project_code = ${projectCode} and lower(contractor_name) = lower(${contractorName})
-    order by work_date asc nulls last, id asc
-  `) as Row[];
-
-  let cumulative = 0;
-  for (const row of rows) {
-    cumulative += number(row.advance);
-    await sql`update gp_subcontractors set cumulative = ${cumulative}, updated_at = now() where organization_id = ${organizationId} and id = ${number(row.id)}`;
-  }
+  await sql`
+    with ordered as (
+      select
+        id,
+        sum(advance) over (order by work_date asc nulls last, id asc) as next_cumulative
+      from gp_subcontractors
+      where organization_id = ${organizationId}
+        and project_code = ${projectCode}
+        and lower(contractor_name) = lower(${contractorName})
+    )
+    update gp_subcontractors target
+    set cumulative = ordered.next_cumulative,
+        updated_at = now()
+    from ordered
+    where target.organization_id = ${organizationId}
+      and target.id = ordered.id
+  `;
 }
 
 export async function deleteSubcontractor(payload: Record<string, unknown>) {

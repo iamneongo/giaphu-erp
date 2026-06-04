@@ -28,16 +28,19 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
     dataset: "subcontractors",
     projectCode: activeProjectCode,
     initialRows: scoped.subcontractors,
+    enabled: section === "advances",
   });
   const paginatedOperations = usePaginatedErpRows<OperationRow>({
     dataset: "operations",
     projectCode: activeProjectCode,
     initialRows: scoped.operations,
+    enabled: section === "operations",
   });
   const paginatedSubcontractorContracts = usePaginatedErpRows<SubcontractorContractRow>({
     dataset: "subcontractorContracts",
     projectCode: activeProjectCode,
     initialRows: scoped.subcontractorContracts,
+    enabled: section === "contracts",
   });
   const categoryOptions = catalogOptions(data.catalogs.hangMuc);
   const contractorOptions = catalogOptions(data.catalogs.thauPhu);
