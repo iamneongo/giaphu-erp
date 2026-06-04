@@ -32,6 +32,7 @@ export interface FormFieldDefinition {
   type?: "text" | "tel" | "number" | "date" | "textarea" | "select" | "checkbox" | "hidden" | "file";
   value?: string | number | boolean;
   placeholder?: string;
+  helperText?: string;
   accept?: string;
   options?: Array<{ label: string; value: string }>;
   required?: boolean;
@@ -391,6 +392,7 @@ export function ActionDialog({
                       onChange={(event) => updateFieldValue(field.name, event.target.value)}
                     />
                   )}
+                  {field.helperText ? <p className="text-muted-foreground text-xs">{field.helperText}</p> : null}
                 </Field>
               );
             })}

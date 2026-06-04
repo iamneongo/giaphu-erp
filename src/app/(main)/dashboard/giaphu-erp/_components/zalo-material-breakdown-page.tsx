@@ -766,7 +766,27 @@ export function ZaloMaterialBreakdownPage({
                   options: materialSelectOptions,
                   required: true,
                 },
-                { name: "supplier", label: "Nhà cung cấp", type: "select", options: supplierSelectOptions },
+                {
+                  name: "supplier",
+                  label: "NCC",
+                  type: "select",
+                  options: supplierSelectOptions,
+                  placeholder: "Chọn NCC từ danh mục",
+                  helperText: supplierSelectOptions.length
+                    ? "Lấy thông tin từ Danh mục > Nhà cung cấp."
+                    : "Chưa có NCC. Vui lòng thêm ở Danh mục > Nhà cung cấp trước.",
+                  validate: (value) => {
+                    const supplier = value.trim();
+                    if (!supplierSelectOptions.length) {
+                      return "Chưa có NCC trong danh mục. Vui lòng thêm nhà cung cấp trước.";
+                    }
+                    if (!supplier) return "Vui lòng chọn NCC từ danh mục nhà cung cấp.";
+                    if (!supplierSelectOptions.some((option) => option.value === supplier)) {
+                      return "NCC phải được chọn từ danh mục nhà cung cấp.";
+                    }
+                    return undefined;
+                  },
+                },
                 { name: "quantity", label: "Số lượng", type: "number", value: 1, required: true },
                 {
                   name: "unit",
