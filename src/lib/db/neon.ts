@@ -1,6 +1,11 @@
 import { neon, neonConfig } from "@neondatabase/serverless";
+import postgres from "postgres";
 
 import https from "node:https";
+
+type GlobalDatabaseState = typeof globalThis & {
+  __giaPhuPostgresSql?: postgres.Sql;
+};
 
 function configureNodeFetchForNeon() {
   if (typeof window !== "undefined" || neonConfig.fetchFunction) {
@@ -84,13 +89,30 @@ export function hasDatabaseUrl() {
   return Boolean(process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.NEON_DATABASE_URL);
 }
 
-export function getSql() {
-  configureNodeFetchForNeon();
+export function getSql(): any {
   const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.NEON_DATABASE_URL;
 
   if (!databaseUrl) {
     throw new Error("Missing DATABASE_URL. Add your Neon connection string to .env.local.");
   }
 
+  const databaseHost = new URL(databaseUrl).hostname;
+  const shouldUseNeonHttp = databaseHost.endsWith(".neon.tech");
+
+  if (!shouldUseNeonHttp) {
+    const globalState = globalThis as GlobalDatabaseState;
+
+    if (!globalState.__giaPhuPostgresSql) {
+      globalState.__giaPhuPostgresSql = postgres(databaseUrl, {
+        connect_timeout: 10,
+        idle_timeout: 20,
+        max: Number(process.env.POSTGRES_POOL_MAX ?? 10),
+      });
+    }
+
+    return globalState.__giaPhuPostgresSql;
+  }
+
+  configureNodeFetchForNeon();
   return neon(databaseUrl);
 }
