@@ -18,7 +18,7 @@ function normalizeChildPath(value = "") {
 }
 
 export function decodeProjectRouteSegment(value: string) {
-  let decoded = value;
+  let decoded = value.replace(/\+/g, " ");
 
   for (let index = 0; index < 3; index += 1) {
     try {

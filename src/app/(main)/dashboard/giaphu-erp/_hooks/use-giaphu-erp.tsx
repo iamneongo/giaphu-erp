@@ -168,7 +168,7 @@ export function GiaPhuErpProvider({
   React.useEffect(() => {
     if (routeProjectCode && initialData.projects.some((project) => project.code === routeProjectCode)) {
       writeActiveProjectCode(routeProjectCode);
-      setActiveProjectCode(routeProjectCode);
+      setActiveProjectCode((current) => (current === routeProjectCode ? current : routeProjectCode));
       return;
     }
 
@@ -176,10 +176,10 @@ export function GiaPhuErpProvider({
     const fallbackProjectCode = initialData.projects[0]?.code ?? "";
 
     if (storedProjectCode && initialData.projects.some((project) => project.code === storedProjectCode)) {
-      setActiveProjectCode(storedProjectCode);
+      setActiveProjectCode((current) => (current === storedProjectCode ? current : storedProjectCode));
     } else if (fallbackProjectCode) {
       writeActiveProjectCode(fallbackProjectCode);
-      setActiveProjectCode(fallbackProjectCode);
+      setActiveProjectCode((current) => (current === fallbackProjectCode ? current : fallbackProjectCode));
     }
   }, [initialData.projects, routeProjectCode]);
 

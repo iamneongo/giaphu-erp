@@ -73,7 +73,7 @@ export function ProjectSwitcher({
         setProjects(nextProjects);
 
         if (nextActiveProject) {
-          setActiveProjectCode(nextActiveProject.code);
+          setActiveProjectCode((current) => (current === nextActiveProject.code ? current : nextActiveProject.code));
           writeActiveProjectCode(nextActiveProject.code);
         }
       } catch {
@@ -85,7 +85,7 @@ export function ProjectSwitcher({
   React.useEffect(() => {
     const routeProject = initialProjects.find((project) => project.code === routeProjectCode);
     if (routeProject) {
-      setActiveProjectCode(routeProject.code);
+      setActiveProjectCode((current) => (current === routeProject.code ? current : routeProject.code));
       writeActiveProjectCode(routeProject.code);
       return;
     }
@@ -95,7 +95,7 @@ export function ProjectSwitcher({
       initialProjects.find((project) => project.code === storedProjectCode) ?? initialProjects[0];
 
     if (nextActiveProject) {
-      setActiveProjectCode(nextActiveProject.code);
+      setActiveProjectCode((current) => (current === nextActiveProject.code ? current : nextActiveProject.code));
       writeActiveProjectCode(nextActiveProject.code);
     }
   }, [initialProjects, routeProjectCode]);
@@ -110,7 +110,7 @@ export function ProjectSwitcher({
     function handleProjectChange(event: Event) {
       const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
       if (nextCode) {
-        setActiveProjectCode(nextCode);
+        setActiveProjectCode((current) => (current === nextCode ? current : nextCode));
       }
     }
 
@@ -151,7 +151,7 @@ export function ProjectSwitcher({
   }
 
   function selectProject(project: ProjectRow) {
-    setActiveProjectCode(project.code);
+    setActiveProjectCode((current) => (current === project.code ? current : project.code));
     writeActiveProjectCode(project.code);
     router.push(switchProjectInPath(pathname, project.code));
   }

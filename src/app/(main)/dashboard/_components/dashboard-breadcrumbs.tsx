@@ -18,7 +18,7 @@ import {
   PROJECTS_REFRESH_EVENT,
   readActiveProjectCode,
 } from "@/lib/giaphu-erp/project-context";
-import { projectScopedPath } from "@/lib/giaphu-erp/project-routes";
+import { decodeProjectRouteSegment, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 import type { ProjectRow } from "@/lib/giaphu-erp/types";
 
 const segmentLabels: Record<string, string> = {
@@ -145,7 +145,7 @@ export function DashboardBreadcrumbs({ initialProjects = [] }: { initialProjects
     }
 
     if (previousSegment === "projects") {
-      const decodedProjectCode = decodeURIComponent(segment);
+      const decodedProjectCode = decodeProjectRouteSegment(segment);
       return projects.find((project) => project.code === decodedProjectCode)?.name ?? decodedProjectCode;
     }
 

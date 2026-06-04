@@ -8,7 +8,7 @@ export type ActiveProjectChangeDetail = {
 };
 
 function decodeStoredProjectCode(value: string) {
-  let decoded = value;
+  let decoded = value.replace(/\+/g, " ");
 
   for (let index = 0; index < 3; index += 1) {
     try {
@@ -32,6 +32,11 @@ export function writeActiveProjectCode(code: string) {
   if (typeof window === "undefined") return;
 
   const normalizedCode = decodeStoredProjectCode(code);
+  const currentCode = readActiveProjectCode();
+
+  if (currentCode === normalizedCode) {
+    return;
+  }
 
   window.localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, normalizedCode);
   document.cookie = `${ACTIVE_PROJECT_COOKIE_NAME}=${encodeURIComponent(normalizedCode)}; path=/; max-age=31536000; samesite=lax`;
