@@ -101,6 +101,7 @@ function SearchableFormSelect({
   options,
   placeholder,
   disabled,
+  dialogOpen,
   required,
   onValueChange,
 }: {
@@ -111,6 +112,7 @@ function SearchableFormSelect({
   options: Array<{ label: string; value: string }>;
   placeholder?: string;
   disabled?: boolean;
+  dialogOpen: boolean;
   required?: boolean;
   onValueChange: (value: string) => void;
 }) {
@@ -118,6 +120,10 @@ function SearchableFormSelect({
   const selectedOption = options.find((option) => option.value === value);
   const displayValue = selectedOption?.label ?? value;
   const resolvedPlaceholder = placeholder ?? `Chọn ${label.toLowerCase()}`;
+
+  React.useEffect(() => {
+    if (!dialogOpen) setOpen(false);
+  }, [dialogOpen]);
 
   return (
     <>
@@ -219,6 +225,18 @@ export function ActionDialog({
       setFieldValues(buildInitialValues(fields));
     }
   }, [fields, resolvedOpen]);
+
+  React.useEffect(() => {
+    if (resolvedOpen) return;
+
+    const timeout = window.setTimeout(() => {
+      if (!document.querySelector('[role="dialog"]')) {
+        document.body.style.pointerEvents = "";
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [resolvedOpen]);
 
   const updateFieldValue = React.useCallback(
     (name: string, value: string | number | boolean) => {
@@ -376,6 +394,7 @@ export function ActionDialog({
                       options={field.options ?? []}
                       required={field.required}
                       disabled={field.disabled}
+                      dialogOpen={resolvedOpen}
                       onValueChange={(value) => updateFieldValue(field.name, value)}
                     />
                   ) : (
