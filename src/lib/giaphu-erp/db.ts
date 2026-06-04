@@ -2790,7 +2790,7 @@ export async function saveZaloMaterialBreakdown(payload: Record<string, unknown>
       x.payment_info,
       ${materialType},
       x.supplier
-    from jsonb_to_recordset(${JSON.stringify(preparedRows)}::jsonb) as x(
+    from jsonb_to_recordset((${JSON.stringify(preparedRows)}::text)::jsonb) as x(
       date date,
       week text,
       shift text,
@@ -3039,7 +3039,7 @@ export async function saveStaffWeeklyAttendance(payload: Record<string, unknown>
         x.total,
         x.status,
         x.coefficient
-      from jsonb_to_recordset(${JSON.stringify(insertRows)}::jsonb) as x(
+      from jsonb_to_recordset((${JSON.stringify(insertRows)}::text)::jsonb) as x(
         date date,
         shift text,
         position text,
