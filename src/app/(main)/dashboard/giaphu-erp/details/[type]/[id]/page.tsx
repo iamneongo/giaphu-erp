@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { ERP_PERMISSIONS, enforceErpRoutePermission } from "@/lib/clerk/erp-rbac";
 import { getDocumentDetail, getGiaPhuDashboardData } from "@/lib/giaphu-erp/db";
 import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
-import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
+import { decodeProjectRouteSegment, erpPathForProject } from "@/lib/giaphu-erp/project-routes";
 
 import { formatMoney } from "../../../_lib/formatters";
 
@@ -82,7 +82,7 @@ export default async function DetailPage({ params }: { params: Promise<{ type: s
   const organizationId = session.orgId ?? "";
 
   const cookieStore = await cookies();
-  const activeProjectCode = cookieStore.get(ACTIVE_PROJECT_COOKIE_NAME)?.value ?? "";
+  const activeProjectCode = decodeProjectRouteSegment(cookieStore.get(ACTIVE_PROJECT_COOKIE_NAME)?.value ?? "");
   const decodedId = decodeURIComponent(id);
   const data = await getGiaPhuDashboardData({ activeProjectCode, organizationId });
   const record =

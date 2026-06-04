@@ -17,8 +17,24 @@ function normalizeChildPath(value = "") {
   return value.startsWith("/") ? value : `/${value}`;
 }
 
+export function decodeProjectRouteSegment(value: string) {
+  let decoded = value;
+
+  for (let index = 0; index < 3; index += 1) {
+    try {
+      const nextDecoded = decodeURIComponent(decoded);
+      if (nextDecoded === decoded) break;
+      decoded = nextDecoded;
+    } catch {
+      break;
+    }
+  }
+
+  return decoded;
+}
+
 export function projectScopedPath(projectCode: string, childPath = "/overview") {
-  const normalizedProjectCode = encodeURIComponent(projectCode);
+  const normalizedProjectCode = encodeURIComponent(decodeProjectRouteSegment(projectCode));
   return `${PROJECT_ROUTE_PREFIX}/${normalizedProjectCode}${normalizeChildPath(childPath)}`;
 }
 
@@ -37,7 +53,7 @@ export function getProjectRouteInfo(pathname: string): ProjectRouteInfo | null {
 
   const rest = normalizedPathname.slice(prefix.length);
   const [encodedProjectCode = "", ...segments] = rest.split("/");
-  const projectCode = decodeURIComponent(encodedProjectCode);
+  const projectCode = decodeProjectRouteSegment(encodedProjectCode);
 
   if (!projectCode) return null;
 

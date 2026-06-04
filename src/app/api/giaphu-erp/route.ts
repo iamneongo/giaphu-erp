@@ -46,6 +46,7 @@ import {
   updateMaterialPrice,
 } from "@/lib/giaphu-erp/db";
 import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
+import { decodeProjectRouteSegment } from "@/lib/giaphu-erp/project-routes";
 import type { GiaPhuPagedDataset } from "@/lib/giaphu-erp/types";
 
 export const runtime = "nodejs";
@@ -88,7 +89,7 @@ function readActiveProjectCode(request: Request, payload?: Record<string, unknow
       : typeof payload?.code === "string"
         ? payload.code
         : undefined;
-  if (projectCode) return projectCode;
+  if (projectCode) return decodeProjectRouteSegment(projectCode);
 
   const cookieValue = request.headers
     .get("cookie")
@@ -97,7 +98,7 @@ function readActiveProjectCode(request: Request, payload?: Record<string, unknow
     .find((part) => part.startsWith(`${ACTIVE_PROJECT_COOKIE_NAME}=`))
     ?.split("=")[1];
 
-  return cookieValue ? decodeURIComponent(cookieValue) : undefined;
+  return cookieValue ? decodeProjectRouteSegment(cookieValue) : undefined;
 }
 
 function parseFilters(searchParams: URLSearchParams) {

@@ -17,6 +17,16 @@ const isCreateProjectRoute = createRouteMatcher(["/create-project(.*)"]);
 const isOrganizationSetupRoute = createRouteMatcher(["/dashboard/workspaces(.*)", "/dashboard/profile(.*)"]);
 const isApiRoute = createRouteMatcher(["/api/giaphu-erp(.*)"]);
 
+function buildRedirectUrl(origin: string, request: Request) {
+  try {
+    const url = new URL(request.url);
+    return `${origin}${decodeURI(url.pathname)}${url.search}`;
+  } catch {
+    const url = new URL(request.url);
+    return `${origin}${url.pathname}${url.search}`;
+  }
+}
+
 export default clerkMiddleware(async (auth, request) => {
   const protectedRoute = isProtectedRoute(request);
   if (!protectedRoute) {
@@ -29,7 +39,7 @@ export default clerkMiddleware(async (auth, request) => {
   if (!isAuthenticated && (isDashboardRoute(request) || isCreateProjectRoute(request))) {
     const origin = getAppOrigin(request.headers, request.url);
     const signInUrl = new URL("/auth/sign-in", request.url);
-    signInUrl.searchParams.set("redirect_url", `${origin}${request.nextUrl.pathname}${request.nextUrl.search}`);
+    signInUrl.searchParams.set("redirect_url", buildRedirectUrl(origin, request));
     return NextResponse.redirect(signInUrl);
   }
 
