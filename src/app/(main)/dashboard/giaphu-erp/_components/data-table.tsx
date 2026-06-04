@@ -82,7 +82,9 @@ export interface DataTableServerState {
 export interface DataTableServerSideOptions {
   rowCount: number;
   loading?: boolean;
+  filterOptionsLoading?: boolean;
   filterOptions?: Record<string, Array<{ label: string; value: string }>>;
+  onFilterOptionsRequest?: () => void;
   onStateChange: (state: DataTableServerState) => void;
 }
 
@@ -138,13 +140,17 @@ function useDebouncedValue<T>(value: T, delay = 300) {
 function DataTableFilterCombobox({
   filter,
   options,
+  loading,
   value,
   onValueChange,
+  onOpen,
 }: {
   filter: DataTableFilter<unknown>;
   options: Array<{ label: string; value: string }>;
+  loading?: boolean;
   value: string;
   onValueChange: (value: string) => void;
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const allLabel = filter.allLabel ?? `Tất cả ${filter.label.toLowerCase()}`;
@@ -152,7 +158,13 @@ function DataTableFilterCombobox({
   const displayValue = value === "__all" ? allLabel : (selectedOption?.label ?? allLabel);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) onOpen?.();
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           aria-expanded={open}
@@ -169,7 +181,7 @@ function DataTableFilterCombobox({
         <Command shouldFilter>
           <CommandInput placeholder={`Tìm ${filter.label.toLowerCase()}...`} />
           <CommandList>
-            <CommandEmpty>Không có lựa chọn phù hợp.</CommandEmpty>
+            <CommandEmpty>{loading ? "Đang tải lựa chọn..." : "Không có lựa chọn phù hợp."}</CommandEmpty>
             <CommandGroup>
               <CommandItem
                 value={allLabel}
@@ -719,7 +731,9 @@ export function DataTable<T>({
                 key={filter.key}
                 filter={filter as DataTableFilter<unknown>}
                 options={options}
+                loading={serverSide?.filterOptionsLoading}
                 value={filterValues[filter.key] ?? "__all"}
+                onOpen={serverSide?.onFilterOptionsRequest}
                 onValueChange={(value) => {
                   setFilterValues((current) => {
                     const nextValues = { ...current };

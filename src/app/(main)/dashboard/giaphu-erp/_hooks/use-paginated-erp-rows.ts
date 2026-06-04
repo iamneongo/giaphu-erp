@@ -39,6 +39,7 @@ export function usePaginatedErpRows<T>({
   const [rows, setRows] = React.useState<T[]>(initialRows);
   const [total, setTotal] = React.useState(initialRows.length);
   const [loading, setLoading] = React.useState(false);
+  const [filterOptionsLoading, setFilterOptionsLoading] = React.useState(false);
   const [filterOptions, setFilterOptions] = React.useState<Record<string, Array<{ label: string; value: string }>>>({});
   const [refreshToken, setRefreshToken] = React.useState(0);
   const [state, setState] = React.useState<DataTableServerState>({
@@ -48,6 +49,12 @@ export function usePaginatedErpRows<T>({
     sorting: [],
     filters: {},
   });
+  const filterOptionsScopeKey = React.useMemo(
+    () => JSON.stringify({ dataset, fixedFilters, projectCode }),
+    [dataset, fixedFilters, projectCode],
+  );
+  const previousFilterOptionsScopeKey = React.useRef(filterOptionsScopeKey);
+
   React.useEffect(() => {
     setRows(initialRows);
     setTotal(initialRows.length);
@@ -55,18 +62,31 @@ export function usePaginatedErpRows<T>({
   }, [initialRows]);
 
   React.useEffect(() => {
+    if (previousFilterOptionsScopeKey.current === filterOptionsScopeKey) return;
+
+    previousFilterOptionsScopeKey.current = filterOptionsScopeKey;
+    setFilterOptions({});
+    setFilterOptionsLoading(false);
+  }, [filterOptionsScopeKey]);
+
+  const loadFilterOptions = React.useCallback(() => {
     if (!enabled) {
       setFilterOptions({});
-      return;
+      return undefined;
     }
 
     if (projectScopedDatasets.has(dataset) && !projectCode) {
       setFilterOptions({});
-      return;
+      return undefined;
+    }
+
+    if (Object.keys(filterOptions).length > 0 || filterOptionsLoading) {
+      return undefined;
     }
 
     const requestRefreshToken = refreshToken;
     const controller = new AbortController();
+    setFilterOptionsLoading(true);
 
     fetchGiaPhuFilterOptions({
       dataset,
@@ -80,10 +100,27 @@ export function usePaginatedErpRows<T>({
       })
       .catch(() => {
         if (!controller.signal.aborted) setFilterOptions({});
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setFilterOptionsLoading(false);
       });
 
-    return () => controller.abort();
-  }, [dataset, enabled, fixedFilters, projectCode, refreshToken]);
+    return controller;
+  }, [dataset, enabled, filterOptions, filterOptionsLoading, fixedFilters, projectCode, refreshToken]);
+
+  React.useEffect(() => {
+    if (!enabled) {
+      setFilterOptions({});
+      setFilterOptionsLoading(false);
+      return;
+    }
+
+    const hasActiveFilters = Object.keys(state.filters).length > 0;
+    if (!hasActiveFilters) return;
+
+    const controller = loadFilterOptions();
+    return () => controller?.abort();
+  }, [enabled, loadFilterOptions, state.filters]);
 
   React.useEffect(() => {
     if (!enabled) {
@@ -160,10 +197,12 @@ export function usePaginatedErpRows<T>({
     () => ({
       rowCount: total,
       loading,
+      filterOptionsLoading,
       filterOptions,
+      onFilterOptionsRequest: loadFilterOptions,
       onStateChange,
     }),
-    [filterOptions, loading, onStateChange, total],
+    [filterOptions, filterOptionsLoading, loadFilterOptions, loading, onStateChange, total],
   );
 
   const refresh = React.useCallback(() => setRefreshToken((current) => current + 1), []);

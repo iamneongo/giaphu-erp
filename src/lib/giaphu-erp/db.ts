@@ -2938,7 +2938,6 @@ export async function saveStaffWeeklyAttendance(payload: Record<string, unknown>
   const week = text(payload.week).trim();
   const category = text(payload.category).trim();
   const staffName = text(payload.staffName).trim();
-  const savedRows: AttendanceRow[] = [];
   const preparedRows = rows.map((row) => {
     const date = requireDateInput(row.date, "NgÃ y cháº¥m cÃ´ng");
     const rowWeek = weekFromDate(date);
@@ -2976,86 +2975,95 @@ export async function saveStaffWeeklyAttendance(payload: Record<string, unknown>
   if (!category) throw new Error("Thiáº¿u háº¡ng má»¥c.");
   if (!staffName) throw new Error("Thiáº¿u nhÃ¢n sá»±.");
 
-  const lockKey = attendanceLockKey(organizationId, projectCode, week, category);
-  const [lock] =
-    (await sql`select status from gp_attendance_locks where organization_id = ${organizationId} and lock_key = ${lockKey}`) as Row[];
-  if (text(lock?.status) === "CLOSED")
-    throw new Error("Tuáº§n/háº¡ng má»¥c Ä‘Ã£ káº¿t sá»•, khÃ´ng thá»ƒ sá»­a cháº¥m cÃ´ng.");
+  async function persist(database: ReturnType<typeof getSql>) {
+    const savedRows: AttendanceRow[] = [];
+    const lockKey = attendanceLockKey(organizationId, projectCode, week, category);
+    const [lock] =
+      (await database`select status from gp_attendance_locks where organization_id = ${organizationId} and lock_key = ${lockKey}`) as Row[];
+    if (text(lock?.status) === "CLOSED")
+      throw new Error("Tuáº§n/háº¡ng má»¥c Ä‘Ã£ káº¿t sá»•, khÃ´ng thá»ƒ sá»­a cháº¥m cÃ´ng.");
 
-  const existingRows = (await sql`
-    select id
-    from gp_attendance
-    where organization_id = ${organizationId}
-      and project_code = ${projectCode}
-      and week = ${week}
-      and category = ${category}
-      and staff_name = ${staffName}
-  `) as Row[];
-  const deletedIds = existingRows.map((row) => number(row.id)).filter(Boolean);
+    const existingRows = (await database`
+      select id
+      from gp_attendance
+      where organization_id = ${organizationId}
+        and project_code = ${projectCode}
+        and week = ${week}
+        and category = ${category}
+        and staff_name = ${staffName}
+    `) as Row[];
+    const deletedIds = existingRows.map((row) => number(row.id)).filter(Boolean);
 
-  await sql`
-    delete from gp_attendance
-    where organization_id = ${organizationId}
-      and project_code = ${projectCode}
-      and week = ${week}
-      and category = ${category}
-      and staff_name = ${staffName}
-  `;
+    await database`
+      delete from gp_attendance
+      where organization_id = ${organizationId}
+        and project_code = ${projectCode}
+        and week = ${week}
+        and category = ${category}
+        and staff_name = ${staffName}
+    `;
 
-  if (!preparedRows.length) return { savedRows, deletedIds };
+    if (!preparedRows.length) return { savedRows, deletedIds };
 
-  const insertRows = preparedRows.map((row) => ({
-    date: row.date,
-    shift: row.shift,
-    position: row.position,
-    half_day_salary: row.halfDaySalary,
-    allowance: row.allowance,
-    overtime_hours: row.overtimeHours,
-    overtime_amount: row.overtimeAmount,
-    total: row.total,
-    status: row.status,
-    coefficient: row.coefficient,
-  }));
+    const insertRows = preparedRows.map((row) => ({
+      date: row.date,
+      shift: row.shift,
+      position: row.position,
+      half_day_salary: row.halfDaySalary,
+      allowance: row.allowance,
+      overtime_hours: row.overtimeHours,
+      overtime_amount: row.overtimeAmount,
+      total: row.total,
+      status: row.status,
+      coefficient: row.coefficient,
+    }));
 
-  const insertedRows = (await sql`
-    insert into gp_attendance (
-      work_date, week, shift, organization_id, project_code, category, staff_name, position, half_day_salary,
-      allowance, overtime_hours, overtime_amount, total, status, coefficient
-    )
-    select
-      x.date,
-      ${week},
-      x.shift,
-      ${organizationId},
-      ${projectCode},
-      ${category},
-      ${staffName},
-      x.position,
-      x.half_day_salary,
-      x.allowance,
-      x.overtime_hours,
-      x.overtime_amount,
-      x.total,
-      x.status,
-      x.coefficient
-    from jsonb_to_recordset(${JSON.stringify(insertRows)}::jsonb) as x(
-      date date,
-      shift text,
-      position text,
-      half_day_salary numeric,
-      allowance numeric,
-      overtime_hours numeric,
-      overtime_amount numeric,
-      total numeric,
-      status text,
-      coefficient numeric
-    )
-    returning *
-  `) as Row[];
+    const insertedRows = (await database`
+      insert into gp_attendance (
+        work_date, week, shift, organization_id, project_code, category, staff_name, position, half_day_salary,
+        allowance, overtime_hours, overtime_amount, total, status, coefficient
+      )
+      select
+        x.date,
+        ${week},
+        x.shift,
+        ${organizationId},
+        ${projectCode},
+        ${category},
+        ${staffName},
+        x.position,
+        x.half_day_salary,
+        x.allowance,
+        x.overtime_hours,
+        x.overtime_amount,
+        x.total,
+        x.status,
+        x.coefficient
+      from jsonb_to_recordset(${JSON.stringify(insertRows)}::jsonb) as x(
+        date date,
+        shift text,
+        position text,
+        half_day_salary numeric,
+        allowance numeric,
+        overtime_hours numeric,
+        overtime_amount numeric,
+        total numeric,
+        status text,
+        coefficient numeric
+      )
+      returning *
+    `) as Row[];
 
-  savedRows.push(...insertedRows.map(attendanceFromRow));
+    savedRows.push(...insertedRows.map(attendanceFromRow));
 
-  return { savedRows, deletedIds };
+    return { savedRows, deletedIds };
+  }
+
+  if (typeof sql.begin === "function") {
+    return sql.begin((transactionSql: ReturnType<typeof getSql>) => persist(transactionSql));
+  }
+
+  return persist(sql);
 }
 
 export async function deleteAttendanceRow(payload: Record<string, unknown>) {
