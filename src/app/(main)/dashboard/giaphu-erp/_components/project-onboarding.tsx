@@ -30,9 +30,10 @@ export function ProjectOnboarding() {
 
     startTransition(async () => {
       try {
-        await runGiaPhuAction("saveProject", payload);
+        const result = await runGiaPhuAction("saveProject", payload);
+        const createdProject = result.data?.projects.find((project) => project.code === projectCode);
         toast.success("Đã tạo công trình.");
-        router.replace(projectScopedPath(projectCode, "/overview"));
+        router.replace(projectScopedPath(createdProject?.id ?? projectCode, "/overview"));
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
       }

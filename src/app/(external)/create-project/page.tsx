@@ -18,7 +18,7 @@ export default async function Page() {
   const projects = await getGiaPhuProjectList({ organizationId });
 
   if (projects.length > 0) {
-    redirect(projectScopedPath(projects[0].code, "/overview"));
+    redirect(projectScopedPath(projects[0].id, "/overview"));
   }
 
   return <ProjectOnboarding />;

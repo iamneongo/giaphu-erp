@@ -1,10 +1,12 @@
 export const ACTIVE_PROJECT_STORAGE_KEY = "giaphu-erp.active-project-code";
+export const ACTIVE_PROJECT_ROUTE_ID_STORAGE_KEY = "giaphu-erp.active-project-route-id";
 export const ACTIVE_PROJECT_CHANGE_EVENT = "giaphu-erp:active-project-change";
 export const PROJECTS_REFRESH_EVENT = "giaphu-erp:projects-refresh";
 export const ACTIVE_PROJECT_COOKIE_NAME = "giaphu_erp_active_project";
 
 export type ActiveProjectChangeDetail = {
   code: string;
+  routeId: string;
 };
 
 function decodeStoredProjectCode(value: string) {
@@ -28,19 +30,29 @@ export function readActiveProjectCode() {
   return decodeStoredProjectCode(window.localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY) ?? "");
 }
 
-export function writeActiveProjectCode(code: string) {
+export function readActiveProjectRouteId() {
+  if (typeof window === "undefined") return "";
+  return decodeStoredProjectCode(window.localStorage.getItem(ACTIVE_PROJECT_ROUTE_ID_STORAGE_KEY) ?? "");
+}
+
+export function writeActiveProjectCode(code: string, routeId = code) {
   if (typeof window === "undefined") return;
 
   const normalizedCode = decodeStoredProjectCode(code);
+  const normalizedRouteId = decodeStoredProjectCode(routeId || code);
   const currentCode = readActiveProjectCode();
+  const currentRouteId = readActiveProjectRouteId();
 
-  if (currentCode === normalizedCode) {
+  if (currentCode === normalizedCode && currentRouteId === normalizedRouteId) {
     return;
   }
 
   window.localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, normalizedCode);
-  document.cookie = `${ACTIVE_PROJECT_COOKIE_NAME}=${encodeURIComponent(normalizedCode)}; path=/; max-age=31536000; samesite=lax`;
+  window.localStorage.setItem(ACTIVE_PROJECT_ROUTE_ID_STORAGE_KEY, normalizedRouteId);
+  document.cookie = `${ACTIVE_PROJECT_COOKIE_NAME}=${encodeURIComponent(normalizedRouteId)}; path=/; max-age=31536000; samesite=lax`;
   window.dispatchEvent(
-    new CustomEvent<ActiveProjectChangeDetail>(ACTIVE_PROJECT_CHANGE_EVENT, { detail: { code: normalizedCode } }),
+    new CustomEvent<ActiveProjectChangeDetail>(ACTIVE_PROJECT_CHANGE_EVENT, {
+      detail: { code: normalizedCode, routeId: normalizedRouteId },
+    }),
   );
 }

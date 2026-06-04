@@ -129,11 +129,14 @@ export function GiaPhuErpProvider({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const routeProjectCode = getProjectRouteInfo(pathname)?.projectCode ?? "";
+  const routeProjectId = getProjectRouteInfo(pathname)?.projectId ?? "";
+  const routeProject = routeProjectId
+    ? initialData.projects.find((project) => project.id === routeProjectId || project.code === routeProjectId)
+    : undefined;
   const [data, setData] = React.useState(initialData);
   const [activeProjectCode, setActiveProjectCode] = React.useState(() => {
-    if (routeProjectCode && initialData.projects.some((project) => project.code === routeProjectCode)) {
-      return routeProjectCode;
+    if (routeProject) {
+      return routeProject.code;
     }
 
     return initialData.projects[0]?.code ?? "";
@@ -159,16 +162,17 @@ export function GiaPhuErpProvider({
         return;
       }
 
-      writeActiveProjectCode(code);
-      router.push(switchProjectInPath(pathname, code));
+      const project = data.projects.find((item) => item.code === code);
+      writeActiveProjectCode(code, project?.id ?? code);
+      router.push(switchProjectInPath(pathname, project?.id ?? code));
     },
-    [activeProjectCode, pathname, router],
+    [activeProjectCode, data.projects, pathname, router],
   );
 
   React.useEffect(() => {
-    if (routeProjectCode && initialData.projects.some((project) => project.code === routeProjectCode)) {
-      writeActiveProjectCode(routeProjectCode);
-      setActiveProjectCode((current) => (current === routeProjectCode ? current : routeProjectCode));
+    if (routeProject) {
+      writeActiveProjectCode(routeProject.code, routeProject.id);
+      setActiveProjectCode((current) => (current === routeProject.code ? current : routeProject.code));
       return;
     }
 
@@ -178,10 +182,11 @@ export function GiaPhuErpProvider({
     if (storedProjectCode && initialData.projects.some((project) => project.code === storedProjectCode)) {
       setActiveProjectCode((current) => (current === storedProjectCode ? current : storedProjectCode));
     } else if (fallbackProjectCode) {
-      writeActiveProjectCode(fallbackProjectCode);
+      const fallbackProject = initialData.projects[0];
+      writeActiveProjectCode(fallbackProjectCode, fallbackProject?.id ?? fallbackProjectCode);
       setActiveProjectCode((current) => (current === fallbackProjectCode ? current : fallbackProjectCode));
     }
-  }, [initialData.projects, routeProjectCode]);
+  }, [initialData.projects, routeProject]);
 
   React.useEffect(() => {
     if (!data.projects.length && pathname !== "/create-project") {

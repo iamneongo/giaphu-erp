@@ -85,6 +85,9 @@ export default async function DetailPage({ params }: { params: Promise<{ type: s
   const activeProjectCode = decodeProjectRouteSegment(cookieStore.get(ACTIVE_PROJECT_COOKIE_NAME)?.value ?? "");
   const decodedId = decodeURIComponent(id);
   const data = await getGiaPhuDashboardData({ activeProjectCode, organizationId });
+  const activeProject = data.projects.find(
+    (project) => project.id === activeProjectCode || project.code === activeProjectCode,
+  );
   const record =
     type === "documents"
       ? await getDocumentRecord(decodedId, organizationId)
@@ -92,7 +95,7 @@ export default async function DetailPage({ params }: { params: Promise<{ type: s
 
   if (!record) notFound();
 
-  const backHref = activeProjectCode ? erpPathForProject(activeProjectCode, record.backHref) : record.backHref;
+  const backHref = activeProject ? erpPathForProject(activeProject.id, record.backHref) : record.backHref;
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">

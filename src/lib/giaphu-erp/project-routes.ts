@@ -2,6 +2,7 @@ export const LEGACY_ERP_ROUTE_PREFIX = "/dashboard/giaphu-erp";
 export const PROJECT_ROUTE_PREFIX = "/dashboard/projects";
 
 type ProjectRouteInfo = {
+  projectId: string;
   projectCode: string;
   legacyPathname: string;
   projectPathname: string;
@@ -33,16 +34,16 @@ export function decodeProjectRouteSegment(value: string) {
   return decoded;
 }
 
-export function projectScopedPath(projectCode: string, childPath = "/overview") {
-  const normalizedProjectCode = encodeURIComponent(decodeProjectRouteSegment(projectCode));
-  return `${PROJECT_ROUTE_PREFIX}/${normalizedProjectCode}${normalizeChildPath(childPath)}`;
+export function projectScopedPath(projectRouteId: string, childPath = "/overview") {
+  const normalizedProjectRouteId = encodeURIComponent(decodeProjectRouteSegment(projectRouteId));
+  return `${PROJECT_ROUTE_PREFIX}/${normalizedProjectRouteId}${normalizeChildPath(childPath)}`;
 }
 
-export function erpPathForProject(projectCode: string, href: string) {
+export function erpPathForProject(projectRouteId: string, href: string) {
   if (!href.startsWith(LEGACY_ERP_ROUTE_PREFIX)) return href;
 
   const childPath = href.slice(LEGACY_ERP_ROUTE_PREFIX.length) || "/overview";
-  return projectScopedPath(projectCode, childPath);
+  return projectScopedPath(projectRouteId, childPath);
 }
 
 export function getProjectRouteInfo(pathname: string): ProjectRouteInfo | null {
@@ -52,33 +53,34 @@ export function getProjectRouteInfo(pathname: string): ProjectRouteInfo | null {
   if (!normalizedPathname.startsWith(prefix)) return null;
 
   const rest = normalizedPathname.slice(prefix.length);
-  const [encodedProjectCode = "", ...segments] = rest.split("/");
-  const projectCode = decodeProjectRouteSegment(encodedProjectCode);
+  const [encodedProjectId = "", ...segments] = rest.split("/");
+  const projectId = decodeProjectRouteSegment(encodedProjectId);
 
-  if (!projectCode) return null;
+  if (!projectId) return null;
 
   const childPath = segments.length ? `/${segments.join("/")}` : "/overview";
 
   return {
-    projectCode,
+    projectId,
+    projectCode: projectId,
     legacyPathname: `${LEGACY_ERP_ROUTE_PREFIX}${childPath}`,
-    projectPathname: `${PROJECT_ROUTE_PREFIX}/${encodeURIComponent(projectCode)}${childPath}`,
+    projectPathname: `${PROJECT_ROUTE_PREFIX}/${encodeURIComponent(projectId)}${childPath}`,
   };
 }
 
-export function legacyErpPathForProject(pathname: string, projectCode: string) {
+export function legacyErpPathForProject(pathname: string, projectRouteId: string) {
   if (!pathname.startsWith(LEGACY_ERP_ROUTE_PREFIX)) return pathname;
 
   const childPath = pathname.slice(LEGACY_ERP_ROUTE_PREFIX.length) || "/overview";
-  return projectScopedPath(projectCode, childPath);
+  return projectScopedPath(projectRouteId, childPath);
 }
 
-export function switchProjectInPath(pathname: string, projectCode: string) {
+export function switchProjectInPath(pathname: string, projectRouteId: string) {
   const projectRoute = getProjectRouteInfo(pathname);
   if (projectRoute) {
     const childPath = projectRoute.legacyPathname.slice(LEGACY_ERP_ROUTE_PREFIX.length) || "/overview";
-    return projectScopedPath(projectCode, childPath);
+    return projectScopedPath(projectRouteId, childPath);
   }
 
-  return legacyErpPathForProject(pathname, projectCode);
+  return legacyErpPathForProject(pathname, projectRouteId);
 }

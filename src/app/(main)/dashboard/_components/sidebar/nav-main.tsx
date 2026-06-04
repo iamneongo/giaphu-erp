@@ -33,13 +33,16 @@ import {
   ACTIVE_PROJECT_CHANGE_EVENT,
   type ActiveProjectChangeDetail,
   readActiveProjectCode,
+  readActiveProjectRouteId,
 } from "@/lib/giaphu-erp/project-context";
 import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
+import type { ProjectRow } from "@/lib/giaphu-erp/types";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
 interface NavMainProps {
   readonly items: readonly NavGroup[];
   readonly effectivePermissions?: readonly ErpPermissionKey[];
+  readonly initialProjects?: readonly ProjectRow[];
 }
 
 const IsComingSoon = () => (
@@ -152,20 +155,24 @@ const NavItemCollapsed = ({
   );
 };
 
-export function NavMain({ items, effectivePermissions = [] }: NavMainProps) {
+export function NavMain({ items, effectivePermissions = [], initialProjects = [] }: NavMainProps) {
   const path = usePathname();
   const { state, isMobile } = useSidebar();
   const { has, orgRole } = useAuth();
-  const [activeProjectCode, setActiveProjectCode] = React.useState("");
+  const [activeProjectRouteId, setActiveProjectRouteId] = React.useState("");
   const effectivePermissionSet = React.useMemo(() => new Set(effectivePermissions), [effectivePermissions]);
 
   React.useEffect(() => {
-    setActiveProjectCode(readActiveProjectCode());
+    const storedCode = readActiveProjectCode();
+    const storedRouteId = readActiveProjectRouteId();
+    const project = initialProjects.find((item) => item.code === storedCode);
+    setActiveProjectRouteId(storedRouteId || project?.id || storedCode);
 
     function handleProjectChange(event: Event) {
-      const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
+      const detail = (event as CustomEvent<ActiveProjectChangeDetail>).detail;
+      const nextCode = detail?.code;
       if (nextCode) {
-        setActiveProjectCode(nextCode);
+        setActiveProjectRouteId(detail.routeId || nextCode);
       }
     }
 
@@ -174,7 +181,7 @@ export function NavMain({ items, effectivePermissions = [] }: NavMainProps) {
     return () => {
       window.removeEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
     };
-  }, []);
+  }, [initialProjects]);
 
   const visibleGroups = items
     .map((group) => {
@@ -226,8 +233,8 @@ export function NavMain({ items, effectivePermissions = [] }: NavMainProps) {
     .filter((group) => group.items.length > 0);
 
   const hrefForProject = React.useCallback(
-    (url: string) => (activeProjectCode ? erpPathForProject(activeProjectCode, url) : url),
-    [activeProjectCode],
+    (url: string) => (activeProjectRouteId ? erpPathForProject(activeProjectRouteId, url) : url),
+    [activeProjectRouteId],
   );
 
   const projectScopedGroups = visibleGroups.map((group) => ({

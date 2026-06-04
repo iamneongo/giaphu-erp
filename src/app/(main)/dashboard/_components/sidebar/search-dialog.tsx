@@ -22,6 +22,7 @@ import {
   ACTIVE_PROJECT_CHANGE_EVENT,
   type ActiveProjectChangeDetail,
   readActiveProjectCode,
+  readActiveProjectRouteId,
 } from "@/lib/giaphu-erp/project-context";
 import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
 import type { NavMainItem } from "@/navigation/sidebar/sidebar-items";
@@ -85,16 +86,17 @@ function groupBy(items: SearchItem[]) {
 export function SearchDialog() {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
-  const [activeProjectCode, setActiveProjectCode] = React.useState("");
+  const [activeProjectRouteId, setActiveProjectRouteId] = React.useState("");
   const router = useRouter();
 
   React.useEffect(() => {
-    setActiveProjectCode(readActiveProjectCode());
+    setActiveProjectRouteId(readActiveProjectRouteId() || readActiveProjectCode());
 
     function handleProjectChange(event: Event) {
-      const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
+      const detail = (event as CustomEvent<ActiveProjectChangeDetail>).detail;
+      const nextCode = detail?.code;
       if (nextCode) {
-        setActiveProjectCode(nextCode);
+        setActiveProjectRouteId(detail.routeId || nextCode);
       }
     }
 
@@ -124,7 +126,7 @@ export function SearchDialog() {
   const handleSelect = (item: SearchItem) => {
     if (item.disabled) return;
     handleOpenChange(false);
-    const href = activeProjectCode ? erpPathForProject(activeProjectCode, item.url) : item.url;
+    const href = activeProjectRouteId ? erpPathForProject(activeProjectRouteId, item.url) : item.url;
 
     if (item.newTab) {
       window.open(href, "_blank", "noopener,noreferrer");

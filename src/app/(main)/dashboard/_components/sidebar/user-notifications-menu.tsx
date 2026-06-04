@@ -14,6 +14,7 @@ import {
   ACTIVE_PROJECT_CHANGE_EVENT,
   type ActiveProjectChangeDetail,
   readActiveProjectCode,
+  readActiveProjectRouteId,
 } from "@/lib/giaphu-erp/project-context";
 import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
 
@@ -48,15 +49,16 @@ const notifications = [
 ];
 
 export function UserNotificationsMenu() {
-  const [activeProjectCode, setActiveProjectCode] = React.useState("");
+  const [activeProjectRouteId, setActiveProjectRouteId] = React.useState("");
 
   React.useEffect(() => {
-    setActiveProjectCode(readActiveProjectCode());
+    setActiveProjectRouteId(readActiveProjectRouteId() || readActiveProjectCode());
 
     function handleProjectChange(event: Event) {
-      const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
+      const detail = (event as CustomEvent<ActiveProjectChangeDetail>).detail;
+      const nextCode = detail?.code;
       if (nextCode) {
-        setActiveProjectCode(nextCode);
+        setActiveProjectRouteId(detail.routeId || nextCode);
       }
     }
 
@@ -102,7 +104,9 @@ export function UserNotificationsMenu() {
                   <Button asChild size="xs" variant={notification.tone}>
                     <Link
                       href={
-                        activeProjectCode ? erpPathForProject(activeProjectCode, notification.href) : notification.href
+                        activeProjectRouteId
+                          ? erpPathForProject(activeProjectRouteId, notification.href)
+                          : notification.href
                       }
                     >
                       {notification.cta}

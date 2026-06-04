@@ -22,5 +22,5 @@ export default async function Page() {
   const activeProjectCode = decodeProjectRouteSegment(cookieStore.get(ACTIVE_PROJECT_COOKIE_NAME)?.value ?? "");
   const activeProject = projects.find((project) => project.code === activeProjectCode) ?? projects[0];
 
-  redirect(projectScopedPath(activeProject.code, "/overview"));
+  redirect(projectScopedPath(activeProject.id, "/overview"));
 }

@@ -24,7 +24,7 @@ export function AppSidebar({
         <ProjectSwitcher initialProjects={initialProjects} organizationReady={organizationReady} />
       </SidebarHeader>
       <SidebarContent className="overflow-x-hidden">
-        <NavMain items={sidebarItems} effectivePermissions={effectivePermissions} />
+        <NavMain items={sidebarItems} effectivePermissions={effectivePermissions} initialProjects={initialProjects} />
       </SidebarContent>
       <SidebarFooter>
         <SidebarUserInfo />

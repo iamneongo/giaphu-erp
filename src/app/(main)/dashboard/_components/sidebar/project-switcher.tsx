@@ -53,7 +53,7 @@ export function ProjectSwitcher({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const routeProjectCode = getProjectRouteInfo(pathname)?.projectCode ?? "";
+  const routeProjectId = getProjectRouteInfo(pathname)?.projectId ?? "";
   const [projects, setProjects] = React.useState<ProjectRow[]>(initialProjects);
   const [activeProjectCode, setActiveProjectCode] = React.useState("");
   const [pending, startTransition] = React.useTransition();
@@ -66,7 +66,8 @@ export function ProjectSwitcher({
         const nextProjects = await fetchProjects();
         const storedProjectCode = readActiveProjectCode();
         const nextActiveProject =
-          nextProjects.find((project) => project.code === routeProjectCode) ??
+          nextProjects.find((project) => project.id === routeProjectId) ??
+          nextProjects.find((project) => project.code === routeProjectId) ??
           nextProjects.find((project) => project.code === storedProjectCode) ??
           nextProjects[0];
 
@@ -74,19 +75,21 @@ export function ProjectSwitcher({
 
         if (nextActiveProject) {
           setActiveProjectCode((current) => (current === nextActiveProject.code ? current : nextActiveProject.code));
-          writeActiveProjectCode(nextActiveProject.code);
+          writeActiveProjectCode(nextActiveProject.code, nextActiveProject.id);
         }
       } catch {
         setProjects([]);
       }
     });
-  }, [routeProjectCode]);
+  }, [routeProjectId]);
 
   React.useEffect(() => {
-    const routeProject = initialProjects.find((project) => project.code === routeProjectCode);
+    const routeProject = initialProjects.find(
+      (project) => project.id === routeProjectId || project.code === routeProjectId,
+    );
     if (routeProject) {
       setActiveProjectCode((current) => (current === routeProject.code ? current : routeProject.code));
-      writeActiveProjectCode(routeProject.code);
+      writeActiveProjectCode(routeProject.code, routeProject.id);
       return;
     }
 
@@ -96,9 +99,9 @@ export function ProjectSwitcher({
 
     if (nextActiveProject) {
       setActiveProjectCode((current) => (current === nextActiveProject.code ? current : nextActiveProject.code));
-      writeActiveProjectCode(nextActiveProject.code);
+      writeActiveProjectCode(nextActiveProject.code, nextActiveProject.id);
     }
-  }, [initialProjects, routeProjectCode]);
+  }, [initialProjects, routeProjectId]);
 
   React.useEffect(() => {
     if (organizationReady && !initialProjects.length) {
@@ -152,8 +155,8 @@ export function ProjectSwitcher({
 
   function selectProject(project: ProjectRow) {
     setActiveProjectCode((current) => (current === project.code ? current : project.code));
-    writeActiveProjectCode(project.code);
-    router.push(switchProjectInPath(pathname, project.code));
+    writeActiveProjectCode(project.code, project.id);
+    router.push(switchProjectInPath(pathname, project.id));
   }
 
   if (!projects.length && !pending) {
@@ -230,7 +233,7 @@ export function ProjectSwitcher({
               <Link
                 prefetch={false}
                 href={
-                  activeProject ? projectScopedPath(activeProject.code, "/crm/projects") : "/dashboard/giaphu-erp/crm"
+                  activeProject ? projectScopedPath(activeProject.id, "/crm/projects") : "/dashboard/giaphu-erp/crm"
                 }
                 className="gap-2"
               >

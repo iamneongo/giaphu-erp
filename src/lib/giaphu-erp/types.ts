@@ -128,6 +128,7 @@ export type GiaPhuReportsData = {
 };
 
 export interface ProjectRow {
+  id: string;
   code: string;
   name: string;
   owner: string;

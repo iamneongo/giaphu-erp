@@ -17,6 +17,7 @@ import {
   type ActiveProjectChangeDetail,
   PROJECTS_REFRESH_EVENT,
   readActiveProjectCode,
+  readActiveProjectRouteId,
 } from "@/lib/giaphu-erp/project-context";
 import { decodeProjectRouteSegment, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 import type { ProjectRow } from "@/lib/giaphu-erp/types";
@@ -80,7 +81,7 @@ async function fetchProjects() {
 
 export function DashboardBreadcrumbs({ initialProjects = [] }: { initialProjects?: ProjectRow[] }) {
   const pathname = usePathname();
-  const [activeProjectCode, setActiveProjectCode] = React.useState("");
+  const [activeProjectRouteId, setActiveProjectRouteId] = React.useState("");
   const [projects, setProjects] = React.useState<ProjectRow[]>(initialProjects);
   const segments = pathname.split("/").filter(Boolean);
   const visibleSegments = segments
@@ -97,12 +98,16 @@ export function DashboardBreadcrumbs({ initialProjects = [] }: { initialProjects
   }, [initialProjects]);
 
   React.useEffect(() => {
-    setActiveProjectCode(readActiveProjectCode());
+    const storedCode = readActiveProjectCode();
+    const storedRouteId = readActiveProjectRouteId();
+    const project = initialProjects.find((item) => item.code === storedCode);
+    setActiveProjectRouteId(storedRouteId || project?.id || storedCode);
 
     function handleProjectChange(event: Event) {
-      const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
+      const detail = (event as CustomEvent<ActiveProjectChangeDetail>).detail;
+      const nextCode = detail?.code;
       if (nextCode) {
-        setActiveProjectCode(nextCode);
+        setActiveProjectRouteId(detail.routeId || nextCode);
       }
     }
 
@@ -111,7 +116,7 @@ export function DashboardBreadcrumbs({ initialProjects = [] }: { initialProjects
     return () => {
       window.removeEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
     };
-  }, []);
+  }, [initialProjects]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -145,8 +150,11 @@ export function DashboardBreadcrumbs({ initialProjects = [] }: { initialProjects
     }
 
     if (previousSegment === "projects") {
-      const decodedProjectCode = decodeProjectRouteSegment(segment);
-      return projects.find((project) => project.code === decodedProjectCode)?.name ?? decodedProjectCode;
+      const decodedProjectId = decodeProjectRouteSegment(segment);
+      return (
+        projects.find((project) => project.id === decodedProjectId || project.code === decodedProjectId)?.name ??
+        decodedProjectId
+      );
     }
 
     return segmentLabels[segment] ?? segment;
@@ -156,7 +164,9 @@ export function DashboardBreadcrumbs({ initialProjects = [] }: { initialProjects
     <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbLink href={activeProjectCode ? projectScopedPath(activeProjectCode, "/overview") : "/dashboard"}>
+          <BreadcrumbLink
+            href={activeProjectRouteId ? projectScopedPath(activeProjectRouteId, "/overview") : "/dashboard"}
+          >
             Bảng điều khiển
           </BreadcrumbLink>
         </BreadcrumbItem>

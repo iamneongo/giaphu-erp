@@ -270,6 +270,7 @@ function parseLocalizedNumber(value: unknown) {
 
 function projectFromRow(row: Row): ProjectRow {
   return {
+    id: text(row.id || row.code),
     code: text(row.code),
     name: text(row.name),
     owner: text(row.owner),
@@ -548,6 +549,7 @@ async function createGiaPhuSchemaInternal() {
   const sql = getSql();
 
   await sql`create table if not exists gp_projects (
+    id bigserial unique,
     code text primary key,
     organization_id text not null default '',
     name text not null,
@@ -802,6 +804,7 @@ async function ensureOrganizationColumns() {
   const sql = getSql();
 
   await sql`alter table gp_projects add column if not exists organization_id text not null default ''`;
+  await sql`alter table gp_projects add column if not exists id bigserial`;
   await sql`alter table gp_catalog_items add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_staff add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_contracts add column if not exists organization_id text not null default ''`;
@@ -832,6 +835,8 @@ async function ensureGiaPhuPerformanceIndexes() {
   const sql = getSql();
   state.__giaPhuPerformanceIndexesPromise ??= (async () => {
     await ensureOrganizationColumns();
+    await sql`create unique index if not exists gp_projects_id_unique_idx on gp_projects (id)`;
+    await sql`create index if not exists gp_projects_org_id_idx on gp_projects (organization_id, id)`;
     await sql`create index if not exists gp_projects_org_date_idx on gp_projects (organization_id, updated_at desc, code asc)`;
     await sql`create index if not exists gp_catalog_items_org_kind_idx on gp_catalog_items (organization_id, kind, name)`;
     await sql`create index if not exists gp_staff_org_idx on gp_staff (organization_id, id asc, name asc)`;
@@ -893,9 +898,11 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     sql`select * from gp_catalog_items where organization_id = ${organizationId} order by kind asc, name asc`,
     sql`select * from gp_staff where organization_id = ${organizationId} order by id asc, name asc`,
   ]);
-  const activeProjectCode = projects.some((project) => project.code === options.activeProjectCode)
-    ? (options.activeProjectCode ?? "")
-    : (projects[0]?.code ?? "");
+  const requestedProject = text(options.activeProjectCode).trim();
+  const activeProjectCode =
+    projects.find((project) => project.code === requestedProject || project.id === requestedProject)?.code ??
+    projects[0]?.code ??
+    "";
 
   const [
     materialRows,
@@ -1061,7 +1068,7 @@ async function resolveActiveProjectCode(activeProjectCode?: string, organization
     const rows = (await sql`
       select code
       from gp_projects
-      where organization_id = ${orgId} and code = ${requestedCode}
+      where organization_id = ${orgId} and (code = ${requestedCode} or id::text = ${requestedCode})
       limit 1
     `) as Row[];
     if (rows[0]?.code) return text(rows[0].code);
