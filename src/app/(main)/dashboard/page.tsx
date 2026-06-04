@@ -20,7 +20,11 @@ export default async function Page() {
 
   const cookieStore = await cookies();
   const activeProjectCode = decodeProjectRouteSegment(cookieStore.get(ACTIVE_PROJECT_COOKIE_NAME)?.value ?? "");
-  const activeProject = projects.find((project) => project.code === activeProjectCode) ?? projects[0];
+  const activeProject =
+    projects.find(
+      (project) =>
+        project.id === activeProjectCode || project.code === activeProjectCode || project.name === activeProjectCode,
+    ) ?? projects[0];
 
   redirect(projectScopedPath(activeProject.id, "/overview"));
 }

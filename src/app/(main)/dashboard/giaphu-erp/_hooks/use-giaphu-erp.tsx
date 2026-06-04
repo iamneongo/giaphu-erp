@@ -131,7 +131,10 @@ export function GiaPhuErpProvider({
   const router = useRouter();
   const routeProjectId = getProjectRouteInfo(pathname)?.projectId ?? "";
   const routeProject = routeProjectId
-    ? initialData.projects.find((project) => project.id === routeProjectId || project.code === routeProjectId)
+    ? initialData.projects.find(
+        (project) =>
+          project.id === routeProjectId || project.code === routeProjectId || project.name === routeProjectId,
+      )
     : undefined;
   const [data, setData] = React.useState(initialData);
   const [activeProjectCode, setActiveProjectCode] = React.useState(() => {
@@ -187,6 +190,11 @@ export function GiaPhuErpProvider({
       setActiveProjectCode((current) => (current === fallbackProjectCode ? current : fallbackProjectCode));
     }
   }, [initialData.projects, routeProject]);
+
+  React.useEffect(() => {
+    if (!routeProject || !routeProjectId || routeProjectId === routeProject.id) return;
+    router.replace(switchProjectInPath(pathname, routeProject.id));
+  }, [pathname, routeProject, routeProjectId, router]);
 
   React.useEffect(() => {
     if (!data.projects.length && pathname !== "/create-project") {
