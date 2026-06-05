@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import {
   type ColumnDef,
@@ -46,7 +46,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { readActiveProjectCode, readActiveProjectRouteId } from "@/lib/giaphu-erp/project-context";
 import { getProjectRouteInfo, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
-import { navigateWithDocument } from "@/lib/navigation/document-navigation";
 import { cn } from "@/lib/utils";
 
 export interface DataTableColumn<T> {
@@ -480,6 +479,7 @@ export function DataTable<T>({
   rowDetailHref?: (row: T) => string | undefined;
   serverSide?: DataTableServerSideOptions;
 }) {
+  const router = useRouter();
   const pathname = usePathname();
   const isServerSide = Boolean(serverSide);
   const isLoading = loading ? true : (serverSide?.loading ?? false);
@@ -830,7 +830,7 @@ export function DataTable<T>({
                   onClick={(event) => {
                     if (!enableRowDetails || isInteractiveTarget(event.target)) return;
                     const href = getDetailHref(row.original);
-                    if (href) navigateWithDocument(href);
+                    if (href) router.push(href);
                   }}
                 >
                   {row.getVisibleCells().map((cell) => {

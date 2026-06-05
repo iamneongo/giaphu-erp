@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 import { useAuth, useOrganizationList } from "@clerk/nextjs";
 import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
@@ -15,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
-import { navigateWithDocument } from "@/lib/navigation/document-navigation";
 
 import { DashboardLink } from "../dashboard-link";
 
@@ -26,6 +26,7 @@ function formatMembershipRole(role?: string | null) {
 }
 
 export function OrganizationSwitcher() {
+  const router = useRouter();
   const { isMobile, state } = useSidebar();
   const { orgId } = useAuth();
   const { isLoaded, setActive, userMemberships } = useOrganizationList({
@@ -43,7 +44,7 @@ export function OrganizationSwitcher() {
     if (!setActive || orgId === organizationId) return;
 
     await setActive({ organization: organizationId });
-    navigateWithDocument("/dashboard");
+    router.push("/dashboard");
   }
 
   if (!isLoaded) {

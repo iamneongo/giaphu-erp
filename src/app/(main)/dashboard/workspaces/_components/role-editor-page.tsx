@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { useRouter } from "next/navigation";
+
 import { Loader2, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,7 +15,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { ClerkOrganizationPermission, ClerkOrganizationRole, ClerkRoleSet } from "@/lib/clerk/clerk-bapi";
 import { ERP_PERMISSION_CATALOG, type ErpPermissionKey, getPermissionCatalogGroups } from "@/lib/clerk/erp-rbac-shared";
-import { navigateWithDocument } from "@/lib/navigation/document-navigation";
 
 import { DashboardLink } from "../../_components/dashboard-link";
 
@@ -59,6 +60,7 @@ async function readRoleManagerResponse(response: Response): Promise<RoleManagerR
 }
 
 export function RoleEditorPage({ mode, roleId }: { mode: "create" | "edit"; roleId?: string }) {
+  const router = useRouter();
   const [loading, setLoading] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
   const [roles, setRoles] = React.useState<ClerkOrganizationRole[]>([]);
@@ -126,9 +128,9 @@ export function RoleEditorPage({ mode, roleId }: { mode: "create" | "edit"; role
   React.useEffect(() => {
     if (mode === "edit" && !loading && !editingRole) {
       toast.error("Không tìm thấy vai trò cần chỉnh sửa.");
-      navigateWithDocument("/dashboard/workspaces/roles");
+      router.replace("/dashboard/workspaces/roles");
     }
-  }, [editingRole, loading, mode]);
+  }, [editingRole, loading, mode, router]);
 
   function togglePermission(permissionKey: ErpPermissionKey, checked: boolean) {
     setSelectedKeys((current) => {
@@ -195,7 +197,8 @@ export function RoleEditorPage({ mode, roleId }: { mode: "create" | "edit"; role
       }
 
       toast.success(mode === "edit" ? "Đã cập nhật vai trò." : "Đã tạo vai trò mới.");
-      navigateWithDocument("/dashboard/workspaces/roles");
+      router.push("/dashboard/workspaces/roles");
+      router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
