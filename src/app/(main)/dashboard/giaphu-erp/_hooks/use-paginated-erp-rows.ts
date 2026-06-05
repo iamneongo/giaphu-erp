@@ -58,7 +58,7 @@ export function usePaginatedErpRows<T>({
   React.useEffect(() => {
     setRows(initialRows);
     setTotal(initialRows.length);
-    setState((current) => ({ ...current, pageIndex: 0 }));
+    setState((current) => (current.pageIndex ? { ...current, pageIndex: 0 } : current));
   }, [initialRows]);
 
   React.useEffect(() => {

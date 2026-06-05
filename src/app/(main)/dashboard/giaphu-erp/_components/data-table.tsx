@@ -137,6 +137,16 @@ function useDebouncedValue<T>(value: T, delay = 300) {
   return debouncedValue;
 }
 
+function getServerStateKey(state: DataTableServerState) {
+  return JSON.stringify({
+    pageIndex: state.pageIndex,
+    pageSize: state.pageSize,
+    query: state.query,
+    sorting: state.sorting,
+    filters: state.filters,
+  });
+}
+
 function DataTableFilterCombobox({
   filter,
   options,
@@ -484,6 +494,7 @@ export function DataTable<T>({
   const isServerSide = Boolean(serverSide);
   const isLoading = loading ? true : (serverSide?.loading ?? false);
   const serverSideOnStateChange = serverSide?.onStateChange;
+  const lastServerStateKey = React.useRef("");
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting);
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: 0,
@@ -659,13 +670,18 @@ export function DataTable<T>({
   React.useEffect(() => {
     if (!serverSideOnStateChange) return;
 
-    serverSideOnStateChange({
+    const nextState = {
       pageIndex: pagination.pageIndex,
       pageSize: pagination.pageSize,
       query: debouncedQuery,
       sorting,
       filters: filterValues,
-    });
+    };
+    const nextStateKey = getServerStateKey(nextState);
+
+    if (lastServerStateKey.current === nextStateKey) return;
+    lastServerStateKey.current = nextStateKey;
+    serverSideOnStateChange(nextState);
   }, [debouncedQuery, filterValues, pagination.pageIndex, pagination.pageSize, serverSideOnStateChange, sorting]);
 
   const pageCount = table.getPageCount();
