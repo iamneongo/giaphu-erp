@@ -29,7 +29,7 @@ import { DatePickerField } from "./date-picker-field";
 export interface FormFieldDefinition {
   name: string;
   label: string;
-  type?: "text" | "tel" | "number" | "date" | "textarea" | "select" | "checkbox" | "hidden" | "file";
+  type?: "text" | "tel" | "number" | "date" | "textarea" | "select" | "checkbox" | "hidden" | "file" | "password";
   value?: string | number | boolean;
   placeholder?: string;
   helperText?: string;

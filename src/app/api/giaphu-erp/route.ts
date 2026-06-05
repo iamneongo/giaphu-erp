@@ -44,8 +44,15 @@ import {
   saveWeeklyAttendance,
   saveZaloMaterialBreakdown,
   updateMaterialPrice,
+  verifyProjectPin,
 } from "@/lib/giaphu-erp/db";
 import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
+import {
+  encodeUnlockedProjectIds,
+  PROJECT_PIN_UNLOCK_COOKIE_NAME,
+  PROJECT_PIN_UNLOCK_MAX_AGE,
+  parseUnlockedProjectIds,
+} from "@/lib/giaphu-erp/project-pin";
 import { decodeProjectRouteSegment } from "@/lib/giaphu-erp/project-routes";
 import type { GiaPhuPagedDataset } from "@/lib/giaphu-erp/types";
 
@@ -287,6 +294,27 @@ export async function POST(request: Request) {
     const payload = { ...sanitizeActionPayload(rawPayload), organizationId: session.orgId };
 
     switch (body.action) {
+      case "verifyProjectPin": {
+        const project = await verifyProjectPin(payload);
+        const cookieHeader = request.headers.get("cookie") ?? "";
+        const currentUnlockCookie =
+          cookieHeader
+            .split(";")
+            .map((part) => part.trim())
+            .find((part) => part.startsWith(`${PROJECT_PIN_UNLOCK_COOKIE_NAME}=`))
+            ?.split("=")[1] ?? "";
+        const unlockedIds = parseUnlockedProjectIds(currentUnlockCookie);
+        unlockedIds.add(project.id);
+
+        const response = NextResponse.json({ status: "success", project, refresh: false });
+        response.cookies.set(PROJECT_PIN_UNLOCK_COOKIE_NAME, encodeUnlockedProjectIds(unlockedIds), {
+          httpOnly: true,
+          sameSite: "lax",
+          path: "/",
+          maxAge: PROJECT_PIN_UNLOCK_MAX_AGE,
+        });
+        return response;
+      }
       case "bulkImport": {
         const items = Array.isArray(rawPayload.items) ? (rawPayload.items as BulkImportItem[]) : [];
         if (!items.length) {

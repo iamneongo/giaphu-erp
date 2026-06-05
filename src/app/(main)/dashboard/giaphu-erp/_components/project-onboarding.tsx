@@ -27,11 +27,15 @@ export function ProjectOnboarding() {
     event.preventDefault();
     const payload = collectFormPayload(event.currentTarget);
     const projectCode = String(payload.code ?? "").trim();
+    const pin = String(payload.pin ?? "").trim();
 
     startTransition(async () => {
       try {
         const result = await runGiaPhuAction("saveProject", payload);
         const createdProject = result.data?.projects.find((project) => project.code === projectCode);
+        if (createdProject && pin) {
+          await runGiaPhuAction("verifyProjectPin", { projectId: createdProject.id, pin });
+        }
         toast.success("Đã tạo công trình.");
         router.replace(projectScopedPath(createdProject?.id ?? projectCode, "/overview"));
       } catch (error) {
@@ -65,6 +69,18 @@ export function ProjectOnboarding() {
                 <Field>
                   <FieldLabel htmlFor="status">Trạng thái</FieldLabel>
                   <Input id="status" name="status" defaultValue="Đang thi công" />
+                </Field>
+                <Field className="md:col-span-2">
+                  <FieldLabel htmlFor="pin">Mã PIN công trình</FieldLabel>
+                  <Input
+                    id="pin"
+                    name="pin"
+                    type="password"
+                    inputMode="numeric"
+                    minLength={4}
+                    placeholder="Tối thiểu 4 ký tự, dùng khi chuyển đổi công trình"
+                    required
+                  />
                 </Field>
                 <Field className="md:col-span-2">
                   <FieldLabel htmlFor="name">Tên công trình</FieldLabel>

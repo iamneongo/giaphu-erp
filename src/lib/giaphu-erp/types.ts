@@ -140,6 +140,7 @@ export interface ProjectRow {
   startDate: string;
   status: string;
   failureReason: string;
+  hasPin: boolean;
 }
 
 export interface CatalogItem {

@@ -25,12 +25,18 @@ import type {
   SubcontractorContractRow,
   SubcontractorRow,
 } from "./types";
+import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 
 type Row = Record<string, unknown>;
 type DashboardDataOptions = {
   activeProjectCode?: string;
   organizationId?: string;
 };
+
+const scryptAsync = promisify(scryptCallback);
+const PROJECT_PIN_HASH_PREFIX = "scrypt";
+const PROJECT_PIN_MIN_LENGTH = 4;
 
 export type GiaPhuPagedRowsOptions = {
   dataset: GiaPhuPagedDataset;
@@ -147,6 +153,32 @@ function dateTime(value: unknown) {
   if (!value) return "";
   if (value instanceof Date) return value.toISOString();
   return String(value);
+}
+
+async function hashProjectPin(value: unknown) {
+  const pin = text(value).trim();
+  if (!pin) return "";
+  if (pin.length < PROJECT_PIN_MIN_LENGTH) {
+    throw new Error(`Mã PIN công trình phải có ít nhất ${PROJECT_PIN_MIN_LENGTH} ký tự.`);
+  }
+
+  const salt = randomBytes(16).toString("hex");
+  const derivedKey = (await scryptAsync(pin, salt, 32)) as Buffer;
+  return `${PROJECT_PIN_HASH_PREFIX}:${salt}:${derivedKey.toString("hex")}`;
+}
+
+async function verifyProjectPinHash(pin: unknown, hash: unknown) {
+  const normalizedPin = text(pin).trim();
+  const normalizedHash = text(hash).trim();
+  if (!normalizedHash) return true;
+  if (!normalizedPin) return false;
+
+  const [prefix, salt, key] = normalizedHash.split(":");
+  if (prefix !== PROJECT_PIN_HASH_PREFIX || !salt || !key) return false;
+
+  const expected = Buffer.from(key, "hex");
+  const actual = (await scryptAsync(normalizedPin, salt, expected.length)) as Buffer;
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 function materialCatalogKey(value: unknown) {
@@ -281,6 +313,7 @@ function projectFromRow(row: Row): ProjectRow {
     startDate: dateOnly(row.start_date),
     status: text(row.status),
     failureReason: text(row.failure_reason),
+    hasPin: Boolean(text(row.pin_hash)),
   };
 }
 
@@ -562,6 +595,7 @@ async function createGiaPhuSchemaInternal() {
     status text not null default 'Äang thi cÃ´ng',
     drive_url text not null default '',
     failure_reason text not null default '',
+    pin_hash text not null default '',
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
   )`;
@@ -807,6 +841,7 @@ async function ensureOrganizationColumns() {
 
   await sql`alter table gp_projects add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_projects add column if not exists id bigserial`;
+  await sql`alter table gp_projects add column if not exists pin_hash text not null default ''`;
   await sql`alter table gp_catalog_items add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_staff add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_contracts add column if not exists organization_id text not null default ''`;
@@ -2735,6 +2770,7 @@ export async function saveProject(payload: Record<string, unknown>) {
   const code = text(payload.code).trim();
   const name = text(payload.name).trim();
   if (!code || !name) throw new Error("Thiáº¿u mÃ£ hoáº·c tÃªn cÃ´ng trÃ¬nh.");
+  const pinHash = await hashProjectPin(payload.pin ?? payload.projectPin);
 
   const existingRows = (await sql`select organization_id from gp_projects where code = ${code} limit 1`) as Row[];
   const existingOrgId = text(existingRows[0]?.organization_id);
@@ -2743,8 +2779,8 @@ export async function saveProject(payload: Record<string, unknown>) {
   }
 
   await sql`
-    insert into gp_projects (code, organization_id, name, owner, contact, referrer, start_date, status, failure_reason, updated_at)
-    values (${code}, ${organizationId}, ${name}, ${text(payload.owner)}, ${text(payload.contact)}, ${text(payload.referrer)}, ${dateOnly(payload.startDate) || null}, ${text(payload.status) || "Äang thi cÃ´ng"}, ${text(payload.failureReason)}, now())
+    insert into gp_projects (code, organization_id, name, owner, contact, referrer, start_date, status, failure_reason, pin_hash, updated_at)
+    values (${code}, ${organizationId}, ${name}, ${text(payload.owner)}, ${text(payload.contact)}, ${text(payload.referrer)}, ${dateOnly(payload.startDate) || null}, ${text(payload.status) || "Äang thi cÃ´ng"}, ${text(payload.failureReason)}, ${pinHash}, now())
     on conflict (code) do update set
       organization_id = excluded.organization_id,
       name = excluded.name,
@@ -2754,8 +2790,31 @@ export async function saveProject(payload: Record<string, unknown>) {
       start_date = excluded.start_date,
       status = excluded.status,
       failure_reason = excluded.failure_reason,
+      pin_hash = case when excluded.pin_hash <> '' then excluded.pin_hash else gp_projects.pin_hash end,
       updated_at = now()
   `;
+}
+
+export async function verifyProjectPin(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const organizationId = requireOrganizationId(payload.organizationId);
+  const projectId = text(payload.projectId || payload.id || payload.code).trim();
+  if (!projectId) throw new Error("Thiếu công trình để xác thực PIN.");
+
+  const rows = (await sql`
+    select *
+    from gp_projects
+    where organization_id = ${organizationId}
+      and (id::text = ${projectId} or code = ${projectId} or name = ${projectId})
+    limit 1
+  `) as Row[];
+  const project = rows[0];
+  if (!project) throw new Error("Không tìm thấy công trình.");
+
+  const isValid = await verifyProjectPinHash(payload.pin, project.pin_hash);
+  if (!isValid) throw new Error("Mã PIN công trình không đúng.");
+
+  return projectFromRow(project);
 }
 
 export async function deleteProject(payload: Record<string, unknown>) {

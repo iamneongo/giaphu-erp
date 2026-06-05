@@ -5,6 +5,7 @@ import type {
   GiaPhuPagedDataset,
   GiaPhuReportsData,
   GiaPhuReportsInsights,
+  ProjectRow,
   ReportTableState,
 } from "@/lib/giaphu-erp/types";
 
@@ -19,6 +20,7 @@ export interface GiaPhuActionResult {
     attendanceDeleteIds?: number[];
   };
   rows?: Record<string, unknown>[];
+  project?: ProjectRow;
   documentId?: number;
   refresh?: false;
   total?: number;

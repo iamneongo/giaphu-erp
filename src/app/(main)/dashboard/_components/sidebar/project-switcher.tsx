@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { BriefcaseBusiness, Check, ChevronsUpDown, PlusCircle, RefreshCw } from "lucide-react";
 
@@ -26,6 +26,7 @@ import { getProjectRouteInfo, projectScopedPath, switchProjectInPath } from "@/l
 import type { ProjectRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
+import { ProjectPinUnlockDialog } from "../../giaphu-erp/_components/project-pin-unlock";
 import { DashboardLink } from "../dashboard-link";
 
 type GiaPhuResponse = {
@@ -53,9 +54,12 @@ export function ProjectSwitcher({
   organizationReady?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const routeProjectId = getProjectRouteInfo(pathname)?.projectId ?? "";
   const [projects, setProjects] = React.useState<ProjectRow[]>(initialProjects);
   const [activeProjectCode, setActiveProjectCode] = React.useState("");
+  const [pinProject, setPinProject] = React.useState<ProjectRow | null>(null);
+  const [pendingProjectPath, setPendingProjectPath] = React.useState("");
   const [pending, startTransition] = React.useTransition();
 
   const activeProject = projects.find((project) => project.code === activeProjectCode) ?? projects[0];
@@ -127,6 +131,15 @@ export function ProjectSwitcher({
       window.removeEventListener(PROJECTS_REFRESH_EVENT, loadProjects);
     };
   }, [loadProjects, organizationReady]);
+
+  const activateProject = React.useCallback(
+    (project: ProjectRow, targetPath: string) => {
+      setActiveProjectCode((current) => (current === project.code ? current : project.code));
+      writeActiveProjectCode(project.code, project.id);
+      if (targetPath !== pathname) router.push(targetPath);
+    },
+    [pathname, router],
+  );
 
   if (!organizationReady) {
     return (
@@ -207,24 +220,31 @@ export function ProjectSwitcher({
           <DropdownMenuContent className="min-w-64 rounded-lg" side="right" align="start" sideOffset={8}>
             <DropdownMenuLabel>Công trình đang làm việc</DropdownMenuLabel>
             {projects.map((project) => (
-              <DropdownMenuItem key={project.code} asChild>
-                <DashboardLink
-                  href={switchProjectInPath(pathname, project.id)}
-                  className={cn("gap-2", project.code === activeProjectCode && "bg-accent/50")}
-                  onClick={() => {
-                    setActiveProjectCode((current) => (current === project.code ? current : project.code));
-                    writeActiveProjectCode(project.code, project.id);
-                  }}
-                >
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-background font-semibold text-xs">
-                    {project.code.slice(0, 2)}
-                  </div>
-                  <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{project.name}</span>
-                    <span className="truncate text-muted-foreground text-xs">{project.code}</span>
-                  </div>
-                  <Check className={cn("size-4 opacity-0", project.code === activeProjectCode && "opacity-100")} />
-                </DashboardLink>
+              <DropdownMenuItem
+                key={project.code}
+                className={cn("gap-2", project.code === activeProjectCode && "bg-accent/50")}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  const targetPath = switchProjectInPath(pathname, project.id);
+                  if (project.code === activeProjectCode) return;
+
+                  if (project.hasPin) {
+                    setPinProject(project);
+                    setPendingProjectPath(targetPath);
+                    return;
+                  }
+
+                  activateProject(project, targetPath);
+                }}
+              >
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-background font-semibold text-xs">
+                  {project.code.slice(0, 2)}
+                </div>
+                <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-medium">{project.name}</span>
+                  <span className="truncate text-muted-foreground text-xs">{project.code}</span>
+                </div>
+                <Check className={cn("size-4 opacity-0", project.code === activeProjectCode && "opacity-100")} />
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
@@ -241,6 +261,23 @@ export function ProjectSwitcher({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <ProjectPinUnlockDialog
+          project={pinProject}
+          open={Boolean(pinProject)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPinProject(null);
+              setPendingProjectPath("");
+            }
+          }}
+          onUnlocked={(project) => {
+            const targetProject = projects.find((item) => item.id === project.id || item.code === project.code);
+            if (!targetProject) return;
+            activateProject(targetProject, pendingProjectPath || switchProjectInPath(pathname, targetProject.id));
+            setPinProject(null);
+            setPendingProjectPath("");
+          }}
+        />
       </SidebarMenuItem>
     </SidebarMenu>
   );

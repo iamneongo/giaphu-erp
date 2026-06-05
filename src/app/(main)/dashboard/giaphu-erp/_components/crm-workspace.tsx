@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+
 import { Banknote, BriefcaseBusiness, FileText, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +19,7 @@ import { ActionDialog } from "./action-dialog";
 import { DataTable } from "./data-table";
 import { ExcelImportDialog } from "./excel-import-dialog";
 import { ModuleHeader } from "./module-header";
+import { ProjectPinUnlockDialog } from "./project-pin-unlock";
 import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
 
@@ -46,6 +49,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
   const projectStatusOptions = uniqueOptions(data.projects.map((project) => project.status));
   const projectOwnerOptions = uniqueOptions(data.projects.map((project) => project.owner));
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.crmManage);
+  const [pinProject, setPinProject] = React.useState<ProjectRow | null>(null);
 
   if (!data.projects.length) {
     return null;
@@ -61,6 +65,15 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
     const result = await runAction(action, { ...payload, __returnData: false });
     if (result) paginatedPayments.refresh();
     return result;
+  }
+
+  function switchProject(project: ProjectRow) {
+    if (project.code === activeProjectCode) return;
+    if (project.hasPin) {
+      setPinProject(project);
+      return;
+    }
+    setActiveProjectCode(project.code);
   }
 
   const headerBySection: Record<
@@ -91,6 +104,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
               { key: "startDate", label: "Ngày bắt đầu", aliases: ["Ngay bat dau"], type: "date" },
               { key: "status", label: "Trạng thái", aliases: ["Trang thai"], defaultValue: "Đang thi công" },
               { key: "failureReason", label: "Lý do thất bại", aliases: ["Ly do that bai", "Ghi chú"] },
+              { key: "pin", label: "Mã PIN", aliases: ["PIN", "Ma PIN", "Project PIN"] },
             ]}
           />
           <ActionDialog
@@ -105,6 +119,13 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
               { name: "owner", label: "Chủ đầu tư", value: activeProject?.owner },
               { name: "contact", label: "Liên hệ", value: activeProject?.contact },
               { name: "referrer", label: "Người giới thiệu", value: activeProject?.referrer },
+              {
+                name: "pin",
+                label: activeProject?.hasPin ? "Mã PIN mới" : "Mã PIN công trình",
+                type: "password",
+                inputMode: "numeric",
+                helperText: activeProject?.hasPin ? "Để trống nếu không đổi PIN." : "Dùng khi chuyển đổi công trình.",
+              },
               {
                 name: "startDate",
                 label: "Ngày bắt đầu",
@@ -132,7 +153,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                 label: "Mã CT",
                 accessor: (project) => project.code,
                 render: (project) => (
-                  <Button variant="link" className="px-0" onClick={() => setActiveProjectCode(project.code)}>
+                  <Button variant="link" className="px-0" onClick={() => switchProject(project)}>
                     {project.code}
                   </Button>
                 ),
@@ -194,6 +215,15 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                                 { name: "owner", label: "Chủ đầu tư", value: project.owner },
                                 { name: "contact", label: "Liên hệ", value: project.contact },
                                 { name: "referrer", label: "Người giới thiệu", value: project.referrer },
+                                {
+                                  name: "pin",
+                                  label: project.hasPin ? "Mã PIN mới" : "Mã PIN công trình",
+                                  type: "password",
+                                  inputMode: "numeric",
+                                  helperText: project.hasPin
+                                    ? "Để trống nếu không đổi PIN."
+                                    : "Dùng khi chuyển đổi công trình.",
+                                },
                                 {
                                   name: "startDate",
                                   label: "Ngày bắt đầu",
@@ -492,6 +522,17 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
         actions={canManage ? currentSection.actions : undefined}
       />
       {currentSection.content}
+      <ProjectPinUnlockDialog
+        project={pinProject}
+        open={Boolean(pinProject)}
+        onOpenChange={(open) => {
+          if (!open) setPinProject(null);
+        }}
+        onUnlocked={(project) => {
+          setPinProject(null);
+          setActiveProjectCode(project.code);
+        }}
+      />
     </div>
   );
 }
