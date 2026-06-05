@@ -266,6 +266,8 @@ export function ExcelImportPanel({
     () => parseRows(workbookRows[selectedSheet] ?? [], fields),
     [fields, selectedSheet, workbookRows],
   );
+  const hasSelectedSheet = Boolean(selectedSheet && workbookRows[selectedSheet]);
+  const hasMissingHeaders = hasSelectedSheet && parsed.missingHeaders.length > 0;
   const validRows = parsed.rows.filter((row) => row.errors.length === 0);
   const invalidRows = parsed.rows.filter((row) => row.errors.length > 0);
   const previewFields = fields.filter((field) => !field.hidden);
@@ -363,7 +365,7 @@ export function ExcelImportPanel({
             </div>
           </div>
 
-          {parsed.missingHeaders.length ? (
+          {hasMissingHeaders ? (
             <Alert variant="destructive">
               <Upload />
               <AlertTitle>Thiếu cột bắt buộc</AlertTitle>
@@ -419,7 +421,7 @@ export function ExcelImportPanel({
           </ScrollArea>
         </CardContent>
         <CardFooter className="justify-end border-t">
-          <Button disabled={pending || !validRows.length || parsed.missingHeaders.length > 0} onClick={importRows}>
+          <Button disabled={pending || !validRows.length || hasMissingHeaders} onClick={importRows}>
             <Upload />
             {pending ? "Đang import..." : `Import ${validRows.length.toLocaleString("vi-VN")} dòng`}
           </Button>
