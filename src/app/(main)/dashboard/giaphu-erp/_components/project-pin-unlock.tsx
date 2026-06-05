@@ -12,11 +12,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { writeActiveProjectCode } from "@/lib/giaphu-erp/project-context";
 import type { ProjectRow } from "@/lib/giaphu-erp/types";
 
 import { runGiaPhuAction } from "../_lib/giaphu-erp-api";
+import { ProjectPinInput } from "./project-pin-input";
 
 type ProjectPinTarget = Pick<ProjectRow, "id" | "code" | "name">;
 
@@ -44,6 +44,10 @@ function ProjectPinForm({
       toast.error("Vui lòng nhập mã PIN công trình.");
       return;
     }
+    if (normalizedPin.length < 4) {
+      toast.error("Mã PIN công trình phải có ít nhất 4 ký tự.");
+      return;
+    }
 
     startTransition(async () => {
       try {
@@ -61,15 +65,12 @@ function ProjectPinForm({
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="project-pin">Mã PIN</FieldLabel>
-          <Input
+          <ProjectPinInput
             id="project-pin"
+            name="pin"
             value={pin}
-            onChange={(event) => setPin(event.target.value)}
-            autoComplete="off"
-            autoFocus
-            inputMode="numeric"
+            onValueChange={setPin}
             placeholder="Nhập mã PIN công trình"
-            type="password"
           />
         </Field>
       </FieldGroup>

@@ -18,16 +18,22 @@ import { todayIso } from "../_lib/date-utils";
 import { runGiaPhuAction } from "../_lib/giaphu-erp-api";
 import { collectFormPayload } from "./action-dialog";
 import { DatePickerField } from "./date-picker-field";
+import { ProjectPinInput } from "./project-pin-input";
 
 export function ProjectOnboarding() {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
+  const [projectPin, setProjectPin] = React.useState("");
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = collectFormPayload(event.currentTarget);
     const projectCode = String(payload.code ?? "").trim();
     const pin = String(payload.pin ?? "").trim();
+    if (pin.length < 4) {
+      toast.error("Mã PIN công trình phải có ít nhất 4 ký tự.");
+      return;
+    }
 
     startTransition(async () => {
       try {
@@ -72,12 +78,11 @@ export function ProjectOnboarding() {
                 </Field>
                 <Field className="md:col-span-2">
                   <FieldLabel htmlFor="pin">Mã PIN công trình</FieldLabel>
-                  <Input
+                  <ProjectPinInput
                     id="pin"
                     name="pin"
-                    type="password"
-                    inputMode="numeric"
-                    minLength={4}
+                    value={projectPin}
+                    onValueChange={setProjectPin}
                     placeholder="Tối thiểu 4 ký tự, dùng khi chuyển đổi công trình"
                     required
                   />

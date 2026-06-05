@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import { DatePickerField } from "./date-picker-field";
+import { ProjectPinInput } from "./project-pin-input";
 
 export interface FormFieldDefinition {
   name: string;
@@ -395,6 +396,16 @@ export function ActionDialog({
                       required={field.required}
                       disabled={field.disabled}
                       dialogOpen={resolvedOpen}
+                      onValueChange={(value) => updateFieldValue(field.name, value)}
+                    />
+                  ) : fieldType === "password" ? (
+                    <ProjectPinInput
+                      id={field.name}
+                      name={field.name}
+                      value={String(fieldValues[field.name] ?? "")}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      disabled={field.disabled}
                       onValueChange={(value) => updateFieldValue(field.name, value)}
                     />
                   ) : (
