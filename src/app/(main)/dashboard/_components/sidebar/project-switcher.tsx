@@ -249,9 +249,9 @@ export function ProjectSwitcher({
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <DashboardLink href="/dashboard/giaphu-erp/crm/projects" className="gap-2">
+              <DashboardLink href="/create-project" className="gap-2">
                 <PlusCircle className="size-4" />
-                Quản lý công trình
+                Thêm công trình
               </DashboardLink>
             </DropdownMenuItem>
           </DropdownMenuContent>
