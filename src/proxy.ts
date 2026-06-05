@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
-import { getProjectRouteInfo, legacyErpPathForProject } from "@/lib/giaphu-erp/project-routes";
+import { legacyErpPathForProject } from "@/lib/giaphu-erp/project-routes";
 import { getAppOrigin } from "@/lib/site-url";
 
 const isProtectedRoute = createRouteMatcher([
@@ -67,21 +67,6 @@ export default clerkMiddleware(async (auth, request) => {
       },
       { status: 403 },
     );
-  }
-
-  const projectRoute = getProjectRouteInfo(request.nextUrl.pathname);
-  if (projectRoute) {
-    const rewriteUrl = request.nextUrl.clone();
-    rewriteUrl.pathname = projectRoute.legacyPathname;
-
-    const response = NextResponse.rewrite(rewriteUrl);
-    response.cookies.set(ACTIVE_PROJECT_COOKIE_NAME, projectRoute.projectCode, {
-      maxAge: 31_536_000,
-      path: "/",
-      sameSite: "lax",
-    });
-
-    return response;
   }
 
   const activeProjectCode = request.cookies.get(ACTIVE_PROJECT_COOKIE_NAME)?.value;
