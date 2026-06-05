@@ -18,6 +18,7 @@ import { formatMoney } from "../_lib/formatters";
 import { uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable } from "./data-table";
+import { ExcelImportDialog } from "./excel-import-dialog";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
@@ -173,66 +174,124 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
 
   const actions = {
     advances: (
-      <ActionDialog
-        title="Tạm ứng thầu phụ"
-        button="Tạm ứng"
-        icon={Hammer}
-        action="saveSubcontractor"
-        onAction={saveSubcontractorWithAttachment}
-        fields={[
-          { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-          { name: "date", label: "Ngày", type: "date", value: todayIso() },
-          { name: "week", label: "Tuần", value: currentIsoWeek() },
-          { name: "category", label: "Hạng mục", type: "select", options: categoryOptions },
-          { name: "contractorName", label: "Thầu phụ", type: "select", options: contractorOptions },
-          { name: "advance", label: "Tạm ứng", type: "number" },
-          { name: "note", label: "Diễn giải", type: "textarea" },
-          {
-            name: "attachment",
-            label: "Hồ sơ / hình ảnh",
-            type: "file",
-            accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,image/*",
-          },
-        ]}
-      />
+      <>
+        <ExcelImportDialog
+          title="Import tạm ứng thầu phụ từ Excel"
+          action="saveSubcontractor"
+          onAction={runAction}
+          onImported={paginatedSubcontractors.refresh}
+          fields={[
+            { key: "projectCode", label: "Công trình", hidden: true, defaultValue: activeProjectCode },
+            { key: "date", label: "Ngày", aliases: ["Ngay"], type: "date", defaultValue: todayIso() },
+            { key: "week", label: "Tuần", aliases: ["Tuan"], defaultValue: currentIsoWeek() },
+            { key: "category", label: "Hạng mục", aliases: ["Hang muc"], required: true },
+            { key: "contractorName", label: "Thầu phụ", aliases: ["Thau phu", "Nhà thầu"], required: true },
+            { key: "advance", label: "Tạm ứng", aliases: ["Tam ung", "Số tiền"], type: "number", required: true },
+            { key: "note", label: "Diễn giải", aliases: ["Ghi chú", "Ghi chu"] },
+          ]}
+        />
+        <ActionDialog
+          title="Tạm ứng thầu phụ"
+          button="Tạm ứng"
+          icon={Hammer}
+          action="saveSubcontractor"
+          onAction={saveSubcontractorWithAttachment}
+          fields={[
+            { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+            { name: "date", label: "Ngày", type: "date", value: todayIso() },
+            { name: "week", label: "Tuần", value: currentIsoWeek() },
+            { name: "category", label: "Hạng mục", type: "select", options: categoryOptions },
+            { name: "contractorName", label: "Thầu phụ", type: "select", options: contractorOptions },
+            { name: "advance", label: "Tạm ứng", type: "number" },
+            { name: "note", label: "Diễn giải", type: "textarea" },
+            {
+              name: "attachment",
+              label: "Hồ sơ / hình ảnh",
+              type: "file",
+              accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,image/*",
+            },
+          ]}
+        />
+      </>
     ),
     contracts: (
-      <ActionDialog
-        title="Hợp đồng thầu phụ"
-        button="HĐ thầu phụ"
-        icon={FileText}
-        action="saveSubcontractorContract"
-        onAction={runSubcontractorContractAction}
-        fields={[
-          { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-          { name: "contractorName", label: "Thầu phụ", type: "select", options: contractorOptions },
-          { name: "approvedCost", label: "Tổng chi phí dự kiến", type: "number" },
-          { name: "status", label: "Trạng thái", value: "Chờ duyệt" },
-          { name: "note", label: "Ghi chú", type: "textarea" },
-        ]}
-      />
+      <>
+        <ExcelImportDialog
+          title="Import hợp đồng thầu phụ từ Excel"
+          action="saveSubcontractorContract"
+          onAction={runAction}
+          onImported={paginatedSubcontractorContracts.refresh}
+          fields={[
+            { key: "projectCode", label: "Công trình", hidden: true, defaultValue: activeProjectCode },
+            { key: "contractorName", label: "Thầu phụ", aliases: ["Thau phu", "Nhà thầu"], required: true },
+            {
+              key: "approvedCost",
+              label: "Tổng chi phí dự kiến",
+              aliases: ["Chi phí", "Chi phi", "Dự kiến"],
+              type: "number",
+            },
+            { key: "status", label: "Trạng thái", aliases: ["Trang thai"], defaultValue: "Chờ duyệt" },
+            { key: "note", label: "Ghi chú", aliases: ["Ghi chu"] },
+          ]}
+        />
+        <ActionDialog
+          title="Hợp đồng thầu phụ"
+          button="HĐ thầu phụ"
+          icon={FileText}
+          action="saveSubcontractorContract"
+          onAction={runSubcontractorContractAction}
+          fields={[
+            { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+            { name: "contractorName", label: "Thầu phụ", type: "select", options: contractorOptions },
+            { name: "approvedCost", label: "Tổng chi phí dự kiến", type: "number" },
+            { name: "status", label: "Trạng thái", value: "Chờ duyệt" },
+            { name: "note", label: "Ghi chú", type: "textarea" },
+          ]}
+        />
+      </>
     ),
     operations: (
-      <ActionDialog
-        title="Chi phí vận hành"
-        button="Vận hành"
-        icon={Banknote}
-        action="saveOperation"
-        onAction={saveOperationWithAttachment}
-        fields={[
-          { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-          { name: "date", label: "Ngày", type: "date", value: todayIso() },
-          { name: "week", label: "Tuần", value: currentIsoWeek() },
-          { name: "description", label: "Diễn giải", required: true },
-          { name: "amount", label: "Số tiền", type: "number" },
-          {
-            name: "attachment",
-            label: "Hồ sơ / hình ảnh",
-            type: "file",
-            accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,image/*",
-          },
-        ]}
-      />
+      <>
+        <ExcelImportDialog
+          title="Import chi phí vận hành từ Excel"
+          action="saveOperation"
+          onAction={runAction}
+          onImported={paginatedOperations.refresh}
+          fields={[
+            { key: "projectCode", label: "Công trình", hidden: true, defaultValue: activeProjectCode },
+            { key: "date", label: "Ngày", aliases: ["Ngay"], type: "date", defaultValue: todayIso() },
+            { key: "week", label: "Tuần", aliases: ["Tuan"], defaultValue: currentIsoWeek() },
+            { key: "description", label: "Diễn giải", aliases: ["Ghi chú", "Ghi chu", "Nội dung"], required: true },
+            {
+              key: "amount",
+              label: "Số tiền",
+              aliases: ["So tien", "Chi phí", "Chi phi"],
+              type: "number",
+              required: true,
+            },
+          ]}
+        />
+        <ActionDialog
+          title="Chi phí vận hành"
+          button="Vận hành"
+          icon={Banknote}
+          action="saveOperation"
+          onAction={saveOperationWithAttachment}
+          fields={[
+            { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+            { name: "date", label: "Ngày", type: "date", value: todayIso() },
+            { name: "week", label: "Tuần", value: currentIsoWeek() },
+            { name: "description", label: "Diễn giải", required: true },
+            { name: "amount", label: "Số tiền", type: "number" },
+            {
+              name: "attachment",
+              label: "Hồ sơ / hình ảnh",
+              type: "file",
+              accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,image/*",
+            },
+          ]}
+        />
+      </>
     ),
   } satisfies Record<SubcontractorsSection, React.ReactNode>;
 

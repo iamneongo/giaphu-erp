@@ -78,6 +78,11 @@ type ActionBody = {
   payload?: Record<string, unknown>;
 };
 
+type BulkImportItem = {
+  action?: string;
+  payload?: Record<string, unknown>;
+};
+
 function sanitizeActionPayload(payload: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(payload).filter(([key]) => !key.startsWith("__")));
 }
@@ -99,6 +104,46 @@ function readActiveProjectCode(request: Request, payload?: Record<string, unknow
     ?.split("=")[1];
 
   return cookieValue ? decodeProjectRouteSegment(cookieValue) : undefined;
+}
+
+async function runGiaPhuMutation(action: string | undefined, payload: Record<string, unknown>) {
+  switch (action) {
+    case "saveProject":
+      await saveProject(payload);
+      return;
+    case "saveContract":
+      await saveContract(payload);
+      return;
+    case "savePayment":
+      await savePayment(payload);
+      return;
+    case "manageCatalog":
+      await manageCatalog(payload);
+      return;
+    case "manageStaff":
+      await manageStaff(payload);
+      return;
+    case "saveMaterial":
+      await saveMaterial(payload);
+      return;
+    case "saveSubcontractor":
+      await saveSubcontractor(payload);
+      return;
+    case "saveSubcontractorContract":
+      await saveSubcontractorContract(payload);
+      return;
+    case "saveOperation":
+      await saveOperation(payload);
+      return;
+    case "saveLaborNorm":
+      await saveLaborNorm(payload);
+      return;
+    case "saveProgress":
+      await saveProgress(payload);
+      return;
+    default:
+      throw new Error(`Action import không hợp lệ: ${action ?? "(trống)"}.`);
+  }
 }
 
 function parseFilters(searchParams: URLSearchParams) {
@@ -242,6 +287,27 @@ export async function POST(request: Request) {
     const payload = { ...sanitizeActionPayload(rawPayload), organizationId: session.orgId };
 
     switch (body.action) {
+      case "bulkImport": {
+        const items = Array.isArray(rawPayload.items) ? (rawPayload.items as BulkImportItem[]) : [];
+        if (!items.length) {
+          return NextResponse.json({ status: "error", message: "Không có dòng dữ liệu để import." }, { status: 400 });
+        }
+        if (items.length > 1000) {
+          return NextResponse.json(
+            { status: "error", message: "Mỗi lần chỉ import tối đa 1.000 dòng để đảm bảo ổn định." },
+            { status: 400 },
+          );
+        }
+
+        for (const item of items) {
+          const itemPayload = {
+            ...sanitizeActionPayload(item.payload ?? {}),
+            organizationId: session.orgId,
+          };
+          await runGiaPhuMutation(item.action, itemPayload);
+        }
+        break;
+      }
       case "saveProject":
         await saveProject(payload);
         break;

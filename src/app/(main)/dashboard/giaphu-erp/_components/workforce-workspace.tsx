@@ -34,6 +34,7 @@ import { formatCount, formatMoney } from "../_lib/formatters";
 import type { GiaPhuActionResult } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable, type DataTableColumn } from "./data-table";
+import { ExcelImportDialog } from "./excel-import-dialog";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
@@ -993,82 +994,149 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
       </>
     ),
     staff: (
-      <ActionDialog
-        title="Nhân sự"
-        button="Nhân sự"
-        icon={Users}
-        action="manageStaff"
-        onAction={runAction}
-        fields={[
-          { name: "id", label: "Mã NS" },
-          { name: "name", label: "Họ tên", required: true },
-          { name: "team", label: "Đội" },
-          { name: "position", label: "Chức vụ" },
-          { name: "salaryDay", label: "Lương/ngày", type: "number" },
-          { name: "resigned", label: "Đã nghỉ việc", type: "checkbox" },
-          {
-            name: "offDate",
-            label: "Thời gian nghỉ",
-            type: "date",
-            validate: validateStaffOffDate,
-            visibleWhen: shouldShowStaffOffDate,
-            defaultValueWhen: defaultStaffOffDate,
-          },
-        ]}
-      />
+      <>
+        <ExcelImportDialog
+          title="Import nhân sự từ Excel"
+          action="manageStaff"
+          onAction={runAction}
+          onImported={paginatedStaff.refresh}
+          fields={[
+            { key: "id", label: "Mã NS", aliases: ["Ma NS", "Mã", "Code"] },
+            { key: "name", label: "Họ tên", aliases: ["Ho ten", "Tên nhân sự", "Tên"], required: true },
+            { key: "team", label: "Đội", aliases: ["Doi", "Tổ đội"] },
+            { key: "position", label: "Chức vụ", aliases: ["Chuc vu", "Vai trò"] },
+            { key: "salaryDay", label: "Lương/ngày", aliases: ["Luong ngay", "Lương"], type: "number" },
+            { key: "resigned", label: "Đã nghỉ việc", aliases: ["Nghỉ việc", "Da nghi viec"], type: "boolean" },
+            { key: "offDate", label: "Thời gian nghỉ", aliases: ["Ngay nghỉ", "Ngay nghi"], type: "date" },
+          ]}
+        />
+        <ActionDialog
+          title="Nhân sự"
+          button="Nhân sự"
+          icon={Users}
+          action="manageStaff"
+          onAction={runAction}
+          fields={[
+            { name: "id", label: "Mã NS" },
+            { name: "name", label: "Họ tên", required: true },
+            { name: "team", label: "Đội" },
+            { name: "position", label: "Chức vụ" },
+            { name: "salaryDay", label: "Lương/ngày", type: "number" },
+            { name: "resigned", label: "Đã nghỉ việc", type: "checkbox" },
+            {
+              name: "offDate",
+              label: "Thời gian nghỉ",
+              type: "date",
+              validate: validateStaffOffDate,
+              visibleWhen: shouldShowStaffOffDate,
+              defaultValueWhen: defaultStaffOffDate,
+            },
+          ]}
+        />
+      </>
     ),
     laborNorms: (
-      <ActionDialog
-        title="Định mức nhân công"
-        button="Định mức"
-        icon={ClipboardList}
-        action="saveLaborNorm"
-        onAction={runLaborNormAction}
-        fields={[
-          { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-          { name: "category", label: "Hạng mục", type: "select", options: categoryOptions, required: true },
-          { name: "workdays", label: "Số công định mức", type: "number", required: true },
-          { name: "cost", label: "Chi phí định mức", type: "number", required: true },
-        ]}
-      />
+      <>
+        <ExcelImportDialog
+          title="Import định mức nhân công từ Excel"
+          action="saveLaborNorm"
+          onAction={runAction}
+          onImported={paginatedLaborNorms.refresh}
+          fields={[
+            { key: "projectCode", label: "Công trình", hidden: true, defaultValue: activeProjectCode },
+            { key: "category", label: "Hạng mục", aliases: ["Hang muc"], required: true },
+            {
+              key: "workdays",
+              label: "Số công định mức",
+              aliases: ["Số công ĐM", "So cong"],
+              type: "number",
+              required: true,
+            },
+            {
+              key: "cost",
+              label: "Chi phí định mức",
+              aliases: ["Chi phí ĐM", "Chi phi"],
+              type: "number",
+              required: true,
+            },
+          ]}
+        />
+        <ActionDialog
+          title="Định mức nhân công"
+          button="Định mức"
+          icon={ClipboardList}
+          action="saveLaborNorm"
+          onAction={runLaborNormAction}
+          fields={[
+            { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+            { name: "category", label: "Hạng mục", type: "select", options: categoryOptions, required: true },
+            { name: "workdays", label: "Số công định mức", type: "number", required: true },
+            { name: "cost", label: "Chi phí định mức", type: "number", required: true },
+          ]}
+        />
+      </>
     ),
     progress: (
-      <ActionDialog
-        title="Tiến độ hạng mục"
-        button="Tiến độ"
-        icon={CalendarCheck}
-        action="saveProgress"
-        onAction={runProgressAction}
-        fields={[
-          { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-          { name: "category", label: "Hạng mục", type: "select", options: categoryOptions, required: true },
-          {
-            name: "startDate",
-            label: "Ngày bắt đầu",
-            type: "date",
-            value: todayIso(),
-            required: true,
-            validate: validateProgressStartDate,
-          },
-          { name: "durationDays", label: "Số ngày", type: "number", required: true },
-          { name: "workdays", label: "Số công", type: "number", required: true },
-          {
-            name: "planEndDate",
-            label: "Ngày HT dự kiến",
-            type: "date",
-            required: true,
-            validate: validateProgressPlanEndDate,
-          },
-          {
-            name: "confirmedEndDate",
-            label: "Ngày HT xác nhận",
-            type: "date",
-            required: true,
-            validate: validateProgressConfirmedEndDate,
-          },
-          { name: "evaluation", label: "Đánh giá", value: "Đang theo dõi" },
-        ]}
-      />
+      <>
+        <ExcelImportDialog
+          title="Import tiến độ hạng mục từ Excel"
+          action="saveProgress"
+          onAction={runAction}
+          onImported={paginatedProgress.refresh}
+          fields={[
+            { key: "projectCode", label: "Công trình", hidden: true, defaultValue: activeProjectCode },
+            { key: "category", label: "Hạng mục", aliases: ["Hang muc"], required: true },
+            { key: "startDate", label: "Ngày bắt đầu", aliases: ["Ngay bat dau"], type: "date", required: true },
+            { key: "durationDays", label: "Số ngày", aliases: ["So ngay"], type: "number", required: true },
+            { key: "workdays", label: "Số công", aliases: ["So cong"], type: "number", required: true },
+            { key: "planEndDate", label: "Ngày HT dự kiến", aliases: ["HT dự kiến"], type: "date", required: true },
+            {
+              key: "confirmedEndDate",
+              label: "Ngày HT xác nhận",
+              aliases: ["HT xác nhận"],
+              type: "date",
+              required: true,
+            },
+            { key: "evaluation", label: "Đánh giá", aliases: ["Danh gia"], defaultValue: "Đang theo dõi" },
+          ]}
+        />
+        <ActionDialog
+          title="Tiến độ hạng mục"
+          button="Tiến độ"
+          icon={CalendarCheck}
+          action="saveProgress"
+          onAction={runProgressAction}
+          fields={[
+            { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+            { name: "category", label: "Hạng mục", type: "select", options: categoryOptions, required: true },
+            {
+              name: "startDate",
+              label: "Ngày bắt đầu",
+              type: "date",
+              value: todayIso(),
+              required: true,
+              validate: validateProgressStartDate,
+            },
+            { name: "durationDays", label: "Số ngày", type: "number", required: true },
+            { name: "workdays", label: "Số công", type: "number", required: true },
+            {
+              name: "planEndDate",
+              label: "Ngày HT dự kiến",
+              type: "date",
+              required: true,
+              validate: validateProgressPlanEndDate,
+            },
+            {
+              name: "confirmedEndDate",
+              label: "Ngày HT xác nhận",
+              type: "date",
+              required: true,
+              validate: validateProgressConfirmedEndDate,
+            },
+            { name: "evaluation", label: "Đánh giá", value: "Đang theo dõi" },
+          ]}
+        />
+      </>
     ),
   } satisfies Record<WorkforceSection, React.ReactNode>;
 

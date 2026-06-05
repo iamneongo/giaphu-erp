@@ -18,6 +18,7 @@ import { getCatalogSectionByKind } from "../_lib/catalog-config";
 import { uniqueOptions } from "../_lib/form-options";
 import { ActionDialog, type FormFieldDefinition } from "./action-dialog";
 import { DataTable, type DataTableColumn } from "./data-table";
+import { ExcelImportDialog, type ExcelImportField } from "./excel-import-dialog";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
@@ -70,6 +71,31 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
   }
 
   fields.push({ name: "note", label: section.noteLabel, type: "textarea" });
+
+  const importFields: ExcelImportField[] = [
+    { key: "kind", label: "Loại", hidden: true, defaultValue: section.kind },
+    { key: "code", label: section.codeLabel, aliases: ["Mã", "Ma", "Code"] },
+    { key: "name", label: section.nameLabel, aliases: ["Tên", "Ten", "Name"], required: true },
+  ];
+
+  if (section.showUnit) {
+    importFields.push({ key: "unit", label: "Đơn vị", aliases: ["Don vi", "ĐV"], required: true });
+  }
+
+  if (section.showContact) {
+    importFields.push({
+      key: "contact",
+      label: "Liên hệ",
+      aliases: ["Lien he", "SĐT", "Phone"],
+      required: true,
+      validate: (value) => {
+        const contact = String(value ?? "").trim();
+        return !contact || isValidPhoneNumber(contact) ? undefined : "Liên hệ phải là số điện thoại hợp lệ.";
+      },
+    });
+  }
+
+  importFields.push({ key: "note", label: section.noteLabel, aliases: ["Ghi chú", "Ghi chu"] });
 
   const columns: DataTableColumn<(typeof rows)[number]>[] = [
     { key: "code", label: "Mã", accessor: (row) => row.code, render: (row) => row.code || "-" },
@@ -142,6 +168,13 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
         actions={
           canManage ? (
             <div className="flex flex-wrap items-center gap-2">
+              <ExcelImportDialog
+                title={`Import ${section.navigationTitle.toLowerCase()} từ Excel`}
+                action="manageCatalog"
+                onAction={runAction}
+                onImported={paginatedCatalogs.refresh}
+                fields={importFields}
+              />
               <ActionDialog
                 title={`Thêm ${section.navigationTitle.toLowerCase()}`}
                 button={section.navigationTitle}

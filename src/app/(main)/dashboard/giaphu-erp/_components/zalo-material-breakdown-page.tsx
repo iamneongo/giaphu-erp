@@ -59,6 +59,7 @@ import { catalogOptions, materialTypeOptions, uniqueOptions } from "../_lib/form
 import { formatCount, formatMoney } from "../_lib/formatters";
 import { ActionDialog } from "./action-dialog";
 import { DataTable, type DataTableColumn } from "./data-table";
+import { ExcelImportDialog } from "./excel-import-dialog";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
@@ -129,6 +130,14 @@ function parseNumber(value: string) {
 
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeBooleanForImport(value: unknown) {
+  if (typeof value === "boolean") return value;
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return ["1", "true", "yes", "y", "co", "có", "x", "da", "đã"].includes(text);
 }
 
 function formatNumberInput(value: string) {
@@ -648,6 +657,50 @@ export function ZaloMaterialBreakdownPage({
                 <DashboardLink href={resolvedBackHref}>Quay lại</DashboardLink>
               </Button>
             ) : null}
+            <ExcelImportDialog
+              title={`Import ${materialType} từ Excel`}
+              action="saveMaterial"
+              onAction={runAction}
+              onImported={paginatedMaterials.refresh}
+              fields={[
+                { key: "projectCode", label: "Công trình", hidden: true, defaultValue: activeProjectCode },
+                { key: "materialType", label: "Loại", hidden: true, defaultValue: materialType },
+                { key: "status", label: "Trạng thái", hidden: true, defaultValue: "Import Excel" },
+                { key: "date", label: "Ngày", aliases: ["Ngay"], type: "date", defaultValue: todayIso() },
+                {
+                  key: "week",
+                  label: "Tuần",
+                  aliases: ["Tuan"],
+                  defaultValue: (payload: Record<string, unknown>) =>
+                    isoWeekFromDate(String(payload.date ?? "")) || currentIsoWeek(),
+                },
+                { key: "category", label: "Hạng mục", aliases: ["Hang muc"], required: true },
+                {
+                  key: "materialName",
+                  label: "Vật tư",
+                  aliases: ["Vat tu", "Tên vật tư", "Ten vat tu"],
+                  required: true,
+                },
+                { key: "supplier", label: "NCC", aliases: ["Nhà CC", "Nhà cung cấp", "Nha cung cap"] },
+                { key: "quantity", label: "SL", aliases: ["Số lượng", "So luong"], type: "number", required: true },
+                { key: "unit", label: "ĐV", aliases: ["Đơn vị", "Don vi"], required: true },
+                { key: "price", label: "Đơn giá", aliases: ["Don gia"], type: "number", defaultValue: 0 },
+                {
+                  key: "debt",
+                  label: "Nợ?",
+                  aliases: ["Nợ", "No", "Công nợ"],
+                  defaultValue: "Không",
+                  transform: (value) => (normalizeBooleanForImport(value) ? "Có" : String(value || "Không")),
+                },
+                {
+                  key: "paymentStatus",
+                  label: "TT",
+                  aliases: ["Thanh toán", "Thanh toan"],
+                  defaultValue: (payload: Record<string, unknown>) => (payload.debt === "Có" ? "Chưa TT" : "Đã TT"),
+                },
+                { key: "paymentInfo", label: "Ghi chú thanh toán", aliases: ["Ghi chú", "Ghi chu"] },
+              ]}
+            />
             <Dialog open={zaloDialogOpen} onOpenChange={setZaloDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="outline">
