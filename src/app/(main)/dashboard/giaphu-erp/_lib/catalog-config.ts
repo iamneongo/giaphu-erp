@@ -11,6 +11,7 @@ export type CatalogSection = {
   codeLabel: string;
   nameLabel: string;
   showUnit?: boolean;
+  showSupplier?: boolean;
   showContact?: boolean;
   noteLabel: string;
 };
@@ -35,6 +36,7 @@ export const catalogSections: CatalogSection[] = [
     codeLabel: "Mã vật tư",
     nameLabel: "Tên vật tư",
     showUnit: true,
+    showSupplier: true,
     noteLabel: "Ghi chú",
   },
   {
@@ -46,6 +48,7 @@ export const catalogSections: CatalogSection[] = [
     codeLabel: "Mã vật tư phụ",
     nameLabel: "Tên vật tư phụ",
     showUnit: true,
+    showSupplier: true,
     noteLabel: "Ghi chú",
   },
   {

@@ -424,7 +424,7 @@ function getDashboardRecord(
         title: row.description || `Chi phí vận hành #${row.id}`,
         subtitle: "Chi phí vận hành",
         badge: formatMoney(row.amount),
-        backHref: "/dashboard/giaphu-erp/subcontractors/operations",
+        backHref: "/dashboard/giaphu-erp/operations",
         backLabel: "Quay lại vận hành",
         fields: [
           field("projectCode", "Công trình", row.projectCode),
@@ -452,6 +452,7 @@ function getDashboardRecord(
           field("code", "Mã", row.code),
           field("name", "Tên", row.name),
           field("unit", "Đơn vị", row.unit),
+          field("supplier", "NCC", row.supplier),
           field("contact", "Liên hệ", row.contact),
           field("note", "Ghi chú", row.note, true),
         ],

@@ -15,7 +15,7 @@ import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import type { CatalogKind } from "../_lib/catalog-config";
 import { getCatalogSectionByKind } from "../_lib/catalog-config";
-import { uniqueOptions } from "../_lib/form-options";
+import { catalogOptions, uniqueOptions } from "../_lib/form-options";
 import { ActionDialog, type FormFieldDefinition } from "./action-dialog";
 import { DataTable, type DataTableColumn } from "./data-table";
 import { ExcelImportDialog, type ExcelImportField } from "./excel-import-dialog";
@@ -27,6 +27,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
   const { data, isSwitchingProject, runAction } = useGiaPhuErp();
   const section = getCatalogSectionByKind(kind);
   const rows = data.catalogs[kind];
+  const supplierOptions = React.useMemo(() => catalogOptions(data.catalogs.nhaCungCap), [data.catalogs.nhaCungCap]);
   const catalogFixedFilters = React.useMemo(() => ({ kind }), [kind]);
   const paginatedCatalogs = usePaginatedErpRows<CatalogItem>({
     dataset: "catalogs",
@@ -66,6 +67,17 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
     fields.push({ name: "unit", label: "Đơn vị", required: true });
   }
 
+  if (section.showSupplier) {
+    fields.push({
+      name: "supplier",
+      label: "NCC",
+      type: "select",
+      options: supplierOptions,
+      placeholder: "Chọn nhà cung cấp",
+      helperText: supplierOptions.length ? "Lấy từ Danh mục > Nhà cung cấp." : "Thêm NCC ở Danh mục > Nhà cung cấp.",
+    });
+  }
+
   if (section.showContact) {
     fields.push(contactField);
   }
@@ -80,6 +92,10 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
 
   if (section.showUnit) {
     importFields.push({ key: "unit", label: "Đơn vị", aliases: ["Don vi", "ĐV"], required: true });
+  }
+
+  if (section.showSupplier) {
+    importFields.push({ key: "supplier", label: "NCC", aliases: ["Nhà CC", "Nhà cung cấp", "Nha cung cap"] });
   }
 
   if (section.showContact) {
@@ -104,6 +120,15 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
 
   if (section.showUnit) {
     columns.push({ key: "unit", label: "Đơn vị", accessor: (row) => row.unit, render: (row) => row.unit || "-" });
+  }
+
+  if (section.showSupplier) {
+    columns.push({
+      key: "supplier",
+      label: "NCC",
+      accessor: (row) => row.supplier,
+      render: (row) => row.supplier || "-",
+    });
   }
 
   if (section.showContact) {
@@ -137,6 +162,21 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
                 { name: "code", label: section.codeLabel, required: true, value: row.code },
                 { name: "name", label: section.nameLabel, required: true, value: row.name },
                 ...(section.showUnit ? [{ name: "unit", label: "Đơn vị", required: true, value: row.unit }] : []),
+                ...(section.showSupplier
+                  ? [
+                      {
+                        name: "supplier",
+                        label: "NCC",
+                        type: "select" as const,
+                        options: supplierOptions,
+                        placeholder: "Chọn nhà cung cấp",
+                        value: row.supplier,
+                        helperText: supplierOptions.length
+                          ? "Lấy từ Danh mục > Nhà cung cấp."
+                          : "Thêm NCC ở Danh mục > Nhà cung cấp.",
+                      },
+                    ]
+                  : []),
                 ...(section.showContact ? [{ ...contactField, value: row.contact }] : []),
                 { name: "note", label: section.noteLabel, type: "textarea" as const, value: row.note },
               ],
@@ -202,6 +242,9 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
           filters={[
             ...(section.showUnit
               ? [{ key: "unit", label: "Đơn vị", options: uniqueOptions(rows.map((row) => row.unit)) }]
+              : []),
+            ...(section.showSupplier
+              ? [{ key: "supplier", label: "NCC", options: uniqueOptions(rows.map((row) => row.supplier)) }]
               : []),
             ...(section.showContact
               ? [{ key: "contact", label: "Liên hệ", options: uniqueOptions(rows.map((row) => row.contact)) }]

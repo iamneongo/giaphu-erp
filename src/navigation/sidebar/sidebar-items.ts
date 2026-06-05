@@ -167,13 +167,13 @@ export const sidebarItems: NavGroup[] = [
             icon: BookOpen,
             permission: ERP_PERMISSIONS.subcontractorsRead,
           },
-          {
-            title: "Vận hành",
-            url: "/dashboard/giaphu-erp/subcontractors/operations",
-            icon: Truck,
-            permission: ERP_PERMISSIONS.subcontractorsRead,
-          },
         ],
+      },
+      {
+        title: "Vận hành",
+        url: "/dashboard/giaphu-erp/operations",
+        icon: Truck,
+        permission: ERP_PERMISSIONS.subcontractorsRead,
       },
       {
         title: "Hồ sơ",

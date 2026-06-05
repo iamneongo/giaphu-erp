@@ -126,8 +126,8 @@ const detailBreadcrumbMeta: Record<string, DetailBreadcrumbMeta> = {
     typeLabel: "Hợp đồng thầu phụ",
   },
   operations: {
-    moduleLabel: "Thầu phụ",
-    listHref: "/subcontractors/operations",
+    moduleLabel: "Vận hành",
+    listHref: "/operations",
     typeLabel: "Vận hành",
   },
   documents: {
@@ -235,6 +235,11 @@ function buildProjectBreadcrumbs(pathname: string, projects: ProjectRow[]) {
 
   if (firstSegment === "subcontractors") {
     addModuleBreadcrumb(items, routeId, "Thầu phụ", "/subcontractors/advances", labelFor(secondSegment || "advances"));
+    return items;
+  }
+
+  if (firstSegment === "operations") {
+    addModuleBreadcrumb(items, routeId, "Vận hành", "/operations");
     return items;
   }
 

@@ -55,6 +55,40 @@ function formatClerkApiError(error: unknown) {
   }
 }
 
+function getClerkApiErrorStatus(error: unknown) {
+  const fallback = error instanceof Error ? error.message : String(error);
+
+  try {
+    const payload = JSON.parse(fallback) as {
+      errors?: Array<{
+        code?: string;
+      }>;
+    };
+    const code = payload.errors?.[0]?.code;
+
+    if (
+      code === "form_identifier_exists" ||
+      code === "identifier_exists" ||
+      code === "resource_already_exists" ||
+      code === "duplicate_record"
+    ) {
+      return 409;
+    }
+
+    if (code?.startsWith("form_")) {
+      return 400;
+    }
+  } catch {
+    return 500;
+  }
+
+  return 500;
+}
+
+function normalizeEmail(email: string | null | undefined) {
+  return email?.trim().toLowerCase() ?? "";
+}
+
 async function canManageRoles(session: Awaited<ReturnType<typeof auth>>) {
   const permissionKeys = await getEffectiveErpPermissions(session);
 
@@ -213,6 +247,34 @@ export async function POST(request: Request) {
         );
       }
 
+      const [roleSet, memberships, invitations] = await Promise.all([
+        getOrganizationRoleSet(session.orgId),
+        listOrganizationMemberships(session.orgId),
+        listOrganizationInvitations(session.orgId),
+      ]);
+      const normalizedEmail = normalizeEmail(emailAddress);
+
+      if (!roleSet.roles.some((entry) => entry.key === role)) {
+        return NextResponse.json(
+          { status: "error", message: "Vai trò này không còn khả dụng trong tổ chức. Hãy tải lại trang rồi chọn lại." },
+          { status: 400 },
+        );
+      }
+
+      if (memberships.some((membership) => normalizeEmail(membership.publicUserData.identifier) === normalizedEmail)) {
+        return NextResponse.json(
+          { status: "error", message: "Email này đã là thành viên của tổ chức, không cần gửi lời mời lại." },
+          { status: 409 },
+        );
+      }
+
+      if (invitations.some((invitation) => normalizeEmail(invitation.emailAddress) === normalizedEmail)) {
+        return NextResponse.json(
+          { status: "error", message: "Email này đã có lời mời đang chờ phản hồi." },
+          { status: 409 },
+        );
+      }
+
       const invitation = await createOrganizationInvitation({
         organizationId: session.orgId,
         emailAddress,
@@ -290,7 +352,7 @@ export async function POST(request: Request) {
         status: "error",
         message: formatClerkApiError(error),
       },
-      { status: 500 },
+      { status: getClerkApiErrorStatus(error) },
     );
   }
 }

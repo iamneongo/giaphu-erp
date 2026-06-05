@@ -324,6 +324,7 @@ function catalogFromRow(row: Row): CatalogItem {
     code: text(row.code),
     name: text(row.name),
     unit: text(row.unit),
+    supplier: text(row.supplier),
     contact: text(row.contact),
     note: text(row.note),
   };
@@ -607,6 +608,7 @@ async function createGiaPhuSchemaInternal() {
     code text not null,
     name text not null,
     unit text not null default '',
+    supplier text not null default '',
     contact text not null default '',
     note text not null default '',
     created_at timestamptz not null default now(),
@@ -843,6 +845,7 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_projects add column if not exists id bigserial`;
   await sql`alter table gp_projects add column if not exists pin_hash text not null default ''`;
   await sql`alter table gp_catalog_items add column if not exists organization_id text not null default ''`;
+  await sql`alter table gp_catalog_items add column if not exists supplier text not null default ''`;
   await sql`alter table gp_staff add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_contracts add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_payments add column if not exists organization_id text not null default ''`;
@@ -876,6 +879,7 @@ async function ensureGiaPhuPerformanceIndexes() {
     await sql`create index if not exists gp_projects_org_id_idx on gp_projects (organization_id, id)`;
     await sql`create index if not exists gp_projects_org_date_idx on gp_projects (organization_id, updated_at desc, code asc)`;
     await sql`create index if not exists gp_catalog_items_org_kind_idx on gp_catalog_items (organization_id, kind, name)`;
+    await sql`create index if not exists gp_catalog_items_org_kind_supplier_idx on gp_catalog_items (organization_id, kind, supplier)`;
     await sql`create index if not exists gp_staff_org_idx on gp_staff (organization_id, id asc, name asc)`;
     await sql`create index if not exists gp_materials_project_date_idx on gp_materials (project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_materials_org_project_date_idx on gp_materials (organization_id, project_code, work_date desc, id desc)`;
@@ -2250,14 +2254,16 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
 
   if (options.dataset === "catalogs") {
     const whereSearch = search
-      ? sql`and lower(concat_ws(' ', kind, code, name, unit, contact, note)) like lower(${pattern})`
+      ? sql`and lower(concat_ws(' ', kind, code, name, unit, supplier, contact, note)) like lower(${pattern})`
       : sql``;
     const kindFilter = filterValue("kind");
     const unitFilter = filterValue("unit");
+    const supplierFilter = filterValue("supplier");
     const contactFilter = filterValue("contact");
     const whereFilters = sql`
       ${kindFilter ? sql`and kind = ${kindFilter}` : sql``}
       ${unitFilter ? sql`and unit = ${unitFilter}` : sql``}
+      ${supplierFilter ? sql`and supplier = ${supplierFilter}` : sql``}
       ${contactFilter ? sql`and contact = ${contactFilter}` : sql``}
     `;
     const [countRows, rows] = await Promise.all([
@@ -2641,15 +2647,17 @@ export async function getGiaPhuFilterOptions(options: {
   if (options.dataset === "catalogs") {
     const kindFilter = fixedFilterValue("kind");
     const whereKind = kindFilter ? sql`and kind = ${kindFilter}` : sql``;
-    const [kindRows, unitRows, contactRows] = await Promise.all([
+    const [kindRows, unitRows, supplierRows, contactRows] = await Promise.all([
       sql`select distinct kind as value from gp_catalog_items where organization_id = ${organizationId} and kind <> '' order by kind asc limit 300`,
       sql`select distinct unit as value from gp_catalog_items where organization_id = ${organizationId} and unit <> '' ${whereKind} order by unit asc limit 300`,
+      sql`select distinct supplier as value from gp_catalog_items where organization_id = ${organizationId} and supplier <> '' ${whereKind} order by supplier asc limit 300`,
       sql`select distinct contact as value from gp_catalog_items where organization_id = ${organizationId} and contact <> '' ${whereKind} order by contact asc limit 300`,
     ]);
 
     return {
       kind: distinctOptions(kindRows),
       unit: distinctOptions(unitRows),
+      supplier: distinctOptions(supplierRows),
       contact: distinctOptions(contactRows),
     };
   }
@@ -2972,6 +2980,7 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   const code = normalizeCatalogCode(text(payload.code).trim() || (await getNextCatalogCode(kind, organizationId)));
   if (!code) throw new Error(`Thiáº¿u ${labels.code.toLowerCase()}.`);
   const unit = text(payload.unit).trim();
+  const supplier = kind === "vatTu" || kind === "vatTuPhu" ? text(payload.supplier).trim() : "";
   const contact = text(payload.contact).trim();
   const note = text(payload.note).trim();
 
@@ -2997,6 +3006,7 @@ export async function manageCatalog(payload: Record<string, unknown>) {
           code = ${code},
           name = ${name},
           unit = ${unit},
+          supplier = ${supplier},
           contact = ${contact},
           note = ${note},
           updated_at = now()
@@ -3006,8 +3016,8 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   }
 
   await sql`
-    insert into gp_catalog_items (id, organization_id, kind, code, name, unit, contact, note, updated_at)
-    values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${contact}, ${note}, now())
+    insert into gp_catalog_items (id, organization_id, kind, code, name, unit, supplier, contact, note, updated_at)
+    values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, now())
   `;
 }
 

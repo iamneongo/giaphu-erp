@@ -22,7 +22,7 @@ import {
   readActiveProjectCode,
   writeActiveProjectCode,
 } from "@/lib/giaphu-erp/project-context";
-import { getProjectRouteInfo, projectScopedPath, switchProjectInPath } from "@/lib/giaphu-erp/project-routes";
+import { getProjectRouteInfo, switchProjectInPath } from "@/lib/giaphu-erp/project-routes";
 import type { ProjectRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
@@ -249,12 +249,7 @@ export function ProjectSwitcher({
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <DashboardLink
-                href={
-                  activeProject ? projectScopedPath(activeProject.id, "/crm/projects") : "/dashboard/giaphu-erp/crm"
-                }
-                className="gap-2"
-              >
+              <DashboardLink href="/dashboard/giaphu-erp/crm/projects" className="gap-2">
                 <PlusCircle className="size-4" />
                 Quản lý công trình
               </DashboardLink>

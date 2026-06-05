@@ -149,6 +149,7 @@ export interface CatalogItem {
   code: string;
   name: string;
   unit: string;
+  supplier: string;
   contact: string;
   note: string;
 }

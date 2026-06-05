@@ -100,6 +100,8 @@ export default async function ProjectPage({ params }: { params: ProjectPageParam
       await enforceErpRoutePermission(ERP_PERMISSIONS.subcontractorsRead);
       return <SubcontractorsWorkspace section="contracts" />;
     case "subcontractors/operations":
+      return redirect(projectScopedPath(decodedProjectId, "/operations"));
+    case "operations":
       await enforceErpRoutePermission(ERP_PERMISSIONS.subcontractorsRead);
       return <SubcontractorsWorkspace section="operations" />;
     case "documents":

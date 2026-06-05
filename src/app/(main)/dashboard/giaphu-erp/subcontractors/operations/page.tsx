@@ -1,8 +1,5 @@
-import { enforceErpRoutePermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac";
+import { redirect } from "next/navigation";
 
-import { SubcontractorsWorkspace } from "../../_components/subcontractors-workspace";
-
-export default async function Page() {
-  await enforceErpRoutePermission(ERP_PERMISSIONS.subcontractorsRead);
-  return <SubcontractorsWorkspace section="operations" />;
+export default function Page() {
+  redirect("/dashboard/giaphu-erp/operations");
 }

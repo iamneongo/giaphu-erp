@@ -2,11 +2,14 @@
 
 import * as React from "react";
 
+import { usePathname } from "next/navigation";
+
 import { Banknote, BriefcaseBusiness, FileText, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { getProjectRouteInfo } from "@/lib/giaphu-erp/project-routes";
 import type { ContractRow, PaymentRow, ProjectRow } from "@/lib/giaphu-erp/types";
 
 import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
@@ -26,6 +29,7 @@ import { TableRowActions } from "./table-row-actions";
 type CrmSection = "projects" | "contracts" | "payments";
 
 export function CrmWorkspace({ section = "projects" }: { section?: CrmSection }) {
+  const pathname = usePathname();
   const { data, activeProject, activeProjectCode, isSwitchingProject, setActiveProjectCode, runAction, scoped } =
     useGiaPhuErp();
   const paginatedProjects = usePaginatedErpRows<ProjectRow>({
@@ -49,6 +53,8 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
   const projectStatusOptions = uniqueOptions(data.projects.map((project) => project.status));
   const projectOwnerOptions = uniqueOptions(data.projects.map((project) => project.owner));
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.crmManage);
+  const isProjectScopedProjectsPage = section === "projects" && Boolean(getProjectRouteInfo(pathname));
+  const canManageProjects = canManage && !isProjectScopedProjectsPage;
   const [pinProject, setPinProject] = React.useState<ProjectRow | null>(null);
 
   if (!data.projects.length) {
@@ -188,7 +194,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                 accessor: (project) => project.status,
                 render: (project) => <Badge variant="outline">{project.status || "-"}</Badge>,
               },
-              ...(canManage
+              ...(canManageProjects
                 ? [
                     {
                       key: "actions",
@@ -512,6 +518,14 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
   };
 
   const currentSection = headerBySection[section];
+  const currentActions =
+    section === "projects"
+      ? canManageProjects
+        ? currentSection.actions
+        : undefined
+      : canManage
+        ? currentSection.actions
+        : undefined;
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
@@ -519,7 +533,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
         title={currentSection.title}
         description={currentSection.description}
         icon={BriefcaseBusiness}
-        actions={canManage ? currentSection.actions : undefined}
+        actions={currentActions}
       />
       {currentSection.content}
       <ProjectPinUnlockDialog

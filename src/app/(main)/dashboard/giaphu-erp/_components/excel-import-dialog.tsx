@@ -2,27 +2,22 @@
 
 import * as React from "react";
 
+import { useRouter } from "next/navigation";
+
 import { FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+import { DashboardLink } from "../../_components/dashboard-link";
 import type { GiaPhuActionResult } from "../_lib/giaphu-erp-api";
 
 type ExcelImportFieldType = "text" | "number" | "date" | "boolean";
@@ -43,6 +38,15 @@ type ParsedImportRow = {
   sourceRow: number;
   payload: Record<string, unknown>;
   errors: string[];
+};
+
+type ExcelImportProps = {
+  title: string;
+  description?: string;
+  action: string;
+  fields: ExcelImportField[];
+  onAction: (action: string, payload: Record<string, unknown>) => Promise<GiaPhuActionResult | false | unknown>;
+  onImported?: () => void;
 };
 
 function normalizeHeader(value: unknown) {
@@ -194,22 +198,62 @@ function parseRows(rawRows: unknown[][], fields: ExcelImportField[]) {
   return { rows, missingHeaders };
 }
 
-export function ExcelImportDialog({
+function getStaticDefaultValue(fields: ExcelImportField[], key: string) {
+  const value = fields.find((field) => field.key === key)?.defaultValue;
+  return typeof value === "function" ? undefined : value;
+}
+
+function getImportHref(action: string, fields: ExcelImportField[]) {
+  const params = new URLSearchParams();
+
+  if (action === "manageCatalog") {
+    const kind = String(getStaticDefaultValue(fields, "kind") ?? "");
+    if (kind) params.set("kind", kind);
+    return `/dashboard/giaphu-erp/import/catalogs?${params.toString()}`;
+  }
+
+  if (action === "saveMaterial") {
+    const materialType = String(getStaticDefaultValue(fields, "materialType") ?? "");
+    if (materialType) params.set("materialType", materialType);
+    return `/dashboard/giaphu-erp/import/materials?${params.toString()}`;
+  }
+
+  const targetByAction: Record<string, string> = {
+    manageStaff: "staff",
+    saveContract: "contracts",
+    saveLaborNorm: "labor-norms",
+    saveOperation: "operations",
+    savePayment: "payments",
+    saveProgress: "progress",
+    saveProject: "projects",
+    saveSubcontractor: "subcontractors",
+    saveSubcontractorContract: "subcontractor-contracts",
+  };
+
+  return `/dashboard/giaphu-erp/import/${targetByAction[action] ?? action}`;
+}
+
+export function ExcelImportDialog({ action, fields }: ExcelImportProps) {
+  return (
+    <Button asChild size="sm" variant="outline">
+      <DashboardLink href={getImportHref(action, fields)}>
+        <FileSpreadsheet />
+        Import Excel
+      </DashboardLink>
+    </Button>
+  );
+}
+
+export function ExcelImportPanel({
   title,
   description,
   action,
   fields,
   onAction,
   onImported,
-}: {
-  title: string;
-  description?: string;
-  action: string;
-  fields: ExcelImportField[];
-  onAction: (action: string, payload: Record<string, unknown>) => Promise<GiaPhuActionResult | false | unknown>;
-  onImported?: () => void;
-}) {
-  const [open, setOpen] = React.useState(false);
+  backHref,
+}: ExcelImportProps & { backHref: string }) {
+  const router = useRouter();
   const [sheetNames, setSheetNames] = React.useState<string[]>([]);
   const [selectedSheet, setSelectedSheet] = React.useState("");
   const [workbookRows, setWorkbookRows] = React.useState<Record<string, unknown[][]>>({});
@@ -259,113 +303,124 @@ export function ExcelImportDialog({
       if (result !== false) {
         toast.success(`Đã import ${validRows.length.toLocaleString("vi-VN")} dòng.`);
         onImported?.();
-        setOpen(false);
+        router.push(backHref);
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <FileSpreadsheet />
-          Import Excel
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-5xl">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
+    <div className="flex flex-col gap-4 md:gap-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
+          <p className="text-muted-foreground text-sm">
             {description ?? "Chọn file Excel/CSV theo sheet AppScript cũ, kiểm tra preview rồi import vào ERP."}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-4 md:grid-cols-[1.4fr_0.8fr]">
-          <div className="space-y-2">
-            <Label htmlFor="excel-file">File Excel / CSV</Label>
-            <Input
-              id="excel-file"
-              type="file"
-              accept=".xlsx,.xls,.xlsm,.csv"
-              onChange={(event) => void handleFile(event.target.files?.[0] ?? null)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Sheet</Label>
-            <Select value={selectedSheet} onValueChange={setSelectedSheet} disabled={!sheetNames.length}>
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn sheet" />
-              </SelectTrigger>
-              <SelectContent>
-                {sheetNames.map((sheetName) => (
-                  <SelectItem key={sheetName} value={sheetName}>
-                    {sheetName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          </p>
         </div>
+        <Button asChild variant="outline">
+          <DashboardLink href={backHref}>Quay lại</DashboardLink>
+        </Button>
+      </div>
 
-        {parsed.missingHeaders.length ? (
-          <Alert variant="destructive">
-            <Upload />
-            <AlertTitle>Thiếu cột bắt buộc</AlertTitle>
-            <AlertDescription>{parsed.missingHeaders.join(", ")}</AlertDescription>
-          </Alert>
-        ) : null}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="size-5" />
+            File import
+          </CardTitle>
+          <CardDescription>Chọn file, chọn sheet rồi kiểm tra dữ liệu trước khi lưu vào ERP.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.8fr)]">
+            <div className="space-y-2">
+              <Label htmlFor="excel-file">File Excel / CSV</Label>
+              <Input
+                id="excel-file"
+                type="file"
+                accept=".xlsx,.xls,.xlsm,.csv"
+                onChange={(event) => void handleFile(event.target.files?.[0] ?? null)}
+              />
+            </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{validRows.length.toLocaleString("vi-VN")} dòng hợp lệ</Badge>
-          <Badge variant={invalidRows.length ? "destructive" : "secondary"}>
-            {invalidRows.length.toLocaleString("vi-VN")} dòng lỗi
-          </Badge>
-        </div>
-
-        <ScrollArea className="max-h-[420px] rounded-md border">
-          <Table className="min-w-[920px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-20">Dòng</TableHead>
-                {previewFields.map((field) => (
-                  <TableHead key={field.key}>{field.label}</TableHead>
-                ))}
-                <TableHead>Lỗi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {parsed.rows.slice(0, 200).map((row) => (
-                <TableRow key={row.sourceRow}>
-                  <TableCell>{row.sourceRow}</TableCell>
-                  {previewFields.map((field) => (
-                    <TableCell key={field.key} className="max-w-48 truncate">
-                      {String(row.payload[field.key] ?? "") || "-"}
-                    </TableCell>
+            <div className="space-y-2">
+              <Label>Sheet</Label>
+              <Select value={selectedSheet} onValueChange={setSelectedSheet} disabled={!sheetNames.length}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn sheet" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sheetNames.map((sheetName) => (
+                    <SelectItem key={sheetName} value={sheetName}>
+                      {sheetName}
+                    </SelectItem>
                   ))}
-                  <TableCell className={row.errors.length ? "text-destructive" : "text-muted-foreground"}>
-                    {row.errors.join(", ") || "OK"}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!parsed.rows.length ? (
-                <TableRow>
-                  <TableCell colSpan={previewFields.length + 2} className="h-24 text-center text-muted-foreground">
-                    Chọn file Excel để xem dữ liệu import.
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
-        </ScrollArea>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-        <DialogFooter showCloseButton>
+          {parsed.missingHeaders.length ? (
+            <Alert variant="destructive">
+              <Upload />
+              <AlertTitle>Thiếu cột bắt buộc</AlertTitle>
+              <AlertDescription>{parsed.missingHeaders.join(", ")}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{validRows.length.toLocaleString("vi-VN")} dòng hợp lệ</Badge>
+            <Badge variant={invalidRows.length ? "destructive" : "secondary"}>
+              {invalidRows.length.toLocaleString("vi-VN")} dòng lỗi
+            </Badge>
+            {parsed.rows.length > 200 ? (
+              <Badge variant="outline">Đang xem 200 / {parsed.rows.length.toLocaleString("vi-VN")} dòng</Badge>
+            ) : null}
+          </div>
+
+          <ScrollArea className="h-[58vh] min-h-[360px] rounded-lg border">
+            <Table className="min-w-[1120px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-20">Dòng</TableHead>
+                  {previewFields.map((field) => (
+                    <TableHead key={field.key}>{field.label}</TableHead>
+                  ))}
+                  <TableHead>Lỗi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {parsed.rows.slice(0, 200).map((row) => (
+                  <TableRow key={row.sourceRow}>
+                    <TableCell>{row.sourceRow}</TableCell>
+                    {previewFields.map((field) => (
+                      <TableCell key={field.key} className="max-w-56 truncate">
+                        {String(row.payload[field.key] ?? "") || "-"}
+                      </TableCell>
+                    ))}
+                    <TableCell className={row.errors.length ? "text-destructive" : "text-muted-foreground"}>
+                      {row.errors.join(", ") || "OK"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!parsed.rows.length ? (
+                  <TableRow>
+                    <TableCell colSpan={previewFields.length + 2} className="h-40 text-center text-muted-foreground">
+                      Chọn file Excel để xem dữ liệu import.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+        </CardContent>
+        <CardFooter className="justify-end border-t">
           <Button disabled={pending || !validRows.length || parsed.missingHeaders.length > 0} onClick={importRows}>
             <Upload />
             {pending ? "Đang import..." : `Import ${validRows.length.toLocaleString("vi-VN")} dòng`}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </CardFooter>
+      </Card>
+    </div>
   );
 }
