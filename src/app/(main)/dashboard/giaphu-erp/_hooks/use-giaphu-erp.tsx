@@ -136,6 +136,8 @@ export function GiaPhuErpProvider({
           project.id === routeProjectId || project.code === routeProjectId || project.name === routeProjectId,
       )
     : undefined;
+  const routeProjectCode = routeProject?.code ?? "";
+  const routeProjectRecordId = routeProject?.id ?? "";
   const [data, setData] = React.useState(initialData);
   const [activeProjectCode, setActiveProjectCode] = React.useState(() => {
     if (routeProject) {
@@ -145,8 +147,17 @@ export function GiaPhuErpProvider({
     return initialData.projects[0]?.code ?? "";
   });
   const [isSwitchingProject, setIsSwitchingProject] = React.useState(false);
+  const activeProjectCodeRef = React.useRef(activeProjectCode);
+  const canonicalizedPathRef = React.useRef<string | null>(null);
+  const redirectedToCreateRef = React.useRef(false);
+
+  React.useEffect(() => {
+    activeProjectCodeRef.current = activeProjectCode;
+  }, [activeProjectCode]);
+
   const loadProjectData = React.useCallback(async (nextCode: string) => {
     setIsSwitchingProject(true);
+    activeProjectCodeRef.current = nextCode;
     setActiveProjectCode(nextCode);
 
     try {
@@ -166,16 +177,25 @@ export function GiaPhuErpProvider({
       }
 
       const project = data.projects.find((item) => item.code === code);
+      const nextRouteId = project?.id ?? code;
+      const nextPath = switchProjectInPath(pathname, nextRouteId);
+
+      activeProjectCodeRef.current = code;
+      setActiveProjectCode(code);
       writeActiveProjectCode(code, project?.id ?? code);
-      router.push(switchProjectInPath(pathname, project?.id ?? code));
+
+      if (nextPath !== pathname) {
+        router.push(nextPath);
+      }
     },
     [activeProjectCode, data.projects, pathname, router],
   );
 
   React.useEffect(() => {
-    if (routeProject) {
-      writeActiveProjectCode(routeProject.code, routeProject.id);
-      setActiveProjectCode((current) => (current === routeProject.code ? current : routeProject.code));
+    if (routeProjectCode && routeProjectRecordId) {
+      activeProjectCodeRef.current = routeProjectCode;
+      writeActiveProjectCode(routeProjectCode, routeProjectRecordId);
+      setActiveProjectCode((current) => (current === routeProjectCode ? current : routeProjectCode));
       return;
     }
 
@@ -183,23 +203,29 @@ export function GiaPhuErpProvider({
     const fallbackProjectCode = initialData.projects[0]?.code ?? "";
 
     if (storedProjectCode && initialData.projects.some((project) => project.code === storedProjectCode)) {
+      activeProjectCodeRef.current = storedProjectCode;
       setActiveProjectCode((current) => (current === storedProjectCode ? current : storedProjectCode));
     } else if (fallbackProjectCode) {
       const fallbackProject = initialData.projects[0];
+      activeProjectCodeRef.current = fallbackProjectCode;
       writeActiveProjectCode(fallbackProjectCode, fallbackProject?.id ?? fallbackProjectCode);
       setActiveProjectCode((current) => (current === fallbackProjectCode ? current : fallbackProjectCode));
     }
-  }, [initialData.projects, routeProject]);
+  }, [initialData.projects, routeProjectCode, routeProjectRecordId]);
 
   React.useEffect(() => {
-    if (!routeProject || !routeProjectId || routeProjectId === routeProject.id) return;
-    router.replace(switchProjectInPath(pathname, routeProject.id));
-  }, [pathname, routeProject, routeProjectId, router]);
+    if (!routeProjectRecordId || !routeProjectId || routeProjectId === routeProjectRecordId) return;
+    const nextPath = switchProjectInPath(pathname, routeProjectRecordId);
+
+    if (nextPath === pathname || canonicalizedPathRef.current === nextPath) return;
+    canonicalizedPathRef.current = nextPath;
+    router.replace(nextPath);
+  }, [pathname, routeProjectRecordId, routeProjectId, router]);
 
   React.useEffect(() => {
-    if (!data.projects.length && pathname !== "/create-project") {
-      router.replace("/create-project");
-    }
+    if (data.projects.length || pathname === "/create-project" || redirectedToCreateRef.current) return;
+    redirectedToCreateRef.current = true;
+    router.replace("/create-project");
   }, [data.projects.length, pathname, router]);
 
   React.useEffect(() => {
@@ -212,13 +238,17 @@ export function GiaPhuErpProvider({
     function handleProjectChange(event: Event) {
       const nextCode = (event as CustomEvent<ActiveProjectChangeDetail>).detail?.code;
 
-      if (nextCode && nextCode !== activeProjectCode) {
+      if (nextCode && nextCode !== activeProjectCodeRef.current) {
         void loadProjectData(nextCode);
       }
     }
 
     function handleStorage(event: StorageEvent) {
-      if (event.key === ACTIVE_PROJECT_STORAGE_KEY && event.newValue && event.newValue !== activeProjectCode) {
+      if (
+        event.key === ACTIVE_PROJECT_STORAGE_KEY &&
+        event.newValue &&
+        event.newValue !== activeProjectCodeRef.current
+      ) {
         void loadProjectData(event.newValue);
       }
     }
@@ -230,7 +260,7 @@ export function GiaPhuErpProvider({
       window.removeEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
       window.removeEventListener("storage", handleStorage);
     };
-  }, [activeProjectCode, loadProjectData]);
+  }, [loadProjectData]);
 
   const activeProject = data.projects.find((project) => project.code === activeProjectCode) ?? data.projects[0];
   const normalizedProjectCode = activeProject?.code ?? "";

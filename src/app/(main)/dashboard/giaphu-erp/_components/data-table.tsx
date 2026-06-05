@@ -483,6 +483,7 @@ export function DataTable<T>({
   const pathname = usePathname();
   const isServerSide = Boolean(serverSide);
   const isLoading = loading ? true : (serverSide?.loading ?? false);
+  const serverSideOnStateChange = serverSide?.onStateChange;
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting);
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: 0,
@@ -656,16 +657,16 @@ export function DataTable<T>({
   });
 
   React.useEffect(() => {
-    if (!serverSide) return;
+    if (!serverSideOnStateChange) return;
 
-    serverSide.onStateChange({
+    serverSideOnStateChange({
       pageIndex: pagination.pageIndex,
       pageSize: pagination.pageSize,
       query: debouncedQuery,
       sorting,
       filters: filterValues,
     });
-  }, [debouncedQuery, filterValues, pagination.pageIndex, pagination.pageSize, serverSide, sorting]);
+  }, [debouncedQuery, filterValues, pagination.pageIndex, pagination.pageSize, serverSideOnStateChange, sorting]);
 
   const pageCount = table.getPageCount();
   const visibleRows = table.getRowModel().rows;
