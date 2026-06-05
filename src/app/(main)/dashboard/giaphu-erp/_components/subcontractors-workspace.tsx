@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+
 import { Banknote, Download, FileText, Hammer, ShieldCheck, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -42,13 +44,44 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
     initialRows: scoped.subcontractorContracts,
     enabled: section === "contracts",
   });
-  const categoryOptions = catalogOptions(data.catalogs.hangMuc);
-  const contractorOptions = catalogOptions(data.catalogs.thauPhu);
-  const subcontractorWeekOptions = uniqueOptions(scoped.subcontractors.map((row) => row.week));
-  const subcontractorCategoryOptions = uniqueOptions(scoped.subcontractors.map((row) => row.category));
-  const subcontractorNameOptions = uniqueOptions(scoped.subcontractors.map((row) => row.contractorName));
-  const subcontractorStatusOptions = uniqueOptions(scoped.subcontractorContracts.map((row) => row.status));
-  const operationWeekOptions = uniqueOptions(scoped.operations.map((row) => row.week));
+  const categoryOptions = React.useMemo(() => catalogOptions(data.catalogs.hangMuc), [data.catalogs.hangMuc]);
+  const contractorOptions = React.useMemo(() => catalogOptions(data.catalogs.thauPhu), [data.catalogs.thauPhu]);
+  const subcontractorWeekOptions = React.useMemo(
+    () => uniqueOptions(scoped.subcontractors.map((row) => row.week)),
+    [scoped.subcontractors],
+  );
+  const subcontractorCategoryOptions = React.useMemo(
+    () => uniqueOptions(scoped.subcontractors.map((row) => row.category)),
+    [scoped.subcontractors],
+  );
+  const subcontractorNameOptions = React.useMemo(
+    () => uniqueOptions(scoped.subcontractors.map((row) => row.contractorName)),
+    [scoped.subcontractors],
+  );
+  const subcontractorStatusOptions = React.useMemo(
+    () => uniqueOptions(scoped.subcontractorContracts.map((row) => row.status)),
+    [scoped.subcontractorContracts],
+  );
+  const operationWeekOptions = React.useMemo(
+    () => uniqueOptions(scoped.operations.map((row) => row.week)),
+    [scoped.operations],
+  );
+  const subcontractorFilters = React.useMemo(
+    () => [
+      { key: "week", label: "Tuần", options: subcontractorWeekOptions },
+      { key: "category", label: "Hạng mục", options: subcontractorCategoryOptions },
+      { key: "contractorName", label: "Thầu phụ", options: subcontractorNameOptions },
+    ],
+    [subcontractorCategoryOptions, subcontractorNameOptions, subcontractorWeekOptions],
+  );
+  const subcontractorContractFilters = React.useMemo(
+    () => [{ key: "status", label: "Trạng thái", options: subcontractorStatusOptions }],
+    [subcontractorStatusOptions],
+  );
+  const operationFilters = React.useMemo(
+    () => [{ key: "week", label: "Tuần", options: operationWeekOptions }],
+    [operationWeekOptions],
+  );
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.subcontractorsManage);
 
   async function saveSubcontractorWithAttachment(
@@ -335,11 +368,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             selectable
             exportFileName="thau-phu-tam-ung"
             searchPlaceholder="Tìm thầu phụ, hạng mục..."
-            filters={[
-              { key: "week", label: "Tuần", options: subcontractorWeekOptions },
-              { key: "category", label: "Hạng mục", options: subcontractorCategoryOptions },
-              { key: "contractorName", label: "Thầu phụ", options: subcontractorNameOptions },
-            ]}
+            filters={subcontractorFilters}
             initialSorting={[{ id: "date", desc: true }]}
           />
         </SectionBlock>
@@ -445,7 +474,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             detailType="subcontractor-contracts"
             selectable
             exportFileName="hop-dong-thau-phu"
-            filters={[{ key: "status", label: "Trạng thái", options: subcontractorStatusOptions }]}
+            filters={subcontractorContractFilters}
           />
         </SectionBlock>
       ),
@@ -552,7 +581,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             detailType="operations"
             selectable
             exportFileName="chi-phi-van-hanh"
-            filters={[{ key: "week", label: "Tuần", options: operationWeekOptions }]}
+            filters={operationFilters}
             initialSorting={[{ id: "date", desc: true }]}
           />
         </SectionBlock>

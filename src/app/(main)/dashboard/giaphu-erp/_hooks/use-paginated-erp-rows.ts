@@ -21,6 +21,10 @@ const projectScopedDatasets = new Set<GiaPhuPagedDataset>([
 ]);
 const emptyFixedFilters: Record<string, string> = {};
 
+function hasObjectValues(value: Record<string, unknown>) {
+  return Object.keys(value).length > 0;
+}
+
 export function usePaginatedErpRows<T>({
   dataset,
   projectCode,
@@ -54,10 +58,15 @@ export function usePaginatedErpRows<T>({
     [dataset, fixedFilters, projectCode],
   );
   const previousFilterOptionsScopeKey = React.useRef(filterOptionsScopeKey);
+  const filterOptionsLoaded = hasObjectValues(filterOptions);
+
+  const clearFilterOptions = React.useCallback(() => {
+    setFilterOptions((current) => (hasObjectValues(current) ? {} : current));
+  }, []);
 
   React.useEffect(() => {
-    setRows(initialRows);
-    setTotal(initialRows.length);
+    setRows((current) => (current === initialRows ? current : initialRows));
+    setTotal((current) => (current === initialRows.length ? current : initialRows.length));
     setState((current) => (current.pageIndex ? { ...current, pageIndex: 0 } : current));
   }, [initialRows]);
 
@@ -65,22 +74,22 @@ export function usePaginatedErpRows<T>({
     if (previousFilterOptionsScopeKey.current === filterOptionsScopeKey) return;
 
     previousFilterOptionsScopeKey.current = filterOptionsScopeKey;
-    setFilterOptions({});
-    setFilterOptionsLoading(false);
-  }, [filterOptionsScopeKey]);
+    clearFilterOptions();
+    setFilterOptionsLoading((current) => (current ? false : current));
+  }, [clearFilterOptions, filterOptionsScopeKey]);
 
   const loadFilterOptions = React.useCallback(() => {
     if (!enabled) {
-      setFilterOptions({});
+      clearFilterOptions();
       return undefined;
     }
 
     if (projectScopedDatasets.has(dataset) && !projectCode) {
-      setFilterOptions({});
+      clearFilterOptions();
       return undefined;
     }
 
-    if (Object.keys(filterOptions).length > 0 || filterOptionsLoading) {
+    if (filterOptionsLoaded || filterOptionsLoading) {
       return undefined;
     }
 
@@ -99,19 +108,28 @@ export function usePaginatedErpRows<T>({
         setFilterOptions(options);
       })
       .catch(() => {
-        if (!controller.signal.aborted) setFilterOptions({});
+        if (!controller.signal.aborted) clearFilterOptions();
       })
       .finally(() => {
-        if (!controller.signal.aborted) setFilterOptionsLoading(false);
+        if (!controller.signal.aborted) setFilterOptionsLoading((current) => (current ? false : current));
       });
 
     return controller;
-  }, [dataset, enabled, filterOptions, filterOptionsLoading, fixedFilters, projectCode, refreshToken]);
+  }, [
+    clearFilterOptions,
+    dataset,
+    enabled,
+    filterOptionsLoaded,
+    filterOptionsLoading,
+    fixedFilters,
+    projectCode,
+    refreshToken,
+  ]);
 
   React.useEffect(() => {
     if (!enabled) {
-      setFilterOptions({});
-      setFilterOptionsLoading(false);
+      clearFilterOptions();
+      setFilterOptionsLoading((current) => (current ? false : current));
       return;
     }
 
@@ -120,19 +138,20 @@ export function usePaginatedErpRows<T>({
 
     const controller = loadFilterOptions();
     return () => controller?.abort();
-  }, [enabled, loadFilterOptions, state.filters]);
+  }, [clearFilterOptions, enabled, loadFilterOptions, state.filters]);
 
   React.useEffect(() => {
     if (!enabled) {
-      setRows(initialRows);
-      setTotal(initialRows.length);
-      setLoading(false);
+      setRows((current) => (current === initialRows ? current : initialRows));
+      setTotal((current) => (current === initialRows.length ? current : initialRows.length));
+      setLoading((current) => (current ? false : current));
       return;
     }
 
     if (projectScopedDatasets.has(dataset) && !projectCode) {
-      setRows([]);
-      setTotal(0);
+      setRows((current) => (current.length ? [] : current));
+      setTotal((current) => (current ? 0 : current));
+      setLoading((current) => (current ? false : current));
       return;
     }
 
@@ -157,11 +176,11 @@ export function usePaginatedErpRows<T>({
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setRows([]);
-        setTotal(0);
+        setRows((current) => (current.length ? [] : current));
+        setTotal((current) => (current ? 0 : current));
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) setLoading((current) => (current ? false : current));
       });
 
     return () => controller.abort();
