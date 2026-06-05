@@ -2984,8 +2984,8 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   const contact = text(payload.contact).trim();
   const note = text(payload.note).trim();
 
-  if ((kind === "vatTu" || kind === "vatTuPhu") && !unit) {
-    throw new Error("Thiáº¿u Ä‘Æ¡n vá»‹.");
+  if ((kind === "vatTu" || kind === "vatTuPhu") && !supplier) {
+    throw new Error("Thiếu nhà cung cấp.");
   }
 
   if (kind === "thauPhu" || kind === "nhaCungCap") {

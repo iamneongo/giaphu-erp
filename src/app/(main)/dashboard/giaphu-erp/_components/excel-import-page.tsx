@@ -163,7 +163,12 @@ function buildImportConfig(target: ImportTarget, query: Record<string, string>, 
     }
 
     if (section.showSupplier) {
-      fields.push({ key: "supplier", label: "NCC", aliases: ["Nhà CC", "Nhà cung cấp", "Nha cung cap"] });
+      fields.push({
+        key: "supplier",
+        label: "NCC",
+        aliases: ["Nhà CC", "Nhà cung cấp", "Nha cung cap"],
+        required: true,
+      });
     }
 
     if (section.showContact) {

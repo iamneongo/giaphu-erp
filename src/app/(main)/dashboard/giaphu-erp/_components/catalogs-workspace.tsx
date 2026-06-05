@@ -74,6 +74,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
       type: "select",
       options: supplierOptions,
       placeholder: "Chọn nhà cung cấp",
+      required: true,
       helperText: supplierOptions.length ? "Lấy từ Danh mục > Nhà cung cấp." : "Thêm NCC ở Danh mục > Nhà cung cấp.",
     });
   }
@@ -95,7 +96,12 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
   }
 
   if (section.showSupplier) {
-    importFields.push({ key: "supplier", label: "NCC", aliases: ["Nhà CC", "Nhà cung cấp", "Nha cung cap"] });
+    importFields.push({
+      key: "supplier",
+      label: "NCC",
+      aliases: ["Nhà CC", "Nhà cung cấp", "Nha cung cap"],
+      required: true,
+    });
   }
 
   if (section.showContact) {
@@ -170,6 +176,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
                         type: "select" as const,
                         options: supplierOptions,
                         placeholder: "Chọn nhà cung cấp",
+                        required: true,
                         value: row.supplier,
                         helperText: supplierOptions.length
                           ? "Lấy từ Danh mục > Nhà cung cấp."
