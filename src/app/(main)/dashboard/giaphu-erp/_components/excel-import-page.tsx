@@ -4,6 +4,7 @@ import { FileSpreadsheet } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { isValidPhoneNumber } from "@/lib/giaphu-erp/phone";
+import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
 import type { MaterialType } from "@/lib/giaphu-erp/types";
 
 import { DashboardLink } from "../../_components/dashboard-link";
@@ -367,7 +368,15 @@ function buildImportConfig(target: ImportTarget, query: Record<string, string>, 
   return null;
 }
 
-export function ExcelImportPage({ target, query }: { target: string; query: Record<string, string> }) {
+export function ExcelImportPage({
+  target,
+  query,
+  routeProjectId,
+}: {
+  target: string;
+  query: Record<string, string>;
+  routeProjectId?: string;
+}) {
   const { activeProjectCode, runAction } = useGiaPhuErp();
   const config = buildImportConfig(target as ImportTarget, query, activeProjectCode);
 
@@ -386,5 +395,9 @@ export function ExcelImportPage({ target, query }: { target: string; query: Reco
     );
   }
 
-  return <ExcelImportPanel {...config} onAction={runAction} />;
+  const scopedConfig = routeProjectId
+    ? { ...config, backHref: erpPathForProject(routeProjectId, config.backHref) }
+    : config;
+
+  return <ExcelImportPanel {...scopedConfig} onAction={runAction} />;
 }

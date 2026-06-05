@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { erpPathForProject, getProjectRouteInfo } from "@/lib/giaphu-erp/project-routes";
 
 import { DashboardLink } from "../../_components/dashboard-link";
 import type { GiaPhuActionResult } from "../_lib/giaphu-erp-api";
@@ -234,9 +235,12 @@ function getImportHref(action: string, fields: ExcelImportField[]) {
 }
 
 export function ExcelImportDialog({ action, fields }: ExcelImportProps) {
+  const projectRoute = getProjectRouteInfo(usePathname());
+  const href = getImportHref(action, fields);
+
   return (
     <Button asChild size="sm" variant="outline">
-      <DashboardLink href={getImportHref(action, fields)}>
+      <DashboardLink href={projectRoute ? erpPathForProject(projectRoute.projectId, href) : href}>
         <FileSpreadsheet />
         Import Excel
       </DashboardLink>

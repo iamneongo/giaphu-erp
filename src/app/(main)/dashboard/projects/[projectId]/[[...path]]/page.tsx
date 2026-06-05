@@ -7,6 +7,7 @@ import { CatalogsWorkspace } from "../../../giaphu-erp/_components/catalogs-work
 import { CrmWorkspace } from "../../../giaphu-erp/_components/crm-workspace";
 import { DetailPageContent } from "../../../giaphu-erp/_components/detail-page-content";
 import { DocumentsWorkspace } from "../../../giaphu-erp/_components/documents-workspace";
+import { ExcelImportPage } from "../../../giaphu-erp/_components/excel-import-page";
 import { MaterialDebtWorkspace } from "../../../giaphu-erp/_components/material-debt-workspace";
 import { OverviewDashboard } from "../../../giaphu-erp/_components/overview-dashboard";
 import { ReportsWorkspace } from "../../../giaphu-erp/_components/reports-workspace";
@@ -20,10 +21,36 @@ type ProjectPageParams = Promise<{
   path?: string[];
 }>;
 
+type ProjectPageSearchParams = Promise<Record<string, string | string[] | undefined>>;
+
 export const dynamic = "force-dynamic";
 
-export default async function ProjectPage({ params }: { params: ProjectPageParams }) {
-  const { projectId, path = [] } = await params;
+function getImportPermission(target: string) {
+  if (["contracts", "payments", "projects"].includes(target)) return ERP_PERMISSIONS.crmManage;
+  if (target === "catalogs") return ERP_PERMISSIONS.catalogsManage;
+  if (target === "materials") return ERP_PERMISSIONS.materialsManage;
+  if (["labor-norms", "progress", "staff"].includes(target)) return ERP_PERMISSIONS.workforceManage;
+  if (["operations", "subcontractor-contracts", "subcontractors"].includes(target)) {
+    return ERP_PERMISSIONS.subcontractorsManage;
+  }
+
+  return ERP_PERMISSIONS.overviewRead;
+}
+
+function normalizeSearchParams(searchParams: Awaited<ProjectPageSearchParams>) {
+  return Object.fromEntries(
+    Object.entries(searchParams).map(([key, value]) => [key, Array.isArray(value) ? (value[0] ?? "") : (value ?? "")]),
+  );
+}
+
+export default async function ProjectPage({
+  params,
+  searchParams,
+}: {
+  params: ProjectPageParams;
+  searchParams: ProjectPageSearchParams;
+}) {
+  const [{ projectId, path = [] }, rawSearchParams] = await Promise.all([params, searchParams]);
   const decodedProjectId = decodeProjectRouteSegment(projectId);
   const routeKey = path.join("/");
 
@@ -129,6 +156,17 @@ export default async function ProjectPage({ params }: { params: ProjectPageParam
         decodedProjectId,
         section.kind === "vatTu" ? "/materials/vat-tu-chinh" : "/materials/vat-tu-phu",
       ),
+    );
+  }
+
+  if (path[0] === "import" && path[1] && !path[2]) {
+    await enforceErpRoutePermission(getImportPermission(path[1]));
+    return (
+      <ExcelImportPage
+        target={path[1]}
+        query={normalizeSearchParams(rawSearchParams)}
+        routeProjectId={decodedProjectId}
+      />
     );
   }
 
