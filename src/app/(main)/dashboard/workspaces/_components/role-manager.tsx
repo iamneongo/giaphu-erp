@@ -2,8 +2,6 @@
 
 import * as React from "react";
 
-import Link from "next/link";
-
 import { Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ClerkOrganizationRole } from "@/lib/clerk/clerk-bapi";
 import { ERP_PERMISSION_CATALOG } from "@/lib/clerk/erp-rbac-shared";
+
+import { DashboardLink } from "../../_components/dashboard-link";
 
 type RoleManagerResponse = {
   status: "success" | "error";
@@ -215,7 +215,7 @@ export function RoleManager() {
           <div className="flex flex-wrap justify-end gap-2">
             {row.type === "custom" ? (
               <Button asChild type="button" size="sm" variant="outline">
-                <Link href={`/dashboard/workspaces/roles/edit/${row.id}`}>Sửa</Link>
+                <DashboardLink href={`/dashboard/workspaces/roles/edit/${row.id}`}>Sửa</DashboardLink>
               </Button>
             ) : (
               <Badge variant="outline">Khóa</Badge>
@@ -278,10 +278,10 @@ export function RoleManager() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button asChild size="sm">
-                <Link href="/dashboard/workspaces/roles/create">
+                <DashboardLink href="/dashboard/workspaces/roles/create">
                   <Plus />
                   Tạo role
-                </Link>
+                </DashboardLink>
               </Button>
             </div>
           </div>

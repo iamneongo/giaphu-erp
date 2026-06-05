@@ -2,8 +2,6 @@
 
 import * as React from "react";
 
-import { useRouter } from "next/navigation";
-
 import { Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +23,7 @@ import {
   readActiveProjectRouteId,
 } from "@/lib/giaphu-erp/project-context";
 import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
+import { navigateWithDocument } from "@/lib/navigation/document-navigation";
 import type { NavMainItem } from "@/navigation/sidebar/sidebar-items";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 
@@ -87,7 +86,6 @@ export function SearchDialog() {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [activeProjectRouteId, setActiveProjectRouteId] = React.useState("");
-  const router = useRouter();
 
   React.useEffect(() => {
     setActiveProjectRouteId(readActiveProjectRouteId() || readActiveProjectCode());
@@ -131,7 +129,7 @@ export function SearchDialog() {
     if (item.newTab) {
       window.open(href, "_blank", "noopener,noreferrer");
     } else {
-      router.push(href);
+      navigateWithDocument(href);
     }
   };
 

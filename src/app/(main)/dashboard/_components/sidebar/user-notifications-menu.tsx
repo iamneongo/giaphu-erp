@@ -2,8 +2,6 @@
 
 import * as React from "react";
 
-import Link from "next/link";
-
 import { Bell, BriefcaseBusiness, ReceiptText, TriangleAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +15,8 @@ import {
   readActiveProjectRouteId,
 } from "@/lib/giaphu-erp/project-context";
 import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
+
+import { DashboardLink } from "../dashboard-link";
 
 const notifications = [
   {
@@ -102,7 +102,7 @@ export function UserNotificationsMenu() {
                 </ItemContent>
                 <ItemActions>
                   <Button asChild size="xs" variant={notification.tone}>
-                    <Link
+                    <DashboardLink
                       href={
                         activeProjectRouteId
                           ? erpPathForProject(activeProjectRouteId, notification.href)
@@ -110,7 +110,7 @@ export function UserNotificationsMenu() {
                       }
                     >
                       {notification.cta}
-                    </Link>
+                    </DashboardLink>
                   </Button>
                 </ItemActions>
               </Item>

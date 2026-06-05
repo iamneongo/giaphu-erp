@@ -102,10 +102,13 @@ export interface GiaPhuReportsInsights {
   };
 }
 
+export type ErpTableSorting = Array<{ id: string; desc: boolean }>;
+
 export type ReportTableState = {
   pageIndex?: number;
   pageSize?: number;
   search?: string;
+  sorting?: ErpTableSorting;
   filters?: Record<string, string>;
 };
 

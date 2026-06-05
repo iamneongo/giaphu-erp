@@ -38,6 +38,8 @@ import { erpPathForProject } from "@/lib/giaphu-erp/project-routes";
 import type { ProjectRow } from "@/lib/giaphu-erp/types";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
+import { DashboardLink } from "../dashboard-link";
+
 interface NavMainProps {
   readonly items: readonly NavGroup[];
   readonly effectivePermissions?: readonly ErpPermissionKey[];
@@ -79,7 +81,7 @@ const NavItemExpanded = ({
               isActive={isActive(item.url)}
               tooltip={item.title}
             >
-              <a
+              <DashboardLink
                 href={item.url}
                 target={item.newTab ? "_blank" : undefined}
                 rel={item.newTab ? "noreferrer" : undefined}
@@ -87,7 +89,7 @@ const NavItemExpanded = ({
                 {item.icon && <item.icon />}
                 <span>{item.title}</span>
                 {item.comingSoon && <IsComingSoon />}
-              </a>
+              </DashboardLink>
             </SidebarMenuButton>
           )}
         </CollapsibleTrigger>
@@ -97,7 +99,7 @@ const NavItemExpanded = ({
               {item.subItems.map((subItem) => (
                 <SidebarMenuSubItem key={subItem.title}>
                   <SidebarMenuSubButton aria-disabled={subItem.comingSoon} isActive={isActive(subItem.url)} asChild>
-                    <a
+                    <DashboardLink
                       href={subItem.url}
                       target={subItem.newTab ? "_blank" : undefined}
                       rel={subItem.newTab ? "noreferrer" : undefined}
@@ -105,7 +107,7 @@ const NavItemExpanded = ({
                       {subItem.icon && <subItem.icon />}
                       <span>{subItem.title}</span>
                       {subItem.comingSoon && <IsComingSoon />}
-                    </a>
+                    </DashboardLink>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
               ))}
@@ -148,7 +150,7 @@ const NavItemCollapsed = ({
                 aria-disabled={subItem.comingSoon}
                 isActive={isActive(subItem.url)}
               >
-                <a
+                <DashboardLink
                   href={subItem.url}
                   target={subItem.newTab ? "_blank" : undefined}
                   rel={subItem.newTab ? "noreferrer" : undefined}
@@ -156,7 +158,7 @@ const NavItemCollapsed = ({
                   {subItem.icon && <subItem.icon className="[&>svg]:text-sidebar-foreground" />}
                   <span>{subItem.title}</span>
                   {subItem.comingSoon && <IsComingSoon />}
-                </a>
+                </DashboardLink>
               </SidebarMenuSubButton>
             </DropdownMenuItem>
           ))}
@@ -287,14 +289,14 @@ export function NavMain({ items, effectivePermissions = [], initialProjects = []
                           tooltip={item.title}
                           isActive={isItemActive(item.url)}
                         >
-                          <a
+                          <DashboardLink
                             href={item.url}
                             target={item.newTab ? "_blank" : undefined}
                             rel={item.newTab ? "noreferrer" : undefined}
                           >
                             {item.icon && <item.icon />}
                             <span>{item.title}</span>
-                          </a>
+                          </DashboardLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );

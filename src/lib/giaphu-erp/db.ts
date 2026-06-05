@@ -8,6 +8,7 @@ import type {
   ContractRow,
   CostSummary,
   DocumentRow,
+  ErpTableSorting,
   GiaPhuDashboardData,
   GiaPhuOverviewInsights,
   GiaPhuPagedDataset,
@@ -38,6 +39,7 @@ export type GiaPhuPagedRowsOptions = {
   pageIndex?: number;
   pageSize?: number;
   search?: string;
+  sorting?: ErpTableSorting;
   filters?: Record<string, string>;
 };
 
@@ -995,6 +997,360 @@ function totalFromCountRows(rows: unknown) {
   return number(row?.total);
 }
 
+function normalizeSorting(sorting?: ErpTableSorting) {
+  const sort = sorting?.find((item) => typeof item.id === "string" && item.id.trim());
+  return sort ? { id: text(sort.id).trim(), desc: Boolean(sort.desc) } : undefined;
+}
+
+function pagedRowsOrderBy(sql: any, dataset: GiaPhuPagedDataset, sorting?: ErpTableSorting) {
+  const sort = normalizeSorting(sorting);
+  const sortId = sort?.id ?? "";
+
+  if (sort?.desc) {
+    switch (dataset) {
+      case "projects":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} = 'code' then code end desc nulls last,
+            case when ${sortId} = 'name' then name end desc nulls last,
+            case when ${sortId} = 'owner' then owner end desc nulls last,
+            case when ${sortId} = 'contact' then contact end desc nulls last,
+            case when ${sortId} = 'referrer' then referrer end desc nulls last,
+            case when ${sortId} = 'startDate' then start_date end desc nulls last,
+            case when ${sortId} = 'status' then status end desc nulls last,
+            case when ${sortId} = 'failureReason' then failure_reason end desc nulls last,
+            updated_at desc, code asc
+        `;
+      case "catalogs":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} = 'kind' then kind end desc nulls last,
+            case when ${sortId} = 'code' then code end desc nulls last,
+            case when ${sortId} = 'name' then name end desc nulls last,
+            case when ${sortId} = 'unit' then unit end desc nulls last,
+            case when ${sortId} = 'contact' then contact end desc nulls last,
+            case when ${sortId} = 'note' then note end desc nulls last,
+            kind asc, name asc
+        `;
+      case "staff":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} = 'name' then name end desc nulls last,
+            case when ${sortId} = 'team' then team end desc nulls last,
+            case when ${sortId} = 'position' then position end desc nulls last,
+            case when ${sortId} = 'salaryDay' then salary_day end desc nulls last,
+            case when ${sortId} = 'resigned' then resigned end desc nulls last,
+            case when ${sortId} = 'offDate' then off_date end desc nulls last,
+            id asc, name asc
+        `;
+      case "contracts":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} = 'contractNo' then contract_no end desc nulls last,
+            case when ${sortId} = 'value' then value end desc nulls last,
+            case when ${sortId} = 'signedDate' then signed_date end desc nulls last,
+            case when ${sortId} = 'note' then note end desc nulls last,
+            signed_date desc nulls last, id desc
+        `;
+      case "payments":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} in ('date', 'paymentDate') then payment_date end desc nulls last,
+            case when ${sortId} = 'amount' then amount end desc nulls last,
+            case when ${sortId} = 'note' then note end desc nulls last,
+            payment_date desc nulls last, id desc
+        `;
+      case "documents":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} = 'doc_type' then doc_type end desc nulls last,
+            case when ${sortId} = 'file_name' then file_name end desc nulls last,
+            case when ${sortId} = 'file_size' then file_size end desc nulls last,
+            case when ${sortId} = 'note' then note end desc nulls last,
+            case when ${sortId} = 'preview_text' then preview_text end desc nulls last,
+            case when ${sortId} = 'has_file' then (file_data <> '') end desc nulls last,
+            created_at desc, id desc
+        `;
+      case "materials":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} in ('date', 'workDate') then work_date end desc nulls last,
+            case when ${sortId} = 'week' then week end desc nulls last,
+            case when ${sortId} = 'shift' then shift end desc nulls last,
+            case when ${sortId} = 'category' then category end desc nulls last,
+            case when ${sortId} = 'materialCode' then material_code end desc nulls last,
+            case when ${sortId} = 'materialName' then material_name end desc nulls last,
+            case when ${sortId} = 'quantity' then quantity end desc nulls last,
+            case when ${sortId} = 'unit' then unit end desc nulls last,
+            case when ${sortId} = 'price' then price end desc nulls last,
+            case when ${sortId} in ('amount', 'total') then quantity * price end desc nulls last,
+            case when ${sortId} = 'debt' then debt end desc nulls last,
+            case when ${sortId} = 'status' then status end desc nulls last,
+            case when ${sortId} = 'paymentStatus' then payment_status end desc nulls last,
+            case when ${sortId} = 'paymentInfo' then payment_info end desc nulls last,
+            case when ${sortId} = 'materialType' then material_type end desc nulls last,
+            case when ${sortId} = 'supplier' then supplier end desc nulls last,
+            work_date desc nulls last, id desc
+        `;
+      case "attendance":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} in ('date', 'workDate') then work_date end desc nulls last,
+            case when ${sortId} = 'week' then week end desc nulls last,
+            case when ${sortId} = 'shift' then shift end desc nulls last,
+            case when ${sortId} = 'category' then category end desc nulls last,
+            case when ${sortId} = 'staffName' then staff_name end desc nulls last,
+            case when ${sortId} = 'position' then position end desc nulls last,
+            case when ${sortId} = 'halfDaySalary' then half_day_salary end desc nulls last,
+            case when ${sortId} = 'allowance' then allowance end desc nulls last,
+            case when ${sortId} = 'overtimeHours' then overtime_hours end desc nulls last,
+            case when ${sortId} = 'overtimeAmount' then overtime_amount end desc nulls last,
+            case when ${sortId} = 'total' then total end desc nulls last,
+            case when ${sortId} = 'status' then status end desc nulls last,
+            case when ${sortId} = 'coefficient' then coefficient end desc nulls last,
+            work_date desc nulls last, id desc
+        `;
+      case "laborNorms":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} = 'category' then category end desc nulls last,
+            case when ${sortId} = 'workdays' then workdays end desc nulls last,
+            case when ${sortId} = 'cost' then cost end desc nulls last,
+            category asc, id desc
+        `;
+      case "progress":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} = 'category' then category end desc nulls last,
+            case when ${sortId} = 'startDate' then start_date end desc nulls last,
+            case when ${sortId} = 'durationDays' then duration_days end desc nulls last,
+            case when ${sortId} = 'workdays' then workdays end desc nulls last,
+            case when ${sortId} = 'planEndDate' then plan_end_date end desc nulls last,
+            case when ${sortId} = 'confirmedEndDate' then confirmed_end_date end desc nulls last,
+            case when ${sortId} = 'evaluation' then evaluation end desc nulls last,
+            start_date desc nulls last, category asc, id desc
+        `;
+      case "subcontractors":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} in ('date', 'workDate') then work_date end desc nulls last,
+            case when ${sortId} = 'week' then week end desc nulls last,
+            case when ${sortId} = 'category' then category end desc nulls last,
+            case when ${sortId} = 'contractorName' then contractor_name end desc nulls last,
+            case when ${sortId} = 'note' then note end desc nulls last,
+            case when ${sortId} = 'advance' then advance end desc nulls last,
+            case when ${sortId} = 'cumulative' then cumulative end desc nulls last,
+            case when ${sortId} = 'status' then status end desc nulls last,
+            work_date desc nulls last, id desc
+        `;
+      case "subcontractorContracts":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} = 'contractorName' then contractor_name end desc nulls last,
+            case when ${sortId} = 'approvedCost' then approved_cost end desc nulls last,
+            case when ${sortId} = 'note' then note end desc nulls last,
+            case when ${sortId} = 'status' then status end desc nulls last,
+            case when ${sortId} = 'approvedBy' then approved_by end desc nulls last,
+            case when ${sortId} = 'approvedAt' then approved_at end desc nulls last,
+            updated_at desc, id desc
+        `;
+      case "operations":
+        return sql`
+          order by
+            case when ${sortId} = 'id' then id end desc nulls last,
+            case when ${sortId} in ('date', 'workDate') then work_date end desc nulls last,
+            case when ${sortId} = 'week' then week end desc nulls last,
+            case when ${sortId} = 'description' then description end desc nulls last,
+            case when ${sortId} = 'amount' then amount end desc nulls last,
+            work_date desc nulls last, id desc
+        `;
+    }
+  }
+
+  switch (dataset) {
+    case "projects":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} = 'code' then code end asc nulls last,
+          case when ${sortId} = 'name' then name end asc nulls last,
+          case when ${sortId} = 'owner' then owner end asc nulls last,
+          case when ${sortId} = 'contact' then contact end asc nulls last,
+          case when ${sortId} = 'referrer' then referrer end asc nulls last,
+          case when ${sortId} = 'startDate' then start_date end asc nulls last,
+          case when ${sortId} = 'status' then status end asc nulls last,
+          case when ${sortId} = 'failureReason' then failure_reason end asc nulls last,
+          updated_at desc, code asc
+      `;
+    case "catalogs":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} = 'kind' then kind end asc nulls last,
+          case when ${sortId} = 'code' then code end asc nulls last,
+          case when ${sortId} = 'name' then name end asc nulls last,
+          case when ${sortId} = 'unit' then unit end asc nulls last,
+          case when ${sortId} = 'contact' then contact end asc nulls last,
+          case when ${sortId} = 'note' then note end asc nulls last,
+          kind asc, name asc
+      `;
+    case "staff":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} = 'name' then name end asc nulls last,
+          case when ${sortId} = 'team' then team end asc nulls last,
+          case when ${sortId} = 'position' then position end asc nulls last,
+          case when ${sortId} = 'salaryDay' then salary_day end asc nulls last,
+          case when ${sortId} = 'resigned' then resigned end asc nulls last,
+          case when ${sortId} = 'offDate' then off_date end asc nulls last,
+          id asc, name asc
+      `;
+    case "contracts":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} = 'contractNo' then contract_no end asc nulls last,
+          case when ${sortId} = 'value' then value end asc nulls last,
+          case when ${sortId} = 'signedDate' then signed_date end asc nulls last,
+          case when ${sortId} = 'note' then note end asc nulls last,
+          signed_date desc nulls last, id desc
+      `;
+    case "payments":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} in ('date', 'paymentDate') then payment_date end asc nulls last,
+          case when ${sortId} = 'amount' then amount end asc nulls last,
+          case when ${sortId} = 'note' then note end asc nulls last,
+          payment_date desc nulls last, id desc
+      `;
+    case "documents":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} = 'doc_type' then doc_type end asc nulls last,
+          case when ${sortId} = 'file_name' then file_name end asc nulls last,
+          case when ${sortId} = 'file_size' then file_size end asc nulls last,
+          case when ${sortId} = 'note' then note end asc nulls last,
+          case when ${sortId} = 'preview_text' then preview_text end asc nulls last,
+          case when ${sortId} = 'has_file' then (file_data <> '') end asc nulls last,
+          created_at desc, id desc
+      `;
+    case "materials":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} in ('date', 'workDate') then work_date end asc nulls last,
+          case when ${sortId} = 'week' then week end asc nulls last,
+          case when ${sortId} = 'shift' then shift end asc nulls last,
+          case when ${sortId} = 'category' then category end asc nulls last,
+          case when ${sortId} = 'materialCode' then material_code end asc nulls last,
+          case when ${sortId} = 'materialName' then material_name end asc nulls last,
+          case when ${sortId} = 'quantity' then quantity end asc nulls last,
+          case when ${sortId} = 'unit' then unit end asc nulls last,
+          case when ${sortId} = 'price' then price end asc nulls last,
+          case when ${sortId} in ('amount', 'total') then quantity * price end asc nulls last,
+          case when ${sortId} = 'debt' then debt end asc nulls last,
+          case when ${sortId} = 'status' then status end asc nulls last,
+          case when ${sortId} = 'paymentStatus' then payment_status end asc nulls last,
+          case when ${sortId} = 'paymentInfo' then payment_info end asc nulls last,
+          case when ${sortId} = 'materialType' then material_type end asc nulls last,
+          case when ${sortId} = 'supplier' then supplier end asc nulls last,
+          work_date desc nulls last, id desc
+      `;
+    case "attendance":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} in ('date', 'workDate') then work_date end asc nulls last,
+          case when ${sortId} = 'week' then week end asc nulls last,
+          case when ${sortId} = 'shift' then shift end asc nulls last,
+          case when ${sortId} = 'category' then category end asc nulls last,
+          case when ${sortId} = 'staffName' then staff_name end asc nulls last,
+          case when ${sortId} = 'position' then position end asc nulls last,
+          case when ${sortId} = 'halfDaySalary' then half_day_salary end asc nulls last,
+          case when ${sortId} = 'allowance' then allowance end asc nulls last,
+          case when ${sortId} = 'overtimeHours' then overtime_hours end asc nulls last,
+          case when ${sortId} = 'overtimeAmount' then overtime_amount end asc nulls last,
+          case when ${sortId} = 'total' then total end asc nulls last,
+          case when ${sortId} = 'status' then status end asc nulls last,
+          case when ${sortId} = 'coefficient' then coefficient end asc nulls last,
+          work_date desc nulls last, id desc
+      `;
+    case "laborNorms":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} = 'category' then category end asc nulls last,
+          case when ${sortId} = 'workdays' then workdays end asc nulls last,
+          case when ${sortId} = 'cost' then cost end asc nulls last,
+          category asc, id desc
+      `;
+    case "progress":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} = 'category' then category end asc nulls last,
+          case when ${sortId} = 'startDate' then start_date end asc nulls last,
+          case when ${sortId} = 'durationDays' then duration_days end asc nulls last,
+          case when ${sortId} = 'workdays' then workdays end asc nulls last,
+          case when ${sortId} = 'planEndDate' then plan_end_date end asc nulls last,
+          case when ${sortId} = 'confirmedEndDate' then confirmed_end_date end asc nulls last,
+          case when ${sortId} = 'evaluation' then evaluation end asc nulls last,
+          start_date desc nulls last, category asc, id desc
+      `;
+    case "subcontractors":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} in ('date', 'workDate') then work_date end asc nulls last,
+          case when ${sortId} = 'week' then week end asc nulls last,
+          case when ${sortId} = 'category' then category end asc nulls last,
+          case when ${sortId} = 'contractorName' then contractor_name end asc nulls last,
+          case when ${sortId} = 'note' then note end asc nulls last,
+          case when ${sortId} = 'advance' then advance end asc nulls last,
+          case when ${sortId} = 'cumulative' then cumulative end asc nulls last,
+          case when ${sortId} = 'status' then status end asc nulls last,
+          work_date desc nulls last, id desc
+      `;
+    case "subcontractorContracts":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} = 'contractorName' then contractor_name end asc nulls last,
+          case when ${sortId} = 'approvedCost' then approved_cost end asc nulls last,
+          case when ${sortId} = 'note' then note end asc nulls last,
+          case when ${sortId} = 'status' then status end asc nulls last,
+          case when ${sortId} = 'approvedBy' then approved_by end asc nulls last,
+          case when ${sortId} = 'approvedAt' then approved_at end asc nulls last,
+          updated_at desc, id desc
+      `;
+    case "operations":
+      return sql`
+        order by
+          case when ${sortId} = 'id' then id end asc nulls last,
+          case when ${sortId} in ('date', 'workDate') then work_date end asc nulls last,
+          case when ${sortId} = 'week' then week end asc nulls last,
+          case when ${sortId} = 'description' then description end asc nulls last,
+          case when ${sortId} = 'amount' then amount end asc nulls last,
+          work_date desc nulls last, id desc
+      `;
+  }
+}
+
 function distinctOptions(rows: unknown): GiaPhuFilterOption[] {
   return (rows as Row[])
     .map((row) => text(row.value).trim())
@@ -1465,6 +1821,7 @@ function normalizeReportTableState(state?: ReportTableState) {
     pageIndex: normalizePageIndex(state?.pageIndex),
     pageSize: normalizePageSize(state?.pageSize),
     search: text(state?.search).trim(),
+    sorting: normalizeSorting(state?.sorting) ? [normalizeSorting(state?.sorting)!] : [],
     filters: state?.filters ?? {},
   };
 }
@@ -1641,7 +1998,7 @@ export async function getGiaPhuReportsData(
       select *, count(*) over()::int as __total
       from gp_attendance
       where ${laborWhere}
-      order by work_date desc nulls last, id desc
+      ${pagedRowsOrderBy(sql, "attendance", laborState.sorting)}
       limit ${laborState.pageSize}
       offset ${laborOffset}
     `,
@@ -1649,7 +2006,7 @@ export async function getGiaPhuReportsData(
       select *, count(*) over()::int as __total
       from gp_materials
       where ${materialWhere}
-      order by work_date desc nulls last, id desc
+      ${pagedRowsOrderBy(sql, "materials", materialState.sorting)}
       limit ${materialState.pageSize}
       offset ${materialOffset}
     `,
@@ -1657,7 +2014,7 @@ export async function getGiaPhuReportsData(
       select *, count(*) over()::int as __total
       from gp_operations
       where ${operationWhere}
-      order by work_date desc nulls last, id desc
+      ${pagedRowsOrderBy(sql, "operations", operationState.sorting)}
       limit ${operationState.pageSize}
       offset ${operationOffset}
     `,
@@ -1841,7 +2198,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_projects
         where organization_id = ${organizationId} ${whereSearch} ${whereFilters}
-        order by updated_at desc, code asc
+        ${pagedRowsOrderBy(sql, "projects", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -1874,7 +2231,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_catalog_items
         where organization_id = ${organizationId} ${whereSearch} ${whereFilters}
-        order by kind asc, name asc
+        ${pagedRowsOrderBy(sql, "catalogs", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -1907,7 +2264,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_staff
         where organization_id = ${organizationId} ${whereSearch} ${whereFilters}
-        order by id asc, name asc
+        ${pagedRowsOrderBy(sql, "staff", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -1934,7 +2291,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_contracts
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch}
-        order by signed_date desc, id desc
+        ${pagedRowsOrderBy(sql, "contracts", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -1957,7 +2314,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_payments
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch}
-        order by payment_date desc, id desc
+        ${pagedRowsOrderBy(sql, "payments", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2000,7 +2357,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select ${selectDocumentFields}
         from gp_documents
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by created_at desc, id desc
+        ${pagedRowsOrderBy(sql, "documents", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2037,7 +2394,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_materials
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by work_date desc nulls last, id desc
+        ${pagedRowsOrderBy(sql, "materials", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2074,7 +2431,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_attendance
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by work_date desc nulls last, id desc
+        ${pagedRowsOrderBy(sql, "attendance", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2099,7 +2456,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_labor_norms
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by category asc, id desc
+        ${pagedRowsOrderBy(sql, "laborNorms", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2124,7 +2481,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_progress
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by start_date desc nulls last, category asc, id desc
+        ${pagedRowsOrderBy(sql, "progress", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2157,7 +2514,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_subcontractors
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by work_date desc nulls last, id desc
+        ${pagedRowsOrderBy(sql, "subcontractors", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2184,7 +2541,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
         select *
         from gp_subcontractor_contracts
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-        order by updated_at desc, id desc
+        ${pagedRowsOrderBy(sql, "subcontractorContracts", options.sorting)}
         limit ${pageSize}
         offset ${offset}
       `,
@@ -2208,7 +2565,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
       select *
       from gp_operations
       where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
-      order by work_date desc nulls last, id desc
+      ${pagedRowsOrderBy(sql, "operations", options.sorting)}
       limit ${pageSize}
       offset ${offset}
     `,

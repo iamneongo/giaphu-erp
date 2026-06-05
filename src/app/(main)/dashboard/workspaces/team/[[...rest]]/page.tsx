@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { auth } from "@clerk/nextjs/server";
 import { ShieldCheck, UsersRound } from "lucide-react";
 
@@ -8,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getEffectiveErpPermissions } from "@/lib/clerk/erp-rbac";
 import { canAccessClerkPermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 
+import { DashboardLink } from "../../../_components/dashboard-link";
 import { TeamManager } from "../../_components/team-manager";
 
 export const metadata = {
@@ -42,10 +41,10 @@ export default async function Page() {
           </CardHeader>
           <CardContent>
             <Button asChild>
-              <Link href="/dashboard/workspaces">
+              <DashboardLink href="/dashboard/workspaces">
                 <UsersRound />
                 Mở quản lý tổ chức
-              </Link>
+              </DashboardLink>
             </Button>
           </CardContent>
         </Card>
@@ -71,13 +70,13 @@ export default async function Page() {
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Button asChild variant="outline">
-              <Link href="/dashboard/workspaces">Quay lại tổ chức</Link>
+              <DashboardLink href="/dashboard/workspaces">Quay lại tổ chức</DashboardLink>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/dashboard/workspaces/roles">Vai trò & quyền</Link>
+              <DashboardLink href="/dashboard/workspaces/roles">Vai trò & quyền</DashboardLink>
             </Button>
             <Button asChild>
-              <Link href="/dashboard">Về ERP</Link>
+              <DashboardLink href="/dashboard">Về ERP</DashboardLink>
             </Button>
           </CardContent>
         </Card>
@@ -92,7 +91,7 @@ export default async function Page() {
       </div>
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline">
-          <Link href="/dashboard/workspaces/roles">Mở vai trò & quyền</Link>
+          <DashboardLink href="/dashboard/workspaces/roles">Mở vai trò & quyền</DashboardLink>
         </Button>
       </div>
       <TeamManager />

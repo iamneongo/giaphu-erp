@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import {
   type ColumnDef,
@@ -46,6 +46,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { readActiveProjectCode, readActiveProjectRouteId } from "@/lib/giaphu-erp/project-context";
 import { getProjectRouteInfo, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
+import { navigateWithDocument } from "@/lib/navigation/document-navigation";
 import { cn } from "@/lib/utils";
 
 export interface DataTableColumn<T> {
@@ -479,7 +480,6 @@ export function DataTable<T>({
   rowDetailHref?: (row: T) => string | undefined;
   serverSide?: DataTableServerSideOptions;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const isServerSide = Boolean(serverSide);
   const isLoading = loading ? true : (serverSide?.loading ?? false);
@@ -493,6 +493,15 @@ export function DataTable<T>({
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] = React.useState<Record<string, boolean>>({});
   const [filterValues, setFilterValues] = React.useState<Record<string, string>>({});
+  const handleSortingChange = React.useCallback<React.Dispatch<React.SetStateAction<SortingState>>>((updater) => {
+    setSorting((currentSorting) => {
+      const nextSorting = typeof updater === "function" ? updater(currentSorting) : updater;
+      setPagination((currentPagination) =>
+        currentPagination.pageIndex ? { ...currentPagination, pageIndex: 0 } : currentPagination,
+      );
+      return nextSorting;
+    });
+  }, []);
 
   const normalizedColumns = React.useMemo(
     () =>
@@ -633,7 +642,7 @@ export function DataTable<T>({
     },
     enableRowSelection: selectable,
     getRowId: (row) => String(getRowId(row)),
-    onSortingChange: setSorting,
+    onSortingChange: handleSortingChange,
     onPaginationChange: setPagination,
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
@@ -821,7 +830,7 @@ export function DataTable<T>({
                   onClick={(event) => {
                     if (!enableRowDetails || isInteractiveTarget(event.target)) return;
                     const href = getDetailHref(row.original);
-                    if (href) router.push(href);
+                    if (href) navigateWithDocument(href);
                   }}
                 >
                   {row.getVisibleCells().map((cell) => {

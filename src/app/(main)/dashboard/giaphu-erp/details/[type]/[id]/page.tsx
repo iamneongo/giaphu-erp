@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { auth } from "@clerk/nextjs/server";
@@ -14,6 +13,7 @@ import { getDocumentDetail, getGiaPhuDashboardData } from "@/lib/giaphu-erp/db";
 import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
 import { decodeProjectRouteSegment, erpPathForProject } from "@/lib/giaphu-erp/project-routes";
 
+import { DashboardLink } from "../../../../_components/dashboard-link";
 import { formatMoney } from "../../../_lib/formatters";
 
 type DetailField = {
@@ -102,10 +102,10 @@ export default async function DetailPage({ params }: { params: Promise<{ type: s
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
           <Button asChild variant="outline" size="sm">
-            <Link href={backHref}>
+            <DashboardLink href={backHref}>
               <ArrowLeft />
               {record.backLabel}
-            </Link>
+            </DashboardLink>
           </Button>
           <div>
             <h1 className="font-semibold text-3xl tracking-tight">{record.title}</h1>
@@ -116,10 +116,10 @@ export default async function DetailPage({ params }: { params: Promise<{ type: s
           {record.badge ? <Badge variant="secondary">{record.badge}</Badge> : null}
           {record.externalHref ? (
             <Button asChild size="sm">
-              <Link href={record.externalHref} rel="noreferrer" target="_blank">
+              <DashboardLink href={record.externalHref} rel="noreferrer" target="_blank">
                 <ExternalLink />
                 {record.externalLabel ?? "Mở"}
-              </Link>
+              </DashboardLink>
             </Button>
           ) : null}
         </div>

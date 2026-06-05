@@ -117,6 +117,25 @@ function parseFilters(searchParams: URLSearchParams) {
   }
 }
 
+function parseSorting(searchParams: URLSearchParams) {
+  const rawSorting = searchParams.get("sorting");
+  if (!rawSorting) return [];
+
+  try {
+    const parsed = JSON.parse(rawSorting) as unknown;
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item): item is { id: string; desc?: boolean } => {
+        return typeof item === "object" && item !== null && typeof (item as { id?: unknown }).id === "string";
+      })
+      .map((item) => ({ id: item.id, desc: Boolean(item.desc) }))
+      .slice(0, 1);
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(request: Request) {
   try {
     await createGiaPhuSchema();
@@ -151,6 +170,7 @@ export async function GET(request: Request) {
         pageIndex: Number(searchParams.get("pageIndex") ?? 0),
         pageSize: Number(searchParams.get("pageSize") ?? 20),
         search: searchParams.get("search") ?? "",
+        sorting: parseSorting(searchParams),
         filters: parseFilters(searchParams),
       });
 

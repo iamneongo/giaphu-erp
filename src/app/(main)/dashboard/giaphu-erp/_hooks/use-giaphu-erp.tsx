@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import { toast } from "sonner";
 
@@ -24,6 +24,7 @@ import type {
   PaymentRow,
   ProjectRow,
 } from "@/lib/giaphu-erp/types";
+import { navigateWithDocument } from "@/lib/navigation/document-navigation";
 
 import {
   fetchGiaPhuData,
@@ -128,7 +129,6 @@ export function GiaPhuErpProvider({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const routeProjectId = getProjectRouteInfo(pathname)?.projectId ?? "";
   const routeProject = routeProjectId
     ? initialData.projects.find(
@@ -167,9 +167,9 @@ export function GiaPhuErpProvider({
 
       const project = data.projects.find((item) => item.code === code);
       writeActiveProjectCode(code, project?.id ?? code);
-      router.push(switchProjectInPath(pathname, project?.id ?? code));
+      navigateWithDocument(switchProjectInPath(pathname, project?.id ?? code));
     },
-    [activeProjectCode, data.projects, pathname, router],
+    [activeProjectCode, data.projects, pathname],
   );
 
   React.useEffect(() => {
@@ -193,14 +193,14 @@ export function GiaPhuErpProvider({
 
   React.useEffect(() => {
     if (!routeProject || !routeProjectId || routeProjectId === routeProject.id) return;
-    router.replace(switchProjectInPath(pathname, routeProject.id));
-  }, [pathname, routeProject, routeProjectId, router]);
+    navigateWithDocument(switchProjectInPath(pathname, routeProject.id));
+  }, [pathname, routeProject, routeProjectId]);
 
   React.useEffect(() => {
     if (!data.projects.length && pathname !== "/create-project") {
-      router.replace("/create-project");
+      navigateWithDocument("/create-project");
     }
-  }, [data.projects.length, pathname, router]);
+  }, [data.projects.length, pathname]);
 
   React.useEffect(() => {
     if (!data.projects.length) return;

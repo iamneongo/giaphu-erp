@@ -1,9 +1,8 @@
-import Link from "next/link";
-
 import { ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
+import { DashboardLink } from "../_components/dashboard-link";
 import { OrganizationManager } from "./_components/organization-manager";
 
 export const metadata = {
@@ -18,10 +17,10 @@ export default function Page() {
           <h1 className="text-3xl font-semibold tracking-tight">Quản lý tổ chức</h1>
         </div>
         <Button asChild variant="outline">
-          <Link href="/dashboard/workspaces/roles">
+          <DashboardLink href="/dashboard/workspaces/roles">
             <ShieldCheck />
             Vai trò & quyền
-          </Link>
+          </DashboardLink>
         </Button>
       </div>
 

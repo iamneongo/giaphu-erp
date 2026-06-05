@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 import { CircleUser, EllipsisVertical, LogOut, ShieldCheck, UsersRound } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,6 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { getInitials } from "@/lib/utils";
+
+import { DashboardLink } from "../dashboard-link";
 
 export function NavUser({
   user,
@@ -71,28 +71,28 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/profile">
+                <DashboardLink href="/dashboard/profile">
                   <CircleUser />
                   Tài khoản
-                </Link>
+                </DashboardLink>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/workspaces">
+                <DashboardLink href="/dashboard/workspaces">
                   <UsersRound />
                   Tổ chức
-                </Link>
+                </DashboardLink>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/workspaces/team">
+                <DashboardLink href="/dashboard/workspaces/team">
                   <ShieldCheck />
                   Thành viên
-                </Link>
+                </DashboardLink>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/workspaces/roles">
+                <DashboardLink href="/dashboard/workspaces/roles">
                   <ShieldCheck />
                   Vai trò & quyền
-                </Link>
+                </DashboardLink>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

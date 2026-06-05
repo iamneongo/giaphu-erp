@@ -146,6 +146,7 @@ export function usePaginatedErpRows<T>({
       pageIndex: state.pageIndex,
       pageSize: state.pageSize,
       search: state.query,
+      sorting: state.sorting,
       filters: { ...fixedFilters, ...state.filters },
       signal: controller.signal,
     })
@@ -173,6 +174,7 @@ export function usePaginatedErpRows<T>({
     refreshToken,
     state.query,
     state.filters,
+    state.sorting,
     state.pageIndex,
     state.pageSize,
   ]);

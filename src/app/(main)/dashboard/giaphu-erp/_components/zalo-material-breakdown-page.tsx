@@ -2,7 +2,6 @@
 
 import * as React from "react";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
@@ -51,6 +50,7 @@ import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type { MaterialRow, MaterialType } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
+import { DashboardLink } from "../../_components/dashboard-link";
 import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
@@ -645,7 +645,7 @@ export function ZaloMaterialBreakdownPage({
           <div className="flex flex-wrap items-center gap-2">
             {backHref ? (
               <Button asChild size="sm" variant="outline">
-                <Link href={resolvedBackHref}>Quay lại</Link>
+                <DashboardLink href={resolvedBackHref}>Quay lại</DashboardLink>
               </Button>
             ) : null}
             <Dialog open={zaloDialogOpen} onOpenChange={setZaloDialogOpen}>

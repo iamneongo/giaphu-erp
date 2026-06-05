@@ -2,8 +2,6 @@
 
 import * as React from "react";
 
-import { useRouter } from "next/navigation";
-
 import { toast } from "sonner";
 
 import { InteractiveGrid } from "@/app/auth/_components/interactive-grid";
@@ -13,6 +11,7 @@ import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { projectScopedPath } from "@/lib/giaphu-erp/project-routes";
+import { navigateWithDocument } from "@/lib/navigation/document-navigation";
 
 import { todayIso } from "../_lib/date-utils";
 import { runGiaPhuAction } from "../_lib/giaphu-erp-api";
@@ -20,7 +19,6 @@ import { collectFormPayload } from "./action-dialog";
 import { DatePickerField } from "./date-picker-field";
 
 export function ProjectOnboarding() {
-  const router = useRouter();
   const [pending, startTransition] = React.useTransition();
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -33,7 +31,7 @@ export function ProjectOnboarding() {
         const result = await runGiaPhuAction("saveProject", payload);
         const createdProject = result.data?.projects.find((project) => project.code === projectCode);
         toast.success("Đã tạo công trình.");
-        router.replace(projectScopedPath(createdProject?.id ?? projectCode, "/overview"));
+        navigateWithDocument(projectScopedPath(createdProject?.id ?? projectCode, "/overview"));
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
       }

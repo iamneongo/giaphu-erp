@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 import { Ellipsis, Folder, Forward, type LucideIcon, Trash2 } from "lucide-react";
 
 import {
@@ -21,6 +19,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
+import { DashboardLink } from "../dashboard-link";
+
 export function NavDocuments({
   items,
 }: {
@@ -39,10 +39,10 @@ export function NavDocuments({
         {items.map((item) => (
           <SidebarMenuItem key={item.name}>
             <SidebarMenuButton asChild>
-              <Link href={item.url}>
+              <DashboardLink href={item.url}>
                 <item.icon />
                 <span>{item.name}</span>
-              </Link>
+              </DashboardLink>
             </SidebarMenuButton>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

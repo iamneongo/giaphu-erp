@@ -2,8 +2,6 @@
 
 import type * as React from "react";
 
-import Link from "next/link";
-
 import type { LucideIcon } from "lucide-react";
 
 import {
@@ -13,6 +11,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+
+import { DashboardLink } from "../dashboard-link";
 
 export function NavSecondary({
   items,
@@ -31,10 +31,10 @@ export function NavSecondary({
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild>
-                <Link href={item.url}>
+                <DashboardLink href={item.url}>
                   <item.icon />
                   <span>{item.title}</span>
-                </Link>
+                </DashboardLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}

@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import * as React from "react";
 
 import { Loader2, RefreshCw, Save } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { ClerkOrganizationPermission, ClerkOrganizationRole, ClerkRoleSet } from "@/lib/clerk/clerk-bapi";
 import { ERP_PERMISSION_CATALOG, type ErpPermissionKey, getPermissionCatalogGroups } from "@/lib/clerk/erp-rbac-shared";
+import { navigateWithDocument } from "@/lib/navigation/document-navigation";
+
+import { DashboardLink } from "../../_components/dashboard-link";
 
 type RoleManagerResponse = {
   status: "success" | "error";
@@ -57,14 +58,7 @@ async function readRoleManagerResponse(response: Response): Promise<RoleManagerR
   }
 }
 
-export function RoleEditorPage({
-  mode,
-  roleId,
-}: {
-  mode: "create" | "edit";
-  roleId?: string;
-}) {
-  const router = useRouter();
+export function RoleEditorPage({ mode, roleId }: { mode: "create" | "edit"; roleId?: string }) {
   const [loading, setLoading] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
   const [roles, setRoles] = React.useState<ClerkOrganizationRole[]>([]);
@@ -77,7 +71,7 @@ export function RoleEditorPage({
   const [selectedKeys, setSelectedKeys] = React.useState<Set<ErpPermissionKey>>(new Set());
 
   const editingRole = React.useMemo(
-    () => (mode === "edit" ? roles.find((role) => role.id === roleId) ?? null : null),
+    () => (mode === "edit" ? (roles.find((role) => role.id === roleId) ?? null) : null),
     [mode, roleId, roles],
   );
 
@@ -132,9 +126,9 @@ export function RoleEditorPage({
   React.useEffect(() => {
     if (mode === "edit" && !loading && !editingRole) {
       toast.error("Không tìm thấy vai trò cần chỉnh sửa.");
-      router.replace("/dashboard/workspaces/roles");
+      navigateWithDocument("/dashboard/workspaces/roles");
     }
-  }, [editingRole, loading, mode, router]);
+  }, [editingRole, loading, mode]);
 
   function togglePermission(permissionKey: ErpPermissionKey, checked: boolean) {
     setSelectedKeys((current) => {
@@ -201,8 +195,7 @@ export function RoleEditorPage({
       }
 
       toast.success(mode === "edit" ? "Đã cập nhật vai trò." : "Đã tạo vai trò mới.");
-      router.push("/dashboard/workspaces/roles");
-      router.refresh();
+      navigateWithDocument("/dashboard/workspaces/roles");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -229,7 +222,9 @@ export function RoleEditorPage({
             <div className="space-y-1">
               <CardTitle>{mode === "edit" ? "Sửa vai trò" : "Tạo vai trò mới"}</CardTitle>
               <CardDescription>
-                {mode === "edit" ? "Chỉnh thông tin và quyền ERP cho vai trò đang chọn." : "Điền thông tin vai trò rồi bật các chức năng ERP mà role này được phép dùng."}
+                {mode === "edit"
+                  ? "Chỉnh thông tin và quyền ERP cho vai trò đang chọn."
+                  : "Điền thông tin vai trò rồi bật các chức năng ERP mà role này được phép dùng."}
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -254,12 +249,7 @@ export function RoleEditorPage({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="role-key-preview">Key tự sinh</Label>
-                <Input
-                  id="role-key-preview"
-                  value={fullGeneratedKey}
-                  readOnly
-                  disabled
-                />
+                <Input id="role-key-preview" value={fullGeneratedKey} readOnly disabled />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="role-description">Mô tả</Label>
@@ -283,7 +273,10 @@ export function RoleEditorPage({
                           <div className="font-medium text-sm">{item.name}</div>
                           <div className="text-muted-foreground text-xs leading-5">{item.description}</div>
                         </div>
-                        <Switch checked={selectedKeys.has(item.key)} onCheckedChange={(checked) => togglePermission(item.key, checked)} />
+                        <Switch
+                          checked={selectedKeys.has(item.key)}
+                          onCheckedChange={(checked) => togglePermission(item.key, checked)}
+                        />
                       </div>
                     ))}
                   </div>
@@ -297,7 +290,7 @@ export function RoleEditorPage({
                 {mode === "edit" ? "Lưu thay đổi" : "Tạo role"}
               </Button>
               <Button asChild type="button" variant="outline">
-                <Link href="/dashboard/workspaces/roles">Quay lại danh sách</Link>
+                <DashboardLink href="/dashboard/workspaces/roles">Quay lại danh sách</DashboardLink>
               </Button>
             </div>
           </form>

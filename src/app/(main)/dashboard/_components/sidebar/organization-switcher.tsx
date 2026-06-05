@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 
 import { useAuth, useOrganizationList } from "@clerk/nextjs";
 import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
@@ -16,6 +15,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
+import { navigateWithDocument } from "@/lib/navigation/document-navigation";
+
+import { DashboardLink } from "../dashboard-link";
 
 function formatMembershipRole(role?: string | null) {
   if (!role || role === "org:member") return "Chưa phân quyền";
@@ -24,7 +26,6 @@ function formatMembershipRole(role?: string | null) {
 }
 
 export function OrganizationSwitcher() {
-  const router = useRouter();
   const { isMobile, state } = useSidebar();
   const { orgId } = useAuth();
   const { isLoaded, setActive, userMemberships } = useOrganizationList({
@@ -42,7 +43,7 @@ export function OrganizationSwitcher() {
     if (!setActive || orgId === organizationId) return;
 
     await setActive({ organization: organizationId });
-    router.push("/dashboard");
+    navigateWithDocument("/dashboard");
   }
 
   if (!isLoaded) {
@@ -68,23 +69,27 @@ export function OrganizationSwitcher() {
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton
+            asChild
             size="lg"
             tooltip="Tạo tổ chức"
-            onClick={() => router.push("/dashboard/workspaces")}
             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
           >
-            <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-              <Plus className="size-4" />
-            </div>
-            <div
-              className={`grid flex-1 text-left text-sm leading-tight transition-all duration-200 ease-in-out ${
-                state === "collapsed" ? "invisible max-w-0 overflow-hidden opacity-0" : "visible max-w-full opacity-100"
-              }`}
-            >
-              <span className="truncate font-medium">Tạo tổ chức</span>
-              <span className="truncate text-muted-foreground text-xs">Bắt đầu workspace</span>
-            </div>
-            <ChevronsUpDown className="ml-auto size-4" />
+            <DashboardLink href="/dashboard/workspaces">
+              <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                <Plus className="size-4" />
+              </div>
+              <div
+                className={`grid flex-1 text-left text-sm leading-tight transition-all duration-200 ease-in-out ${
+                  state === "collapsed"
+                    ? "invisible max-w-0 overflow-hidden opacity-0"
+                    : "visible max-w-full opacity-100"
+                }`}
+              >
+                <span className="truncate font-medium">Tạo tổ chức</span>
+                <span className="truncate text-muted-foreground text-xs">Bắt đầu workspace</span>
+              </div>
+              <ChevronsUpDown className="ml-auto size-4" />
+            </DashboardLink>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
@@ -171,11 +176,13 @@ export function OrganizationSwitcher() {
               );
             })}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 p-2" onClick={() => router.push("/dashboard/workspaces")}>
-              <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
-                <Plus className="size-4" />
-              </div>
-              <span className="font-medium text-muted-foreground">Thêm tổ chức</span>
+            <DropdownMenuItem asChild>
+              <DashboardLink href="/dashboard/workspaces" className="gap-2 p-2">
+                <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
+                  <Plus className="size-4" />
+                </div>
+                <span className="font-medium text-muted-foreground">Thêm tổ chức</span>
+              </DashboardLink>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

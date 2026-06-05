@@ -2,8 +2,7 @@
 
 import * as React from "react";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import { BriefcaseBusiness, Check, ChevronsUpDown, PlusCircle, RefreshCw } from "lucide-react";
 
@@ -26,6 +25,8 @@ import {
 import { getProjectRouteInfo, projectScopedPath, switchProjectInPath } from "@/lib/giaphu-erp/project-routes";
 import type { ProjectRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
+
+import { DashboardLink } from "../dashboard-link";
 
 type GiaPhuResponse = {
   status: "success" | "error";
@@ -52,7 +53,6 @@ export function ProjectSwitcher({
   organizationReady?: boolean;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const routeProjectId = getProjectRouteInfo(pathname)?.projectId ?? "";
   const [projects, setProjects] = React.useState<ProjectRow[]>(initialProjects);
   const [activeProjectCode, setActiveProjectCode] = React.useState("");
@@ -138,7 +138,7 @@ export function ProjectSwitcher({
             tooltip="Chọn tổ chức"
             asChild
           >
-            <Link prefetch={false} href="/dashboard/workspaces">
+            <DashboardLink href="/dashboard/workspaces">
               <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-background">
                 <BriefcaseBusiness className="size-4" />
               </div>
@@ -146,17 +146,11 @@ export function ProjectSwitcher({
                 <span className="truncate font-medium">Chọn tổ chức</span>
                 <span className="truncate text-muted-foreground text-xs">Trước khi dùng ERP</span>
               </div>
-            </Link>
+            </DashboardLink>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
     );
-  }
-
-  function selectProject(project: ProjectRow) {
-    setActiveProjectCode((current) => (current === project.code ? current : project.code));
-    writeActiveProjectCode(project.code, project.id);
-    router.push(switchProjectInPath(pathname, project.id));
   }
 
   if (!projects.length && !pending) {
@@ -169,7 +163,7 @@ export function ProjectSwitcher({
             tooltip="Tạo công trình"
             asChild
           >
-            <Link prefetch={false} href="/create-project">
+            <DashboardLink href="/create-project">
               <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-background">
                 <PlusCircle className="size-4" />
               </div>
@@ -177,7 +171,7 @@ export function ProjectSwitcher({
                 <span className="truncate font-medium">Tạo công trình</span>
                 <span className="truncate text-muted-foreground text-xs">Chưa có dữ liệu dự án</span>
               </div>
-            </Link>
+            </DashboardLink>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
@@ -213,25 +207,29 @@ export function ProjectSwitcher({
           <DropdownMenuContent className="min-w-64 rounded-lg" side="right" align="start" sideOffset={8}>
             <DropdownMenuLabel>Công trình đang làm việc</DropdownMenuLabel>
             {projects.map((project) => (
-              <DropdownMenuItem
-                key={project.code}
-                className={cn("gap-2", project.code === activeProjectCode && "bg-accent/50")}
-                onClick={() => selectProject(project)}
-              >
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-background font-semibold text-xs">
-                  {project.code.slice(0, 2)}
-                </div>
-                <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{project.name}</span>
-                  <span className="truncate text-muted-foreground text-xs">{project.code}</span>
-                </div>
-                <Check className={cn("size-4 opacity-0", project.code === activeProjectCode && "opacity-100")} />
+              <DropdownMenuItem key={project.code} asChild>
+                <DashboardLink
+                  href={switchProjectInPath(pathname, project.id)}
+                  className={cn("gap-2", project.code === activeProjectCode && "bg-accent/50")}
+                  onClick={() => {
+                    setActiveProjectCode((current) => (current === project.code ? current : project.code));
+                    writeActiveProjectCode(project.code, project.id);
+                  }}
+                >
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-background font-semibold text-xs">
+                    {project.code.slice(0, 2)}
+                  </div>
+                  <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-medium">{project.name}</span>
+                    <span className="truncate text-muted-foreground text-xs">{project.code}</span>
+                  </div>
+                  <Check className={cn("size-4 opacity-0", project.code === activeProjectCode && "opacity-100")} />
+                </DashboardLink>
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link
-                prefetch={false}
+              <DashboardLink
                 href={
                   activeProject ? projectScopedPath(activeProject.id, "/crm/projects") : "/dashboard/giaphu-erp/crm"
                 }
@@ -239,7 +237,7 @@ export function ProjectSwitcher({
               >
                 <PlusCircle className="size-4" />
                 Quản lý công trình
-              </Link>
+              </DashboardLink>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -20,6 +20,7 @@ const defaultTableState: Required<ReportTableState> = {
   pageIndex: 0,
   pageSize: 10,
   search: "",
+  sorting: [],
   filters: {},
 };
 
@@ -28,6 +29,7 @@ function toReportTableState(state: DataTableServerState): Required<ReportTableSt
     pageIndex: state.pageIndex,
     pageSize: state.pageSize,
     search: state.query,
+    sorting: state.sorting,
     filters: state.filters,
   };
 }
@@ -37,6 +39,7 @@ function sameReportState(left: Required<ReportTableState>, right: Required<Repor
     left.pageIndex === right.pageIndex &&
     left.pageSize === right.pageSize &&
     left.search === right.search &&
+    JSON.stringify(left.sorting) === JSON.stringify(right.sorting) &&
     JSON.stringify(left.filters) === JSON.stringify(right.filters)
   );
 }

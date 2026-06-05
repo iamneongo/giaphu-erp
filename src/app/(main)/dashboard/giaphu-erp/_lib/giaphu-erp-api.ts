@@ -92,6 +92,7 @@ export async function fetchGiaPhuPagedRows<T>({
   pageIndex,
   pageSize,
   search,
+  sorting,
   filters,
   signal,
 }: {
@@ -100,6 +101,7 @@ export async function fetchGiaPhuPagedRows<T>({
   pageIndex: number;
   pageSize: number;
   search: string;
+  sorting?: Array<{ id: string; desc: boolean }>;
   filters?: Record<string, string>;
   signal?: AbortSignal;
 }) {
@@ -112,6 +114,7 @@ export async function fetchGiaPhuPagedRows<T>({
   });
 
   if (search.trim()) params.set("search", search.trim());
+  if (sorting?.length) params.set("sorting", JSON.stringify(sorting.slice(0, 1)));
   const activeFilters = Object.fromEntries(
     Object.entries(filters ?? {}).filter(([, value]) => value && value !== "__all"),
   );
