@@ -41,6 +41,11 @@ type ParsedImportRow = {
   errors: string[];
 };
 
+type SheetHeader = {
+  index: number;
+  label: string;
+};
+
 type ExcelImportProps = {
   title: string;
   description?: string;
@@ -136,7 +141,17 @@ function buildHeaderMap(headerRow: unknown[]) {
   return map;
 }
 
-function getFieldColumnIndex(field: ExcelImportField, headerMap: Map<string, number>) {
+function getFieldColumnIndex(
+  field: ExcelImportField,
+  headerMap: Map<string, number>,
+  columnMapping?: Record<string, string>,
+) {
+  const mappedColumn = columnMapping?.[field.key];
+  if (mappedColumn && mappedColumn !== "__skip__") {
+    const index = Number(mappedColumn);
+    return Number.isInteger(index) ? index : undefined;
+  }
+
   const keys = [field.label, field.key, ...(field.aliases ?? [])].map(normalizeHeader).filter(Boolean);
   for (const key of keys) {
     const index = headerMap.get(key);
@@ -150,20 +165,39 @@ function getDefaultValue(field: ExcelImportField, payload: Record<string, unknow
   return typeof field.defaultValue === "function" ? field.defaultValue(payload) : field.defaultValue;
 }
 
-function parseRows(rawRows: unknown[][], fields: ExcelImportField[]) {
+function getSheetHeaderInfo(rawRows: unknown[][]) {
   const headerIndex = rawRows.findIndex((row) => row.filter((cell) => String(cell ?? "").trim()).length >= 2);
+  if (headerIndex < 0) return { headerIndex, headers: [] as SheetHeader[] };
+
+  return {
+    headerIndex,
+    headers: rawRows[headerIndex].map((cell, index) => ({
+      index,
+      label: String(cell ?? "").trim() || `Cột ${index + 1}`,
+    })),
+  };
+}
+
+function parseRows(rawRows: unknown[][], fields: ExcelImportField[], columnMapping?: Record<string, string>) {
+  const { headerIndex } = getSheetHeaderInfo(rawRows);
   if (headerIndex < 0)
-    return { rows: [], missingHeaders: fields.filter((field) => !field.hidden).map((field) => field.label) };
+    return {
+      rows: [],
+      missingHeaderKeys: fields.filter((field) => !field.hidden && field.required).map((field) => field.key),
+      missingHeaders: fields.filter((field) => !field.hidden && field.required).map((field) => field.label),
+    };
 
   const headerMap = buildHeaderMap(rawRows[headerIndex]);
   const columnByField = new Map<string, number | undefined>();
   for (const field of fields) {
-    columnByField.set(field.key, getFieldColumnIndex(field, headerMap));
+    columnByField.set(field.key, getFieldColumnIndex(field, headerMap, columnMapping));
   }
 
-  const missingHeaders = fields
-    .filter((field) => !field.hidden && field.required && columnByField.get(field.key) === undefined)
-    .map((field) => field.label);
+  const missingFields = fields.filter(
+    (field) => !field.hidden && field.required && columnByField.get(field.key) === undefined,
+  );
+  const missingHeaderKeys = missingFields.map((field) => field.key);
+  const missingHeaders = missingFields.map((field) => field.label);
   const rows = rawRows
     .slice(headerIndex + 1)
     .map<ParsedImportRow>((row, index) => {
@@ -196,7 +230,7 @@ function parseRows(rawRows: unknown[][], fields: ExcelImportField[]) {
     })
     .filter((row) => !isEmptyPayload(row.payload));
 
-  return { rows, missingHeaders };
+  return { rows, missingHeaderKeys, missingHeaders };
 }
 
 function getStaticDefaultValue(fields: ExcelImportField[], key: string) {
@@ -261,16 +295,20 @@ export function ExcelImportPanel({
   const [sheetNames, setSheetNames] = React.useState<string[]>([]);
   const [selectedSheet, setSelectedSheet] = React.useState("");
   const [workbookRows, setWorkbookRows] = React.useState<Record<string, unknown[][]>>({});
+  const [columnMapping, setColumnMapping] = React.useState<Record<string, string>>({});
   const [pending, startTransition] = React.useTransition();
+  const selectedRows = workbookRows[selectedSheet] ?? [];
+  const headerInfo = React.useMemo(() => getSheetHeaderInfo(selectedRows), [selectedRows]);
   const parsed = React.useMemo(
-    () => parseRows(workbookRows[selectedSheet] ?? [], fields),
-    [fields, selectedSheet, workbookRows],
+    () => parseRows(selectedRows, fields, columnMapping),
+    [columnMapping, fields, selectedRows],
   );
   const hasSelectedSheet = Boolean(selectedSheet && workbookRows[selectedSheet]);
   const hasMissingHeaders = hasSelectedSheet && parsed.missingHeaders.length > 0;
   const validRows = parsed.rows.filter((row) => row.errors.length === 0);
   const invalidRows = parsed.rows.filter((row) => row.errors.length > 0);
   const previewFields = fields.filter((field) => !field.hidden);
+  const mappableFields = previewFields.filter((field) => parsed.missingHeaderKeys.includes(field.key));
 
   async function handleFile(file: File | null) {
     if (!file) return;
@@ -289,9 +327,22 @@ export function ExcelImportPanel({
       setSheetNames(workbook.SheetNames);
       setSelectedSheet(workbook.SheetNames[0] ?? "");
       setWorkbookRows(nextRows);
+      setColumnMapping({});
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không đọc được file Excel.");
     }
+  }
+
+  function updateSelectedSheet(sheetName: string) {
+    setSelectedSheet(sheetName);
+    setColumnMapping({});
+  }
+
+  function updateColumnMapping(fieldKey: string, columnIndex: string) {
+    setColumnMapping((current) => ({
+      ...current,
+      [fieldKey]: columnIndex,
+    }));
   }
 
   function importRows() {
@@ -350,7 +401,7 @@ export function ExcelImportPanel({
 
             <div className="space-y-2">
               <Label>Sheet</Label>
-              <Select value={selectedSheet} onValueChange={setSelectedSheet} disabled={!sheetNames.length}>
+              <Select value={selectedSheet} onValueChange={updateSelectedSheet} disabled={!sheetNames.length}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Chọn sheet" />
                 </SelectTrigger>
@@ -366,11 +417,48 @@ export function ExcelImportPanel({
           </div>
 
           {hasMissingHeaders ? (
-            <Alert variant="destructive">
+            <Alert>
               <Upload />
-              <AlertTitle>Thiếu cột bắt buộc</AlertTitle>
-              <AlertDescription>{parsed.missingHeaders.join(", ")}</AlertDescription>
+              <AlertTitle>Cần ghép cột Excel</AlertTitle>
+              <AlertDescription>
+                File chưa khớp các trường: {parsed.missingHeaders.join(", ")}. Chọn cột tương ứng bên dưới để tiếp tục
+                import.
+              </AlertDescription>
             </Alert>
+          ) : null}
+
+          {hasMissingHeaders && headerInfo.headers.length ? (
+            <Card className="border-dashed shadow-none">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Ghép cột Excel</CardTitle>
+                <CardDescription>Chọn cột trong file Excel tương ứng với trường ERP đang thiếu.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {mappableFields.map((field) => (
+                    <div key={field.key} className="space-y-2">
+                      <Label>{field.label}</Label>
+                      <Select
+                        value={columnMapping[field.key] ?? "__skip__"}
+                        onValueChange={(value) => updateColumnMapping(field.key, value)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Chọn cột Excel" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__skip__">Chưa chọn</SelectItem>
+                          {headerInfo.headers.map((header) => (
+                            <SelectItem key={`${field.key}-${header.index}`} value={String(header.index)}>
+                              {header.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           ) : null}
 
           <div className="flex flex-wrap items-center gap-2">
