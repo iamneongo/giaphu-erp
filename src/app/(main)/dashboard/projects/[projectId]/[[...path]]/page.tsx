@@ -5,6 +5,7 @@ import { decodeProjectRouteSegment, projectScopedPath } from "@/lib/giaphu-erp/p
 
 import { CatalogsWorkspace } from "../../../giaphu-erp/_components/catalogs-workspace";
 import { CrmWorkspace } from "../../../giaphu-erp/_components/crm-workspace";
+import { DetailPageContent } from "../../../giaphu-erp/_components/detail-page-content";
 import { DocumentsWorkspace } from "../../../giaphu-erp/_components/documents-workspace";
 import { MaterialDebtWorkspace } from "../../../giaphu-erp/_components/material-debt-workspace";
 import { OverviewDashboard } from "../../../giaphu-erp/_components/overview-dashboard";
@@ -127,6 +128,10 @@ export default async function ProjectPage({ params }: { params: ProjectPageParam
         section.kind === "vatTu" ? "/materials/vat-tu-chinh" : "/materials/vat-tu-phu",
       ),
     );
+  }
+
+  if (path[0] === "details" && path[1] && path[2] && !path[3]) {
+    return <DetailPageContent type={path[1]} id={path[2]} routeProjectId={decodedProjectId} />;
   }
 
   notFound();
