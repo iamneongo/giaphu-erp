@@ -248,15 +248,10 @@ function requireDateInput(value: unknown, label: string) {
 
 function assertProgressDateRules(startDate: string, planEndDate: string, confirmedEndDate: string) {
   const start = dateInputTime(startDate);
-  const today = dateInputTime(dateOnly(new Date()));
   const planEnd = dateInputTime(planEndDate);
   const confirmedEnd = dateInputTime(confirmedEndDate);
 
-  if (start == null || today == null || planEnd == null || confirmedEnd == null) return;
-
-  if (start < today) {
-    throw new Error("NgÃ y báº¯t Ä‘áº§u khÃ´ng Ä‘Æ°á»£c nhá» hÆ¡n ngÃ y hiá»‡n táº¡i.");
-  }
+  if (start == null || planEnd == null || confirmedEnd == null) return;
 
   if (planEnd < start) {
     throw new Error("NgÃ y HT dá»± kiáº¿n khÃ´ng Ä‘Æ°á»£c nhá» hÆ¡n ngÃ y báº¯t Ä‘áº§u.");

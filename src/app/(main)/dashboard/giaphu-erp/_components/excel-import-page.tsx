@@ -59,12 +59,10 @@ function dateTimeFromInput(value: unknown) {
 
 function validateProgressStartDate(value: unknown, payload: Record<string, unknown>) {
   const startDate = dateTimeFromInput(value);
-  const today = dateTimeFromInput(todayIso());
   const planEndDate = dateTimeFromInput(payload.planEndDate);
   const confirmedEndDate = dateTimeFromInput(payload.confirmedEndDate);
 
   if (!startDate) return "Ngày bắt đầu không hợp lệ.";
-  if (today && startDate < today) return "Ngày bắt đầu không được nhỏ hơn ngày hiện tại.";
   if (planEndDate && planEndDate < startDate) return "Ngày HT dự kiến không được nhỏ hơn ngày bắt đầu.";
   if (confirmedEndDate && confirmedEndDate < startDate) return "Ngày HT xác nhận không được nhỏ hơn ngày bắt đầu.";
 
