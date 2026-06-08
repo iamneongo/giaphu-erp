@@ -785,7 +785,7 @@ async function createGiaPhuSchemaInternal() {
     category text not null default '',
     workdays numeric not null default 0,
     cost numeric not null default 0,
-    updated_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
   )`;
 
   await sql`create table if not exists gp_progress (
@@ -799,7 +799,7 @@ async function createGiaPhuSchemaInternal() {
     plan_end_date date,
     confirmed_end_date date,
     evaluation text not null default '',
-    updated_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
   )`;
 
   await ensureOrganizationColumns();
