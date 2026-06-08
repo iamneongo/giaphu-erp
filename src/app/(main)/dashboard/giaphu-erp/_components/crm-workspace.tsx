@@ -2,14 +2,11 @@
 
 import * as React from "react";
 
-import { usePathname } from "next/navigation";
-
 import { Banknote, BriefcaseBusiness, FileText, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
-import { getProjectRouteInfo } from "@/lib/giaphu-erp/project-routes";
 import type { ContractRow, PaymentRow, ProjectRow } from "@/lib/giaphu-erp/types";
 
 import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
@@ -29,9 +26,7 @@ import { TableRowActions } from "./table-row-actions";
 type CrmSection = "projects" | "contracts" | "payments";
 
 export function CrmWorkspace({ section = "projects" }: { section?: CrmSection }) {
-  const pathname = usePathname();
-  const { data, activeProject, activeProjectCode, isSwitchingProject, setActiveProjectCode, runAction, scoped } =
-    useGiaPhuErp();
+  const { data, activeProjectCode, isSwitchingProject, setActiveProjectCode, runAction, scoped } = useGiaPhuErp();
   const paginatedProjects = usePaginatedErpRows<ProjectRow>({
     dataset: "projects",
     projectCode: "",
@@ -53,8 +48,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
   const projectStatusOptions = uniqueOptions(data.projects.map((project) => project.status));
   const projectOwnerOptions = uniqueOptions(data.projects.map((project) => project.owner));
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.crmManage);
-  const isProjectScopedProjectsPage = section === "projects" && Boolean(getProjectRouteInfo(pathname));
-  const canManageProjects = canManage && !isProjectScopedProjectsPage;
+  const canManageProjects = canManage;
   const [pinProject, setPinProject] = React.useState<ProjectRow | null>(null);
 
   if (!data.projects.length) {
@@ -114,36 +108,36 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
             ]}
           />
           <ActionDialog
-            title="Thông tin công trình"
-            button="Công trình"
+            title="Thêm công trình"
+            button="Thêm công trình"
             icon={Plus}
             action="saveProject"
             onAction={runAction}
             fields={[
-              { name: "code", label: "Mã công trình", value: activeProject?.code, required: true },
-              { name: "name", label: "Tên công trình", value: activeProject?.name, required: true },
-              { name: "owner", label: "Chủ đầu tư", value: activeProject?.owner },
-              { name: "contact", label: "Liên hệ", value: activeProject?.contact },
-              { name: "referrer", label: "Người giới thiệu", value: activeProject?.referrer },
+              { name: "code", label: "Mã công trình", required: true },
+              { name: "name", label: "Tên công trình", required: true },
+              { name: "owner", label: "Chủ đầu tư" },
+              { name: "contact", label: "Liên hệ" },
+              { name: "referrer", label: "Người giới thiệu" },
               {
                 name: "pin",
-                label: activeProject?.hasPin ? "Mã PIN mới" : "Mã PIN công trình",
+                label: "Mã PIN công trình",
                 type: "password",
                 inputMode: "numeric",
-                helperText: activeProject?.hasPin ? "Để trống nếu không đổi PIN." : "Dùng khi chuyển đổi công trình.",
+                required: true,
+                helperText: "Dùng khi chuyển đổi công trình.",
               },
               {
                 name: "startDate",
                 label: "Ngày bắt đầu",
                 type: "date",
-                value: activeProject?.startDate || todayIso(),
+                value: todayIso(),
               },
-              { name: "status", label: "Trạng thái", value: activeProject?.status || "Đang thi công" },
+              { name: "status", label: "Trạng thái", value: "Đang thi công" },
               {
                 name: "failureReason",
                 label: "Lý do thất bại",
                 type: "textarea",
-                value: activeProject?.failureReason,
               },
             ]}
           />
