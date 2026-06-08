@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
-import { currentIsoWeek, todayIso } from "../_lib/date-utils";
+import { currentIsoWeek, isoWeekFromDate, todayIso } from "../_lib/date-utils";
 import { catalogOptions, uniqueOptions } from "../_lib/form-options";
 import { formatCount, formatMoney } from "../_lib/formatters";
 import type { GiaPhuActionResult } from "../_lib/giaphu-erp-api";
@@ -147,17 +147,24 @@ function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: St
   return Array.from(staffMap.values()).sort((first, second) => first.name.localeCompare(second.name, "vi"));
 }
 
-function weekSortValue(value: string) {
-  const [weekText, yearText] = value.split(".");
-  return Number(yearText || 0) * 100 + Number(weekText || 0);
-}
+function normalizeAttendanceWeekInput(value: string) {
+  const raw = value.trim();
+  if (!raw) return { error: "Nhập tuần chấm công." };
 
-function buildWeekOptions(options: Array<{ label: string; value: string }>) {
-  const values = new Set([currentIsoWeek(), ...options.map((option) => option.value).filter(Boolean)]);
+  const dateWeek = isoWeekFromDate(raw);
+  if (dateWeek) return { value: dateWeek };
 
-  return Array.from(values)
-    .sort((first, second) => weekSortValue(second) - weekSortValue(first))
-    .map((value) => ({ label: value, value }));
+  const normalized = raw.replace(/[/-]/g, ".");
+  const match = normalized.match(/^(\d{1,2})\.(\d{4})$/);
+  if (!match) return { error: "Nhập tuần dạng 24.2026 hoặc ngày dạng 2026-06-08." };
+
+  const week = Number(match[1]);
+  const year = Number(match[2]);
+  if (week < 1 || week > 53 || year < 1900 || year > 2200) {
+    return { error: "Tuần chấm công không hợp lệ." };
+  }
+
+  return { value: `${String(week).padStart(2, "0")}.${year}` };
 }
 
 function dateTimeFromInput(value: unknown) {
@@ -354,7 +361,6 @@ function AttendanceBoard({
   rows,
   staff,
   categoryOptions,
-  weekOptions,
   activeProjectCode,
   canManage,
   loading,
@@ -363,7 +369,6 @@ function AttendanceBoard({
   rows: AttendanceRow[];
   staff: StaffRow[];
   categoryOptions: Array<{ label: string; value: string }>;
-  weekOptions: Array<{ label: string; value: string }>;
   activeProjectCode: string;
   canManage: boolean;
   loading: boolean;
@@ -372,8 +377,9 @@ function AttendanceBoard({
     payload: Record<string, unknown>,
   ) => Promise<GiaPhuActionResult | false | boolean | undefined>;
 }) {
-  const normalizedWeekOptions = React.useMemo(() => buildWeekOptions(weekOptions), [weekOptions]);
   const [selectedWeek, setSelectedWeek] = React.useState(currentIsoWeek());
+  const [weekInput, setWeekInput] = React.useState(currentIsoWeek());
+  const [weekError, setWeekError] = React.useState("");
   const [selectedCategory, setSelectedCategory] = React.useState(categoryOptions[0]?.value || "");
   const [selectedStaffName, setSelectedStaffName] = React.useState("");
   const [draftParticipants, setDraftParticipants] = React.useState<DraftAttendanceParticipant[]>([]);
@@ -383,11 +389,17 @@ function AttendanceBoard({
   const [savingStaffName, setSavingStaffName] = React.useState("");
   const [deletingStaffName, setDeletingStaffName] = React.useState("");
 
-  React.useEffect(() => {
-    if (normalizedWeekOptions.length > 0 && !normalizedWeekOptions.some((option) => option.value === selectedWeek)) {
-      setSelectedWeek(currentIsoWeek());
+  const applyWeekInput = React.useCallback((value: string) => {
+    const normalized = normalizeAttendanceWeekInput(value);
+    if (!normalized.value) {
+      setWeekError(normalized.error ?? "Tuần chấm công không hợp lệ.");
+      return;
     }
-  }, [normalizedWeekOptions, selectedWeek]);
+
+    setSelectedWeek(normalized.value);
+    setWeekInput(normalized.value);
+    setWeekError("");
+  }, []);
 
   React.useEffect(() => {
     if (categoryOptions.length === 0) {
@@ -847,21 +859,33 @@ function AttendanceBoard({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-        <div className="grid gap-3 sm:grid-cols-[160px_224px]">
+        <div className="grid gap-3 sm:grid-cols-[200px_224px]">
           <div className="space-y-1.5">
             <div className="font-medium text-muted-foreground text-xs">Tuần</div>
-            <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {normalizedWeekOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input
+              value={weekInput}
+              placeholder="VD: 24.2026"
+              aria-invalid={Boolean(weekError)}
+              onBlur={() => applyWeekInput(weekInput)}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setWeekInput(nextValue);
+                const normalized = normalizeAttendanceWeekInput(nextValue);
+                if (normalized.value) {
+                  setSelectedWeek(normalized.value);
+                  setWeekError("");
+                } else {
+                  setWeekError("");
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyWeekInput(weekInput);
+                }
+              }}
+            />
+            {weekError ? <p className="text-destructive text-xs">{weekError}</p> : null}
           </div>
           <div className="space-y-1.5">
             <div className="font-medium text-muted-foreground text-xs">Hạng mục</div>
@@ -939,7 +963,6 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
     enabled: section === "progress",
   });
   const categoryOptions = catalogOptions(data.catalogs.hangMuc);
-  const attendanceWeekOptions = uniqueOptions(scoped.attendance.map((row) => row.week));
   const staffTeamOptions = uniqueOptions(data.staff.map((row) => row.team));
   const staffPositionOptions = uniqueOptions(data.staff.map((row) => row.position));
   const laborNormCategoryOptions = uniqueOptions(scoped.laborNorms.map((row) => row.category));
@@ -1149,7 +1172,6 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
               rows={scoped.attendance}
               staff={data.staff}
               categoryOptions={categoryOptions}
-              weekOptions={attendanceWeekOptions}
               activeProjectCode={activeProjectCode}
               canManage={canManage}
               loading={isSwitchingProject}
