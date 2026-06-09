@@ -25,6 +25,20 @@ function getInitials(name: string) {
     .join("");
 }
 
+async function setUnlimitedMemberships(organizationId: string) {
+  const response = await fetch("/api/clerk-organizations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "setUnlimitedMemberships", organizationId }),
+  });
+
+  const payload = (await response.json()) as { status?: string; message?: string };
+
+  if (!response.ok || payload.status !== "success") {
+    throw new Error(payload.message || "Không thể nâng giới hạn thành viên workspace.");
+  }
+}
+
 export function OrganizationManager() {
   const router = useRouter();
   const { orgId } = useAuth();
@@ -79,8 +93,9 @@ export function OrganizationManager() {
 
     try {
       const organization = await createOrganization({ name });
+      await setUnlimitedMemberships(organization.id);
       setOrganizationName("");
-      toast.success("Đã tạo tổ chức mới.");
+      toast.success("Đã tạo tổ chức mới và mở không giới hạn thành viên.");
 
       await setActive({ organization: organization.id });
       void userMemberships?.revalidate();

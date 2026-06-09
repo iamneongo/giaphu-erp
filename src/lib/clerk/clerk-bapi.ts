@@ -88,6 +88,8 @@ export type ClerkOrganizationInvitation = {
   status?: "pending" | "accepted" | "revoked" | "expired";
 };
 
+export const CLERK_UNLIMITED_MEMBERSHIPS = 0;
+
 const CLERK_BAPI_BASE = "https://api.clerk.com/v1";
 
 function getClerkSecretKey() {
@@ -124,7 +126,9 @@ async function clerkBapi<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function listOrganizationPermissions() {
-  const response = await clerkBapi<ClerkListResponse<ClerkOrganizationPermission>>("/organization_permissions?limit=200");
+  const response = await clerkBapi<ClerkListResponse<ClerkOrganizationPermission>>(
+    "/organization_permissions?limit=200",
+  );
   return response.data;
 }
 
@@ -149,22 +153,36 @@ export async function getOrganizationRoleSet(organizationId: string) {
   return getRoleSet(roleSetKey);
 }
 
-export async function createOrganizationPermission(input: {
-  key: string;
-  name: string;
-  description: string;
+export async function setOrganizationMembershipLimit(input: {
+  organizationId: string;
+  maxAllowedMemberships?: number;
 }) {
+  const client = await clerkClient();
+
+  return client.organizations.updateOrganization(input.organizationId, {
+    maxAllowedMemberships: input.maxAllowedMemberships ?? CLERK_UNLIMITED_MEMBERSHIPS,
+  });
+}
+
+export async function ensureUnlimitedOrganizationMemberships(organizationId: string) {
+  const client = await clerkClient();
+  const organization = await client.organizations.getOrganization({ organizationId });
+
+  if (organization.maxAllowedMemberships === CLERK_UNLIMITED_MEMBERSHIPS) {
+    return organization;
+  }
+
+  return setOrganizationMembershipLimit({ organizationId });
+}
+
+export async function createOrganizationPermission(input: { key: string; name: string; description: string }) {
   return clerkBapi<ClerkOrganizationPermission>("/organization_permissions", {
     method: "POST",
     body: JSON.stringify(input),
   });
 }
 
-export async function createOrganizationRole(input: {
-  key: string;
-  name: string;
-  description: string;
-}) {
+export async function createOrganizationRole(input: { key: string; name: string; description: string }) {
   return clerkBapi<ClerkOrganizationRole>("/organization_roles", {
     method: "POST",
     body: JSON.stringify(input),
@@ -258,10 +276,7 @@ export async function createRoleWithPermissions(input: {
   return roles.find((entry) => entry.id === role.id) ?? role;
 }
 
-export async function updateRolePermissions(input: {
-  roleId: string;
-  permissionKeys: ErpPermissionKey[];
-}) {
+export async function updateRolePermissions(input: { roleId: string; permissionKeys: ErpPermissionKey[] }) {
   await ensureErpPermissionCatalog();
 
   const [roles, permissions] = await Promise.all([listOrganizationRoles(), listOrganizationPermissions()]);
@@ -307,6 +322,17 @@ export async function listOrganizationMemberships(organizationId: string) {
   return memberships.data as ClerkOrganizationMembership[];
 }
 
+export async function getOrganizationMembershipForUser(input: { organizationId: string; userId: string }) {
+  const client = await clerkClient();
+  const memberships = await client.organizations.getOrganizationMembershipList({
+    organizationId: input.organizationId,
+    userId: [input.userId],
+    limit: 1,
+  });
+
+  return (memberships.data[0] as ClerkOrganizationMembership | undefined) ?? null;
+}
+
 export async function updateOrganizationMembershipRole(input: {
   organizationId: string;
   userId: string;
@@ -321,10 +347,7 @@ export async function updateOrganizationMembershipRole(input: {
   });
 }
 
-export async function deleteOrganizationMembership(input: {
-  organizationId: string;
-  userId: string;
-}) {
+export async function deleteOrganizationMembership(input: { organizationId: string; userId: string }) {
   const client = await clerkClient();
 
   return client.organizations.deleteOrganizationMembership({
@@ -352,6 +375,7 @@ export async function createOrganizationInvitation(input: {
   redirectUrl?: string;
 }) {
   const client = await clerkClient();
+  await ensureUnlimitedOrganizationMemberships(input.organizationId);
 
   return client.organizations.createOrganizationInvitation({
     organizationId: input.organizationId,
