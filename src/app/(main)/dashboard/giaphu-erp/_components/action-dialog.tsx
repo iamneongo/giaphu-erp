@@ -33,12 +33,15 @@ export interface FormFieldDefinition {
   type?: "text" | "tel" | "number" | "date" | "textarea" | "select" | "checkbox" | "hidden" | "file" | "password";
   value?: string | number | boolean;
   placeholder?: string;
-  helperText?: string;
+  helperText?: string | ((payload: FormPayload) => string);
   accept?: string;
-  options?: Array<{ label: string; value: string }>;
+  options?:
+    | Array<{ label: string; value: string }>
+    | ((payload: FormPayload) => Array<{ label: string; value: string }>);
   required?: boolean;
   disabled?: boolean;
   readOnly?: boolean;
+  clearWhenOptionsChange?: boolean;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   validate?: (value: string, payload: FormPayload) => string | undefined;
   deriveValue?: (payload: FormPayload) => string | number | boolean | undefined;
@@ -103,6 +106,16 @@ function getResolvedFieldType(field: FormFieldDefinition) {
   if (field.type) return field.type;
   if (field.name === "description" || field.label.toLowerCase().includes("diễn giải")) return "textarea";
   return "text";
+}
+
+function resolveFieldOptions(field: FormFieldDefinition, payload: FormPayload) {
+  if (typeof field.options === "function") return field.options(payload);
+  return field.options ?? [];
+}
+
+function resolveFieldHelperText(field: FormFieldDefinition, payload: FormPayload) {
+  if (typeof field.helperText === "function") return field.helperText(payload);
+  return field.helperText;
 }
 
 function SearchableFormSelect({
@@ -304,6 +317,16 @@ export function ActionForm({
           }
         }
 
+        for (const field of fields) {
+          if (!field.clearWhenOptionsChange || getResolvedFieldType(field) !== "select") continue;
+
+          const value = String(next[field.name] ?? "").trim();
+          const options = resolveFieldOptions(field, next);
+          if (value && options.length > 0 && !options.some((option) => option.value === value)) {
+            next[field.name] = "";
+          }
+        }
+
         return next;
       });
     },
@@ -360,6 +383,8 @@ export function ActionForm({
           const fieldType = getResolvedFieldType(field);
           const isVisible = field.visibleWhen?.(fieldValues) ?? true;
           if (!isVisible) return null;
+          const fieldOptions = resolveFieldOptions(field, fieldValues);
+          const fieldHelperText = resolveFieldHelperText(field, fieldValues);
 
           if (fieldType === "hidden") {
             return (
@@ -419,7 +444,7 @@ export function ActionForm({
                   value={String(fieldValues[field.name] ?? "")}
                   label={field.label}
                   placeholder={field.placeholder}
-                  options={field.options ?? []}
+                  options={fieldOptions}
                   required={field.required}
                   disabled={field.disabled}
                   dialogOpen={formActive}
@@ -449,7 +474,7 @@ export function ActionForm({
                   onChange={(event) => updateFieldValue(field.name, event.target.value)}
                 />
               )}
-              {field.helperText ? <p className="text-muted-foreground text-xs">{field.helperText}</p> : null}
+              {fieldHelperText ? <p className="text-muted-foreground text-xs">{fieldHelperText}</p> : null}
             </Field>
           );
         })}

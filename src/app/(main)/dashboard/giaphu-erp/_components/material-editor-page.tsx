@@ -8,7 +8,7 @@ import { ArrowLeft, PackagePlus, RefreshCw, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { MaterialRow, MaterialType } from "@/lib/giaphu-erp/types";
+import type { CatalogItem, MaterialRow, MaterialType } from "@/lib/giaphu-erp/types";
 
 import { DashboardLink } from "../../_components/dashboard-link";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
@@ -38,6 +38,38 @@ function uniqueTextOptions(values: string[]) {
     .map((value) => ({ label: value, value }));
 }
 
+function textKey(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function getSupplierOptionsForMaterial({
+  materialName,
+  materialCatalogItems,
+  supplierCatalogOptions,
+}: {
+  materialName: string;
+  materialCatalogItems: CatalogItem[];
+  supplierCatalogOptions: Array<{ label: string; value: string }>;
+}) {
+  const selectedMaterialKey = textKey(materialName);
+  if (!selectedMaterialKey) return [];
+
+  const supplierNames = materialCatalogItems
+    .filter((item) => textKey(item.name) === selectedMaterialKey)
+    .map((item) => item.supplier)
+    .filter(Boolean);
+  const supplierKeys = new Set(supplierNames.map(textKey));
+  if (!supplierKeys.size) return [];
+
+  const knownSuppliers = supplierCatalogOptions.filter((option) => supplierKeys.has(textKey(option.value)));
+  const knownSupplierKeys = new Set(knownSuppliers.map((option) => textKey(option.value)));
+  const extraSuppliers = uniqueTextOptions(
+    supplierNames.filter((supplier) => !knownSupplierKeys.has(textKey(supplier))),
+  );
+
+  return [...knownSuppliers, ...extraSuppliers];
+}
+
 function materialListPath(pathname: string) {
   return pathname.replace(/\/(?:new|edit\/[^/]+)\/?$/, "");
 }
@@ -48,7 +80,7 @@ function buildMaterialFields({
   row,
   categoryOptions,
   materialOptions,
-  supplierOptions,
+  getSupplierOptions,
   unitOptions,
 }: {
   activeProjectCode: string;
@@ -56,7 +88,7 @@ function buildMaterialFields({
   row?: MaterialRow;
   categoryOptions: Array<{ label: string; value: string }>;
   materialOptions: Array<{ label: string; value: string }>;
-  supplierOptions: Array<{ label: string; value: string }>;
+  getSupplierOptions: (payload: FormPayload) => Array<{ label: string; value: string }>;
   unitOptions: Array<{ label: string; value: string }>;
 }): FormFieldDefinition[] {
   const date = row?.date || todayIso();
@@ -95,20 +127,27 @@ function buildMaterialFields({
       label: "NCC",
       type: "select",
       value: row?.supplier ?? "",
-      options: supplierOptions,
-      placeholder: "Chọn NCC từ danh mục",
-      helperText: supplierOptions.length
-        ? "Lấy thông tin từ Danh mục > Nhà cung cấp."
-        : "Chưa có NCC. Vui lòng thêm ở Danh mục > Nhà cung cấp trước.",
-      validate: (value) => {
+      options: getSupplierOptions,
+      placeholder: "Chọn NCC theo vật tư",
+      clearWhenOptionsChange: true,
+      helperText: (payload) => {
+        const materialName = String(payload.materialName ?? "").trim();
+        const options = getSupplierOptions(payload);
+        if (!materialName) return "Chọn vật tư trước, hệ thống sẽ lọc NCC tương ứng.";
+        if (options.length) return `Chỉ hiển thị NCC đã gán cho "${materialName}" trong Danh mục > Vật tư.`;
+        return `Vật tư "${materialName}" chưa gán NCC trong danh mục. Vui lòng cập nhật Danh mục > Vật tư trước.`;
+      },
+      validate: (value, payload) => {
         const supplier = value.trim();
-        if (!supplierOptions.length) {
-          return "Chưa có NCC trong danh mục. Vui lòng thêm nhà cung cấp trước.";
+        const materialName = String(payload.materialName ?? "").trim();
+        const options = getSupplierOptions(payload);
+        if (!materialName) return "Vui lòng chọn vật tư trước khi chọn NCC.";
+        if (!options.length) {
+          return `Vật tư "${materialName}" chưa có NCC tương ứng trong danh mục. Vui lòng cập nhật Danh mục > Vật tư.`;
         }
-        if (!supplier) return "Vui lòng chọn NCC từ danh mục nhà cung cấp.";
-        if (!supplierOptions.some((option) => option.value === supplier)) {
-          return "NCC phải được chọn từ danh mục nhà cung cấp.";
-        }
+        if (!supplier) return "Vui lòng chọn NCC tương ứng với vật tư.";
+        if (!options.some((option) => option.value === supplier))
+          return "NCC phải thuộc danh sách NCC của vật tư đã chọn.";
         return undefined;
       },
     },
@@ -162,7 +201,20 @@ export function MaterialEditorPage({ materialType, mode, materialId, listHref }:
     () => catalogOptions(materialType === "VT Chính" ? data.catalogs.vatTu : data.catalogs.vatTuPhu),
     [data.catalogs.vatTu, data.catalogs.vatTuPhu, materialType],
   );
-  const supplierOptions = React.useMemo(() => catalogOptions(data.catalogs.nhaCungCap), [data.catalogs.nhaCungCap]);
+  const materialCatalogItems = materialType === "VT Chính" ? data.catalogs.vatTu : data.catalogs.vatTuPhu;
+  const supplierCatalogOptions = React.useMemo(
+    () => catalogOptions(data.catalogs.nhaCungCap),
+    [data.catalogs.nhaCungCap],
+  );
+  const getSupplierOptions = React.useCallback(
+    (payload: FormPayload) =>
+      getSupplierOptionsForMaterial({
+        materialName: String(payload.materialName ?? ""),
+        materialCatalogItems,
+        supplierCatalogOptions,
+      }),
+    [materialCatalogItems, supplierCatalogOptions],
+  );
   const unitOptions = React.useMemo(
     () =>
       uniqueTextOptions([
@@ -188,10 +240,10 @@ export function MaterialEditorPage({ materialType, mode, materialId, listHref }:
         row: editingRow,
         categoryOptions,
         materialOptions,
-        supplierOptions,
+        getSupplierOptions,
         unitOptions,
       }),
-    [activeProjectCode, categoryOptions, editingRow, materialOptions, materialType, supplierOptions, unitOptions],
+    [activeProjectCode, categoryOptions, editingRow, getSupplierOptions, materialOptions, materialType, unitOptions],
   );
 
   async function saveMaterial(action: string, payload: FormPayload) {
