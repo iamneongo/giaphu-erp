@@ -2,12 +2,35 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@clerk/nextjs/server";
 
+import type { GiaPhuDashboardData } from "../giaphu-erp/types";
 import { listOrganizationMemberships, listOrganizationRoles } from "./clerk-bapi";
-import { canAccessClerkPermission, ERP_PERMISSIONS, type ErpPermissionKey } from "./erp-rbac-shared";
+import {
+  canAccessAnyClerkPermission,
+  canAccessClerkPermission,
+  ERP_PERMISSIONS,
+  type ErpPermissionKey,
+} from "./erp-rbac-shared";
 
 type ClerkAuthSession = Awaited<ReturnType<typeof auth>>;
 
-const useBackendPermissionLookup = process.env.CLERK_PERMISSION_SYNC_MODE === "backend";
+const useBackendPermissionLookup = process.env.CLERK_PERMISSION_SYNC_MODE !== "claims";
+
+export const ERP_DATA_ACCESS_PERMISSIONS = [
+  ERP_PERMISSIONS.overviewRead,
+  ERP_PERMISSIONS.reportsRead,
+  ERP_PERMISSIONS.crmRead,
+  ERP_PERMISSIONS.crmManage,
+  ERP_PERMISSIONS.materialsRead,
+  ERP_PERMISSIONS.materialsManage,
+  ERP_PERMISSIONS.workforceRead,
+  ERP_PERMISSIONS.workforceManage,
+  ERP_PERMISSIONS.subcontractorsRead,
+  ERP_PERMISSIONS.subcontractorsManage,
+  ERP_PERMISSIONS.documentsRead,
+  ERP_PERMISSIONS.documentsManage,
+  ERP_PERMISSIONS.catalogsRead,
+  ERP_PERMISSIONS.catalogsManage,
+] as const satisfies readonly ErpPermissionKey[];
 
 function buildContext(session: ClerkAuthSession, permissionKeys?: Iterable<string>) {
   return {
@@ -16,6 +39,22 @@ function buildContext(session: ClerkAuthSession, permissionKeys?: Iterable<strin
     hasPermission: (permission: string) => session.has({ permission }),
     permissionKeys,
   };
+}
+
+export function canAccessErpPermission(
+  session: ClerkAuthSession,
+  permission: ErpPermissionKey,
+  permissionKeys?: Iterable<string>,
+) {
+  return canAccessClerkPermission(buildContext(session, permissionKeys), permission);
+}
+
+export function canAccessAnyErpPermission(
+  session: ClerkAuthSession,
+  permissions: readonly ErpPermissionKey[] = ERP_DATA_ACCESS_PERMISSIONS,
+  permissionKeys?: Iterable<string>,
+) {
+  return canAccessAnyClerkPermission(buildContext(session, permissionKeys), permissions);
 }
 
 export async function getEffectiveErpPermissions(session?: ClerkAuthSession) {
@@ -126,6 +165,45 @@ export async function enforceOrganizationRoleManagement() {
   }
 
   return session;
+}
+
+export function filterGiaPhuDashboardDataByPermissions(
+  data: GiaPhuDashboardData,
+  session: ClerkAuthSession,
+  permissionKeys: readonly ErpPermissionKey[],
+): GiaPhuDashboardData {
+  const canReadOverview = canAccessErpPermission(session, ERP_PERMISSIONS.overviewRead, permissionKeys);
+  const canReadReports = canAccessErpPermission(session, ERP_PERMISSIONS.reportsRead, permissionKeys);
+  const canReadCrm = canAccessErpPermission(session, ERP_PERMISSIONS.crmRead, permissionKeys);
+  const canReadMaterials = canAccessErpPermission(session, ERP_PERMISSIONS.materialsRead, permissionKeys);
+  const canReadWorkforce = canAccessErpPermission(session, ERP_PERMISSIONS.workforceRead, permissionKeys);
+  const canReadSubcontractors = canAccessErpPermission(session, ERP_PERMISSIONS.subcontractorsRead, permissionKeys);
+  const canReadCatalogs = canAccessErpPermission(session, ERP_PERMISSIONS.catalogsRead, permissionKeys);
+  const canReadAnyErpData = canAccessAnyErpPermission(session, ERP_DATA_ACCESS_PERMISSIONS, permissionKeys);
+  const canUseCatalogs = canReadCatalogs || canReadMaterials || canReadWorkforce || canReadSubcontractors;
+
+  return {
+    projects: canReadAnyErpData ? data.projects : [],
+    catalogs: {
+      hangMuc: canUseCatalogs ? data.catalogs.hangMuc : [],
+      vatTu: canReadCatalogs || canReadMaterials ? data.catalogs.vatTu : [],
+      vatTuPhu: canReadCatalogs || canReadMaterials ? data.catalogs.vatTuPhu : [],
+      thauPhu: canReadCatalogs || canReadSubcontractors ? data.catalogs.thauPhu : [],
+      nhaCungCap: canReadCatalogs || canReadMaterials ? data.catalogs.nhaCungCap : [],
+    },
+    staff: canReadWorkforce ? data.staff : [],
+    materials: canReadMaterials ? data.materials : [],
+    attendance: canReadWorkforce ? data.attendance : [],
+    subcontractors: canReadSubcontractors ? data.subcontractors : [],
+    subcontractorContracts: canReadSubcontractors ? data.subcontractorContracts : [],
+    operations: canReadSubcontractors ? data.operations : [],
+    laborNorms: canReadWorkforce ? data.laborNorms : [],
+    progress: canReadWorkforce ? data.progress : [],
+    payments: canReadCrm ? data.payments : [],
+    contracts: canReadCrm ? data.contracts : [],
+    attendanceLocks: canReadWorkforce ? data.attendanceLocks : [],
+    summaries: canReadOverview || canReadReports ? data.summaries : {},
+  };
 }
 
 export { ERP_PERMISSIONS };

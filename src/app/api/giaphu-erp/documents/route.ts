@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@clerk/nextjs/server";
 
+import { canAccessErpPermission, ERP_PERMISSIONS, getEffectiveErpPermissions } from "@/lib/clerk/erp-rbac";
 import { createGiaPhuSchema, saveDocument } from "@/lib/giaphu-erp/db";
 
 export const runtime = "nodejs";
@@ -25,6 +26,11 @@ export async function POST(request: Request) {
         { status: "error", message: "Vui lòng chọn tổ chức trước khi dùng ERP." },
         { status: 403 },
       );
+    }
+
+    const permissionKeys = await getEffectiveErpPermissions(session);
+    if (!canAccessErpPermission(session, ERP_PERMISSIONS.documentsManage, permissionKeys)) {
+      return NextResponse.json({ status: "error", message: "Bạn không có quyền quản lý hồ sơ." }, { status: 403 });
     }
 
     const formData = await request.formData();

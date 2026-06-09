@@ -3,6 +3,14 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import {
+  canAccessAnyErpPermission,
+  canAccessErpPermission,
+  ERP_DATA_ACCESS_PERMISSIONS,
+  ERP_PERMISSIONS,
+  filterGiaPhuDashboardDataByPermissions,
+  getEffectiveErpPermissions,
+} from "@/lib/clerk/erp-rbac";
+import {
   approveSubcontractorContract,
   closeAttendance,
   createGiaPhuSchema,
@@ -90,8 +98,82 @@ type BulkImportItem = {
   payload?: Record<string, unknown>;
 };
 
+type ClerkAuthSession = Awaited<ReturnType<typeof auth>>;
+
+const datasetReadPermissions = {
+  projects: ERP_PERMISSIONS.crmRead,
+  catalogs: ERP_PERMISSIONS.catalogsRead,
+  staff: ERP_PERMISSIONS.workforceRead,
+  contracts: ERP_PERMISSIONS.crmRead,
+  payments: ERP_PERMISSIONS.crmRead,
+  documents: ERP_PERMISSIONS.documentsRead,
+  materials: ERP_PERMISSIONS.materialsRead,
+  attendance: ERP_PERMISSIONS.workforceRead,
+  laborNorms: ERP_PERMISSIONS.workforceRead,
+  progress: ERP_PERMISSIONS.workforceRead,
+  subcontractors: ERP_PERMISSIONS.subcontractorsRead,
+  subcontractorContracts: ERP_PERMISSIONS.subcontractorsRead,
+  operations: ERP_PERMISSIONS.subcontractorsRead,
+} as const satisfies Record<AllowedPagedDataset, (typeof ERP_PERMISSIONS)[keyof typeof ERP_PERMISSIONS]>;
+
+const mutationPermissions = {
+  saveProject: ERP_PERMISSIONS.crmManage,
+  deleteProject: ERP_PERMISSIONS.crmManage,
+  saveContract: ERP_PERMISSIONS.crmManage,
+  deleteContract: ERP_PERMISSIONS.crmManage,
+  savePayment: ERP_PERMISSIONS.crmManage,
+  deletePayment: ERP_PERMISSIONS.crmManage,
+  manageCatalog: ERP_PERMISSIONS.catalogsManage,
+  deleteCatalog: ERP_PERMISSIONS.catalogsManage,
+  manageStaff: ERP_PERMISSIONS.workforceManage,
+  deleteStaff: ERP_PERMISSIONS.workforceManage,
+  saveMaterial: ERP_PERMISSIONS.materialsManage,
+  saveZaloMaterialBreakdown: ERP_PERMISSIONS.materialsManage,
+  deleteMaterial: ERP_PERMISSIONS.materialsManage,
+  updateMaterialPrice: ERP_PERMISSIONS.materialsManage,
+  markMaterialPaid: ERP_PERMISSIONS.materialsManage,
+  saveWeeklyAttendance: ERP_PERMISSIONS.workforceManage,
+  saveStaffWeeklyAttendance: ERP_PERMISSIONS.workforceManage,
+  deleteAttendanceRow: ERP_PERMISSIONS.workforceManage,
+  closeAttendance: ERP_PERMISSIONS.workforceManage,
+  reopenAttendance: ERP_PERMISSIONS.workforceManage,
+  saveSubcontractor: ERP_PERMISSIONS.subcontractorsManage,
+  deleteSubcontractor: ERP_PERMISSIONS.subcontractorsManage,
+  saveSubcontractorContract: ERP_PERMISSIONS.subcontractorsManage,
+  deleteSubcontractorContract: ERP_PERMISSIONS.subcontractorsManage,
+  approveSubcontractorContract: ERP_PERMISSIONS.subcontractorsManage,
+  saveOperation: ERP_PERMISSIONS.subcontractorsManage,
+  deleteOperation: ERP_PERMISSIONS.subcontractorsManage,
+  saveLaborNorm: ERP_PERMISSIONS.workforceManage,
+  deleteLaborNorm: ERP_PERMISSIONS.workforceManage,
+  saveProgress: ERP_PERMISSIONS.workforceManage,
+  deleteProgress: ERP_PERMISSIONS.workforceManage,
+  saveDocument: ERP_PERMISSIONS.documentsManage,
+  deleteDocument: ERP_PERMISSIONS.documentsManage,
+  queryDocuments: ERP_PERMISSIONS.documentsRead,
+} as const;
+
 function sanitizeActionPayload(payload: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(payload).filter(([key]) => !key.startsWith("__")));
+}
+
+function forbidden(message = "Bạn không có quyền dùng chức năng này.") {
+  return NextResponse.json({ status: "error", message }, { status: 403 });
+}
+
+function canUsePermission(
+  session: ClerkAuthSession,
+  permissionKeys: Awaited<ReturnType<typeof getEffectiveErpPermissions>>,
+  permission: (typeof ERP_PERMISSIONS)[keyof typeof ERP_PERMISSIONS],
+) {
+  return canAccessErpPermission(session, permission, permissionKeys);
+}
+
+function canUseAnyErpData(
+  session: ClerkAuthSession,
+  permissionKeys: Awaited<ReturnType<typeof getEffectiveErpPermissions>>,
+) {
+  return canAccessAnyErpPermission(session, ERP_DATA_ACCESS_PERMISSIONS, permissionKeys);
 }
 
 function readActiveProjectCode(request: Request, payload?: Record<string, unknown>) {
@@ -202,9 +284,14 @@ export async function GET(request: Request) {
       );
     }
     const organizationId = session.orgId;
+    const permissionKeys = await getEffectiveErpPermissions(session);
     const { searchParams } = new URL(request.url);
 
     if (searchParams.get("view") === "projects") {
+      if (!canUseAnyErpData(session, permissionKeys)) {
+        return forbidden("Bạn chưa được cấp quyền truy cập dữ liệu ERP.");
+      }
+
       const projects = await getGiaPhuProjectList({ organizationId });
       return NextResponse.json({ status: "success", projects });
     }
@@ -213,6 +300,10 @@ export async function GET(request: Request) {
       const dataset = searchParams.get("dataset");
       if (!isPagedDataset(dataset)) {
         return NextResponse.json({ status: "error", message: "Dataset không hợp lệ." }, { status: 400 });
+      }
+
+      if (!canUsePermission(session, permissionKeys, datasetReadPermissions[dataset])) {
+        return forbidden("Bạn không có quyền xem nhóm dữ liệu này.");
       }
 
       const result = await getGiaPhuPagedRows({
@@ -235,6 +326,10 @@ export async function GET(request: Request) {
         return NextResponse.json({ status: "error", message: "Dataset không hợp lệ." }, { status: 400 });
       }
 
+      if (!canUsePermission(session, permissionKeys, datasetReadPermissions[dataset])) {
+        return forbidden("Bạn không có quyền xem bộ lọc của nhóm dữ liệu này.");
+      }
+
       const filterOptions = await getGiaPhuFilterOptions({
         dataset,
         organizationId,
@@ -250,11 +345,19 @@ export async function GET(request: Request) {
       const activeProjectCode = searchParams.get("projectCode") || readActiveProjectCode(request);
 
       if (type === "overview") {
+        if (!canUsePermission(session, permissionKeys, ERP_PERMISSIONS.overviewRead)) {
+          return forbidden("Bạn không có quyền xem tổng quan.");
+        }
+
         const insights = await getGiaPhuOverviewInsights({ activeProjectCode, organizationId });
         return NextResponse.json({ status: "success", insights });
       }
 
       if (type === "reports") {
+        if (!canUsePermission(session, permissionKeys, ERP_PERMISSIONS.reportsRead)) {
+          return forbidden("Bạn không có quyền xem báo cáo.");
+        }
+
         const insights = await getGiaPhuReportsInsights({ activeProjectCode, organizationId });
         return NextResponse.json({ status: "success", insights });
       }
@@ -266,7 +369,15 @@ export async function GET(request: Request) {
       organizationId,
       activeProjectCode: readActiveProjectCode(request),
     });
-    return NextResponse.json({ status: "success", data });
+
+    if (!canUseAnyErpData(session, permissionKeys)) {
+      return forbidden("Bạn chưa được cấp quyền truy cập dữ liệu ERP.");
+    }
+
+    return NextResponse.json({
+      status: "success",
+      data: filterGiaPhuDashboardDataByPermissions(data, session, permissionKeys),
+    });
   } catch (error) {
     return NextResponse.json(
       { status: "error", message: error instanceof Error ? error.message : String(error) },
@@ -292,9 +403,14 @@ export async function POST(request: Request) {
     const rawPayload = body.payload ?? {};
     const shouldReturnData = rawPayload.__returnData !== false;
     const payload = { ...sanitizeActionPayload(rawPayload), organizationId: session.orgId };
+    const permissionKeys = await getEffectiveErpPermissions(session);
 
     switch (body.action) {
       case "verifyProjectPin": {
+        if (!canUseAnyErpData(session, permissionKeys)) {
+          return forbidden("Bạn chưa được cấp quyền truy cập dữ liệu ERP.");
+        }
+
         const project = await verifyProjectPin(payload);
         const cookieHeader = request.headers.get("cookie") ?? "";
         const currentUnlockCookie =
@@ -328,6 +444,12 @@ export async function POST(request: Request) {
         }
 
         for (const item of items) {
+          const requiredPermission = mutationPermissions[item.action as keyof typeof mutationPermissions];
+
+          if (!requiredPermission || !canUsePermission(session, permissionKeys, requiredPermission)) {
+            return forbidden(`Bạn không có quyền import action ${item.action ?? "(trống)"}.`);
+          }
+
           const itemPayload = {
             ...sanitizeActionPayload(item.payload ?? {}),
             organizationId: session.orgId,
@@ -337,55 +459,76 @@ export async function POST(request: Request) {
         break;
       }
       case "saveProject":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveProject)) return forbidden();
         await saveProject(payload);
         break;
       case "deleteProject":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteProject)) return forbidden();
         await deleteProject(payload);
         break;
       case "saveContract":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveContract)) return forbidden();
         await saveContract(payload);
         break;
       case "deleteContract":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteContract)) return forbidden();
         await deleteContract(payload);
         break;
       case "savePayment":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.savePayment)) return forbidden();
         await savePayment(payload);
         break;
       case "deletePayment":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deletePayment)) return forbidden();
         await deletePayment(payload);
         break;
       case "manageCatalog":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.manageCatalog)) return forbidden();
         await manageCatalog(payload);
         break;
       case "deleteCatalog":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteCatalog)) return forbidden();
         await deleteCatalog(payload);
         break;
       case "manageStaff":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.manageStaff)) return forbidden();
         await manageStaff(payload);
         break;
       case "deleteStaff":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteStaff)) return forbidden();
         await deleteStaff(payload);
         break;
       case "saveMaterial":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveMaterial)) return forbidden();
         await saveMaterial(payload);
         break;
       case "saveZaloMaterialBreakdown":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveZaloMaterialBreakdown))
+          return forbidden();
         await saveZaloMaterialBreakdown(payload);
         break;
       case "deleteMaterial":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteMaterial)) return forbidden();
         await deleteMaterial(payload);
         break;
       case "updateMaterialPrice":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.updateMaterialPrice)) return forbidden();
         await updateMaterialPrice(payload);
         break;
       case "markMaterialPaid":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.markMaterialPaid)) return forbidden();
         await markMaterialPaid(payload);
         break;
       case "saveWeeklyAttendance": {
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveWeeklyAttendance)) return forbidden();
         const rows = await saveWeeklyAttendance(payload);
         return NextResponse.json({ status: "success", patch: { attendanceUpsert: rows } });
       }
       case "saveStaffWeeklyAttendance": {
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveStaffWeeklyAttendance)) {
+          return forbidden();
+        }
+
         const { savedRows, deletedIds } = await saveStaffWeeklyAttendance(payload);
         return NextResponse.json({
           status: "success",
@@ -393,55 +536,78 @@ export async function POST(request: Request) {
         });
       }
       case "deleteAttendanceRow": {
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteAttendanceRow)) return forbidden();
         const ids = await deleteAttendanceRow(payload);
         return NextResponse.json({ status: "success", patch: { attendanceDeleteIds: ids } });
       }
       case "closeAttendance":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.closeAttendance)) return forbidden();
         await closeAttendance(payload);
         break;
       case "reopenAttendance":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.reopenAttendance)) return forbidden();
         await reopenAttendance(payload);
         break;
       case "saveSubcontractor":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveSubcontractor)) return forbidden();
         await saveSubcontractor(payload);
         break;
       case "deleteSubcontractor":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteSubcontractor)) return forbidden();
         await deleteSubcontractor(payload);
         break;
       case "saveSubcontractorContract":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveSubcontractorContract)) {
+          return forbidden();
+        }
         await saveSubcontractorContract(payload);
         break;
       case "deleteSubcontractorContract":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteSubcontractorContract)) {
+          return forbidden();
+        }
         await deleteSubcontractorContract(payload);
         break;
       case "approveSubcontractorContract":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.approveSubcontractorContract)) {
+          return forbidden();
+        }
         await approveSubcontractorContract(payload);
         break;
       case "saveOperation":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveOperation)) return forbidden();
         await saveOperation(payload);
         break;
       case "deleteOperation":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteOperation)) return forbidden();
         await deleteOperation(payload);
         break;
       case "saveLaborNorm":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveLaborNorm)) return forbidden();
         await saveLaborNorm(payload);
         break;
       case "deleteLaborNorm":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteLaborNorm)) return forbidden();
         await deleteLaborNorm(payload);
         break;
       case "saveProgress":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveProgress)) return forbidden();
         await saveProgress(payload);
         break;
       case "deleteProgress":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteProgress)) return forbidden();
         await deleteProgress(payload);
         break;
       case "saveDocument":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveDocument)) return forbidden();
         await saveDocument(payload);
         break;
       case "deleteDocument":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteDocument)) return forbidden();
         await deleteDocument(payload);
         break;
       case "queryDocuments": {
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.queryDocuments)) return forbidden();
         const rows = await queryDocuments(payload);
         return NextResponse.json({ status: "success", rows });
       }
@@ -457,7 +623,10 @@ export async function POST(request: Request) {
       organizationId: session.orgId,
       activeProjectCode: readActiveProjectCode(request, payload),
     });
-    return NextResponse.json({ status: "success", data });
+    return NextResponse.json({
+      status: "success",
+      data: filterGiaPhuDashboardDataByPermissions(data, session, permissionKeys),
+    });
   } catch (error) {
     return NextResponse.json(
       { status: "error", message: error instanceof Error ? error.message : String(error) },

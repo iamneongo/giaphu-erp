@@ -19,6 +19,17 @@ export const ERP_PERMISSIONS = {
 
 export type ErpPermissionKey = (typeof ERP_PERMISSIONS)[keyof typeof ERP_PERMISSIONS];
 
+export const ERP_PERMISSION_KEYS = Object.values(ERP_PERMISSIONS);
+
+const impliedPermissionGrants: Partial<Record<ErpPermissionKey, ErpPermissionKey[]>> = {
+  [ERP_PERMISSIONS.crmRead]: [ERP_PERMISSIONS.crmManage],
+  [ERP_PERMISSIONS.materialsRead]: [ERP_PERMISSIONS.materialsManage],
+  [ERP_PERMISSIONS.workforceRead]: [ERP_PERMISSIONS.workforceManage],
+  [ERP_PERMISSIONS.subcontractorsRead]: [ERP_PERMISSIONS.subcontractorsManage],
+  [ERP_PERMISSIONS.documentsRead]: [ERP_PERMISSIONS.documentsManage],
+  [ERP_PERMISSIONS.catalogsRead]: [ERP_PERMISSIONS.catalogsManage],
+};
+
 export type PermissionCatalogItem = {
   key: ErpPermissionKey;
   name: string;
@@ -135,25 +146,37 @@ export type RoleAccessContext = {
 export function canAccessClerkPermission(
   context: RoleAccessContext,
   permission: ErpPermissionKey,
-  _options?: { allowLegacyMember?: boolean },
+  options?: { allowLegacyMember?: boolean },
 ) {
   if (context.hasRole?.("org:admin")) {
     return true;
   }
 
-  if (context.hasPermission?.(permission)) {
-    return true;
+  const acceptedPermissions = [permission, ...(impliedPermissionGrants[permission] ?? [])];
+
+  for (const acceptedPermission of acceptedPermissions) {
+    if (context.hasPermission?.(acceptedPermission)) {
+      return true;
+    }
   }
 
   if (context.permissionKeys) {
-    return new Set(context.permissionKeys).has(permission);
+    const permissionSet = new Set(context.permissionKeys);
+
+    if (acceptedPermissions.some((acceptedPermission) => permissionSet.has(acceptedPermission))) {
+      return true;
+    }
   }
 
-  if (!context.orgRole) {
-    return permission !== ERP_PERMISSIONS.rolesManage;
-  }
+  return Boolean(options?.allowLegacyMember && !context.orgRole && permission !== ERP_PERMISSIONS.rolesManage);
+}
 
-  return false;
+export function canAccessAnyClerkPermission(
+  context: RoleAccessContext,
+  permissions: readonly ErpPermissionKey[] = ERP_PERMISSION_KEYS,
+  options?: { allowLegacyMember?: boolean },
+) {
+  return permissions.some((permission) => canAccessClerkPermission(context, permission, options));
 }
 
 export function getPermissionCatalogGroups() {
