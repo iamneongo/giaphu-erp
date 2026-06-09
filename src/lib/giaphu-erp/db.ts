@@ -94,7 +94,7 @@ function organizationIdFrom(value: unknown) {
 
 function requireOrganizationId(value: unknown) {
   const organizationId = organizationIdFrom(value);
-  if (!organizationId) throw new Error("Thiáº¿u tá»• chá»©c Ä‘ang hoáº¡t Ä‘á»™ng.");
+  if (!organizationId) throw new Error("Thiếu tổ chức đang hoạt động.");
   return organizationId;
 }
 
@@ -209,11 +209,11 @@ function requireNumericInput(value: unknown, label: string) {
   const raw = text(value).trim();
 
   if (!raw) {
-    throw new Error(`Thiáº¿u ${label.toLowerCase()}.`);
+    throw new Error(`Thiếu ${label.toLowerCase()}.`);
   }
 
   if (!/\d/.test(raw) || !/^-?[\d\s,.]+$/.test(raw)) {
-    throw new Error(`${label} pháº£i lÃ  sá»‘ há»£p lá»‡.`);
+    throw new Error(`${label} phải là số hợp lệ.`);
   }
 
   return parseLocalizedNumber(raw);
@@ -236,11 +236,11 @@ function requireDateInput(value: unknown, label: string) {
   const date = dateOnly(value).trim();
 
   if (!date) {
-    throw new Error(`Thiáº¿u ${label.toLowerCase()}.`);
+    throw new Error(`Thiếu ${label.toLowerCase()}.`);
   }
 
   if (dateInputTime(date) == null) {
-    throw new Error(`${label} khÃ´ng há»£p lá»‡.`);
+    throw new Error(`${label} không hợp lệ.`);
   }
 
   return date;
@@ -254,15 +254,15 @@ function assertProgressDateRules(startDate: string, planEndDate: string, confirm
   if (start == null || planEnd == null || confirmedEnd == null) return;
 
   if (planEnd < start) {
-    throw new Error("NgÃ y HT dá»± kiáº¿n khÃ´ng Ä‘Æ°á»£c nhá» hÆ¡n ngÃ y báº¯t Ä‘áº§u.");
+    throw new Error("Ngày HT dự kiến không được nhỏ hơn ngày bắt đầu.");
   }
 
   if (confirmedEnd < planEnd) {
-    throw new Error("NgÃ y HT xÃ¡c nháº­n khÃ´ng Ä‘Æ°á»£c nhá» hÆ¡n ngÃ y HT dá»± kiáº¿n.");
+    throw new Error("Ngày HT xác nhận không được nhỏ hơn ngày HT dự kiến.");
   }
 
   if (confirmedEnd < start) {
-    throw new Error("NgÃ y HT xÃ¡c nháº­n khÃ´ng Ä‘Æ°á»£c nhá» hÆ¡n ngÃ y báº¯t Ä‘áº§u.");
+    throw new Error("Ngày HT xác nhận không được nhỏ hơn ngày bắt đầu.");
   }
 }
 
@@ -352,9 +352,9 @@ function materialFromRow(row: Row): MaterialRow {
     price: number(row.price),
     debt: text(row.debt),
     status: text(row.status),
-    paymentStatus: (text(row.payment_status) || "ChÆ°a TT") as MaterialRow["paymentStatus"],
+    paymentStatus: (text(row.payment_status) || "Chưa TT") as MaterialRow["paymentStatus"],
     paymentInfo: text(row.payment_info),
-    materialType: (text(row.material_type) || "VT ChÃ­nh") as MaterialRow["materialType"],
+    materialType: (text(row.material_type) || "VT Chính") as MaterialRow["materialType"],
     supplier: text(row.supplier),
   };
 }
@@ -554,7 +554,7 @@ async function getGiaPhuSummaries(activeProjectCode?: string, organizationId?: s
     const summary = get(text(row.project_code));
     const amount = number(row.total);
     const materialType = text(row.material_type);
-    if (materialType === "VT Phá»¥") summary.materialSub += amount;
+    if (materialType === "VT Phụ") summary.materialSub += amount;
     else if (materialType === "VT MEP" || materialType === "VT MEP-HVAC") summary.materialMep += amount;
     else summary.materialMain += amount;
   }
@@ -588,7 +588,7 @@ async function createGiaPhuSchemaInternal() {
     contact text not null default '',
     referrer text not null default '',
     start_date date,
-    status text not null default 'Äang thi cÃ´ng',
+    status text not null default 'Đang thi công',
     drive_url text not null default '',
     failure_reason text not null default '',
     pin_hash text not null default '',
@@ -679,9 +679,9 @@ async function createGiaPhuSchemaInternal() {
     price numeric not null default 0,
     debt text not null default '',
     status text not null default '',
-    payment_status text not null default 'ChÆ°a TT',
+    payment_status text not null default 'Chưa TT',
     payment_info text not null default '',
-    material_type text not null default 'VT ChÃ­nh',
+    material_type text not null default 'VT Chính',
     supplier text not null default '',
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
@@ -750,7 +750,7 @@ async function createGiaPhuSchemaInternal() {
     note text not null default '',
     file_url text not null default '',
     file_id text not null default '',
-    status text not null default 'Chá» duyá»‡t',
+    status text not null default 'Chờ duyệt',
     approved_by text not null default '',
     approved_at timestamptz,
     created_at timestamptz not null default now(),
@@ -1417,10 +1417,10 @@ function emptyMonthlyPoint(month: string) {
 
 function buildBreakdownFromRows(rows: Row[]) {
   const labels: Record<string, string> = {
-    materials: "Váº­t tÆ°",
-    labor: "NhÃ¢n cÃ´ng",
-    subcontractors: "Tháº§u phá»¥",
-    operations: "Váº­n hÃ nh",
+    materials: "Vật tư",
+    labor: "Nhân công",
+    subcontractors: "Thầu phụ",
+    operations: "Vận hành",
   };
   const total = rows.reduce((sum, row) => sum + number(row.value), 0) || 1;
 
@@ -1439,7 +1439,7 @@ function percentChange(current: number, previous: number) {
 }
 
 function normalizeWeek(value: unknown) {
-  return text(value) || "ChÆ°a rÃµ";
+  return text(value) || "Chưa rõ";
 }
 
 function compareWeekDesc(a: string, b: string) {
@@ -1538,7 +1538,7 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
     sql`select 'operations' as key, count(*)::int as rows, coalesce(sum(amount), 0)::float8 as value from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
     sql`select coalesce(sum(value), 0)::float8 as total from gp_contracts where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
     sql`select coalesce(sum(amount), 0)::float8 as total from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
-    sql`select coalesce(sum(quantity * price), 0)::float8 as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> 'ÄÃ£ TT'`,
+    sql`select coalesce(sum(quantity * price), 0)::float8 as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> 'Đã TT'`,
     sql`
       select
         (
@@ -1564,10 +1564,10 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(advance), 0)::float8 as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select to_char(coalesce(payment_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select coalesce(category, 'KhÃ¡c') as category, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select coalesce(category, 'KhÃ¡c') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select coalesce(category, 'KhÃ¡c') as category, coalesce(sum(advance), 0)::float8 as subcontractors from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select coalesce(description, 'KhÃ¡c') as category, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(advance), 0)::float8 as subcontractors from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(description, 'Khác') as category, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select id, material_name, material_code, supplier, category, quantity, price, work_date from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 5`,
     sql`select id, note, amount, payment_date from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by payment_date desc nulls last, id desc limit 5`,
     sql`select id, contractor_name, category, note, advance, work_date from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 5`,
@@ -1598,7 +1598,7 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
     { category: string; total: number; materials: number; labor: number; subcontractors: number; operations: number }
   >();
   const ensureCategory = (category: string) => {
-    const key = category || "KhÃ¡c";
+    const key = category || "Khác";
     const current = categoryMap.get(key) ?? {
       category: key,
       total: 0,
@@ -1634,32 +1634,32 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
   const recentActivities = [
     ...(recentMaterialRows as Row[]).map((row) => ({
       id: `material-${number(row.id)}`,
-      type: "Váº­t tÆ°",
-      title: text(row.material_name) || text(row.material_code) || "Phiáº¿u váº­t tÆ°",
-      subtitle: text(row.supplier) || text(row.category) || "ChÆ°a phÃ¢n loáº¡i",
+      type: "Vật tư",
+      title: text(row.material_name) || text(row.material_code) || "Phiếu vật tư",
+      subtitle: text(row.supplier) || text(row.category) || "Chưa phân loại",
       amount: number(row.quantity) * number(row.price),
       date: dateOnly(row.work_date),
     })),
     ...(recentPaymentRows as Row[]).map((row) => ({
       id: `payment-${number(row.id)}`,
-      type: "Thu tiá»n",
-      title: text(row.note) || "Phiáº¿u thu cÃ´ng trÃ¬nh",
+      type: "Thu tiền",
+      title: text(row.note) || "Phiếu thu công trình",
       subtitle: activeProjectCode,
       amount: number(row.amount),
       date: dateOnly(row.payment_date),
     })),
     ...(recentSubcontractorRows as Row[]).map((row) => ({
       id: `subcontractor-${number(row.id)}`,
-      type: "Tháº§u phá»¥",
-      title: text(row.contractor_name) || "Táº¡m á»©ng tháº§u phá»¥",
-      subtitle: text(row.category) || text(row.note) || "ChÆ°a ghi chÃº",
+      type: "Thầu phụ",
+      title: text(row.contractor_name) || "Tạm ứng thầu phụ",
+      subtitle: text(row.category) || text(row.note) || "Chưa ghi chú",
       amount: number(row.advance),
       date: dateOnly(row.work_date),
     })),
     ...(recentOperationRows as Row[]).map((row) => ({
       id: `operation-${number(row.id)}`,
-      type: "Váº­n hÃ nh",
-      title: text(row.description) || "Chi phÃ­ váº­n hÃ nh",
+      type: "Vận hành",
+      title: text(row.description) || "Chi phí vận hành",
       subtitle: activeProjectCode,
       amount: number(row.amount),
       date: dateOnly(row.work_date),
@@ -1675,10 +1675,10 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
   const previousCost = previous.materials + previous.labor + previous.subcontractors + previous.operations;
   const totalCost = breakdown.reduce((sum, row) => sum + row.value, 0);
   const materialMainCost = (materialTypeRows as Row[])
-    .filter((row) => text(row.material_type) === "VT ChÃ­nh")
+    .filter((row) => text(row.material_type) === "VT Chính")
     .reduce((sum, row) => sum + number(row.value), 0);
   const materialSubCost = (materialTypeRows as Row[])
-    .filter((row) => text(row.material_type) !== "VT ChÃ­nh")
+    .filter((row) => text(row.material_type) !== "VT Chính")
     .reduce((sum, row) => sum + number(row.value), 0);
   const laborCost = number((laborBreakdown as Row[])[0]?.value);
   const subcontractorCost = number((subcontractorBreakdown as Row[])[0]?.value);
@@ -1754,12 +1754,12 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
     weeklySubcontractorRows,
     weeklyOperationRows,
   ] = await Promise.all([
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT ChÃ­nh' group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select null::text as month, 0::float8 as value where false`,
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select to_char(coalesce(payment_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT ChÃ­nh' group by 1`,
+    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
     sql`select week, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select null::text as week, 0::float8 as subcontractors where false`,
     sql`select week, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
@@ -1808,21 +1808,21 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
   const breakdown = [
     {
       key: "materials",
-      label: "VT ChÃ­nh",
+      label: "VT Chính",
       value: overview.headline.materialMainCost,
       rows: 0,
       share: totalCost ? (overview.headline.materialMainCost / totalCost) * 100 : 0,
     },
     {
       key: "labor",
-      label: "NhÃ¢n cÃ´ng",
+      label: "Nhân công",
       value: overview.headline.laborCost,
       rows: 0,
       share: totalCost ? (overview.headline.laborCost / totalCost) * 100 : 0,
     },
     {
       key: "operations",
-      label: "Váº­n hÃ nh",
+      label: "Vận hành",
       value: overview.headline.operationCost,
       rows: 0,
       share: totalCost ? (overview.headline.operationCost / totalCost) * 100 : 0,
@@ -1975,7 +1975,7 @@ export async function getGiaPhuReportsData(
   const materialWhere = sql`
     organization_id = ${organizationId}
     and project_code = ${activeProjectCode}
-    and material_type = 'VT ChÃ­nh'
+    and material_type = 'VT Chính'
     ${materialState.search ? sql`and lower(concat_ws(' ', week, shift, category, material_code, material_name, unit, debt, status, payment_status, payment_info, supplier)) like lower(${materialPattern})` : sql``}
     ${materialWeekFilter ? sql`and week = ${materialWeekFilter}` : sql``}
     ${materialCategoryFilter ? sql`and category = ${materialCategoryFilter}` : sql``}
@@ -2017,17 +2017,17 @@ export async function getGiaPhuReportsData(
     sql`select count(*)::int as rows, coalesce(sum(amount), 0)::float8 as value from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
     sql`select coalesce(sum(value), 0)::float8 as total from gp_contracts where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
     sql`select coalesce(sum(amount), 0)::float8 as total from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
-    sql`select coalesce(sum(quantity * price), 0)::float8 as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> 'ÄÃ£ TT'`,
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT ChÃ­nh' group by 1`,
+    sql`select coalesce(sum(quantity * price), 0)::float8 as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> 'Đã TT'`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select to_char(coalesce(payment_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT ChÃ­nh' group by 1`,
+    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
     sql`select week, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select week, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select coalesce(category, 'KhÃ¡c') as category, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT ChÃ­nh' group by 1`,
-    sql`select coalesce(category, 'KhÃ¡c') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select coalesce(description, 'KhÃ¡c') as category, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(description, 'Khác') as category, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`
       select *, count(*) over()::int as __total
       from gp_attendance
@@ -2061,9 +2061,9 @@ export async function getGiaPhuReportsData(
     `,
     sql`
       select
-        ARRAY(select distinct week from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT ChÃ­nh' and week <> '' order by week desc limit 300) as week,
-        ARRAY(select distinct category from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT ChÃ­nh' and category <> '' order by category asc limit 300) as category,
-        ARRAY(select distinct supplier from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT ChÃ­nh' and supplier <> '' order by supplier asc limit 300) as supplier
+        ARRAY(select distinct week from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' and week <> '' order by week desc limit 300) as week,
+        ARRAY(select distinct category from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' and category <> '' order by category asc limit 300) as category,
+        ARRAY(select distinct supplier from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' and supplier <> '' order by supplier asc limit 300) as supplier
     `,
     sql`
       select ARRAY(select distinct week from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' order by week desc limit 300) as week
@@ -2113,7 +2113,7 @@ export async function getGiaPhuReportsData(
     { category: string; total: number; materials: number; labor: number; subcontractors: number; operations: number }
   >();
   const ensureCategory = (category: string) => {
-    const key = category || "KhÃ¡c";
+    const key = category || "Khác";
     const current = categoryMap.get(key) ?? {
       category: key,
       total: 0,
@@ -2142,7 +2142,7 @@ export async function getGiaPhuReportsData(
   }
 
   const materialMainCost = (materialTypeRows as Row[])
-    .filter((row) => text(row.material_type) === "VT ChÃ­nh")
+    .filter((row) => text(row.material_type) === "VT Chính")
     .reduce((sum, row) => sum + number(row.value), 0);
   const laborCost = number((laborTotalRows as Row[])[0]?.value);
   const operationCost = number((operationTotalRows as Row[])[0]?.value);
@@ -2150,11 +2150,11 @@ export async function getGiaPhuReportsData(
   const contractValue = number((contractRows as Row[])[0]?.total);
   const collectedCash = number((paymentRows as Row[])[0]?.total);
   const reportCostRows = [
-    { key: "materials", label: "VT ChÃ­nh", value: materialMainCost, rows: 0 },
-    { key: "labor", label: "NhÃ¢n cÃ´ng", value: laborCost, rows: number((laborTotalRows as Row[])[0]?.rows) },
+    { key: "materials", label: "VT Chính", value: materialMainCost, rows: 0 },
+    { key: "labor", label: "Nhân công", value: laborCost, rows: number((laborTotalRows as Row[])[0]?.rows) },
     {
       key: "operations",
-      label: "Váº­n hÃ nh",
+      label: "Vận hành",
       value: operationCost,
       rows: number((operationTotalRows as Row[])[0]?.rows),
     },
@@ -2292,7 +2292,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     const whereFilters = sql`
       ${teamFilter ? sql`and team = ${teamFilter}` : sql``}
       ${positionFilter ? sql`and position = ${positionFilter}` : sql``}
-      ${resignedFilter ? sql`and resigned = ${resignedFilter === "ÄÃ£ nghá»‰ viá»‡c"}` : sql``}
+      ${resignedFilter ? sql`and resigned = ${resignedFilter === "Đã nghỉ việc"}` : sql``}
     `;
     const [countRows, rows] = await Promise.all([
       sql`select count(*)::int as total from gp_staff where organization_id = ${organizationId} ${whereSearch} ${whereFilters}`,
@@ -2374,7 +2374,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     const hasFileFilter = filterValue("has_file");
     const whereFilters = sql`
       ${typeFilter ? sql`and doc_type = ${typeFilter}` : sql``}
-      ${hasFileFilter ? sql`and (file_data <> '') = ${hasFileFilter === "ÄÃ£ táº£i"}` : sql``}
+      ${hasFileFilter ? sql`and (file_data <> '') = ${hasFileFilter === "Đã tải"}` : sql``}
     `;
     const selectDocumentFields = sql`
       id,
@@ -2667,8 +2667,8 @@ export async function getGiaPhuFilterOptions(options: {
       team: distinctOptions(teamRows),
       position: distinctOptions(positionRows),
       resigned: [
-        { label: "Äang lÃ m", value: "Äang lÃ m" },
-        { label: "ÄÃ£ nghá»‰ viá»‡c", value: "ÄÃ£ nghá»‰ viá»‡c" },
+        { label: "Đang làm", value: "Đang làm" },
+        { label: "Đã nghỉ việc", value: "Đã nghỉ việc" },
       ],
     };
   }
@@ -2684,8 +2684,8 @@ export async function getGiaPhuFilterOptions(options: {
     return {
       doc_type: distinctOptions(typeRows),
       has_file: [
-        { label: "ÄÃ£ táº£i", value: "ÄÃ£ táº£i" },
-        { label: "Thiáº¿u tá»‡p", value: "Thiáº¿u tá»‡p" },
+        { label: "Đã tải", value: "Đã tải" },
+        { label: "Thiếu tệp", value: "Thiếu tệp" },
       ],
     };
   }
@@ -2772,7 +2772,7 @@ export async function saveProject(payload: Record<string, unknown>) {
   const organizationId = requireOrganizationId(payload.organizationId);
   const code = text(payload.code).trim();
   const name = text(payload.name).trim();
-  if (!code || !name) throw new Error("Thiáº¿u mÃ£ hoáº·c tÃªn cÃ´ng trÃ¬nh.");
+  if (!code || !name) throw new Error("Thiếu mã hoặc tên công trình.");
   const pinHash = await hashProjectPin(payload.pin ?? payload.projectPin);
   const originalCode = text(payload.originalCode).trim();
 
@@ -2788,7 +2788,7 @@ export async function saveProject(payload: Record<string, unknown>) {
           contact = ${text(payload.contact)},
           referrer = ${text(payload.referrer)},
           start_date = ${dateOnly(payload.startDate) || null},
-          status = ${text(payload.status) || "Äang thi cÃ´ng"},
+          status = ${text(payload.status) || "Đang thi công"},
           failure_reason = ${text(payload.failureReason)},
           pin_hash = case when ${pinHash} <> '' then ${pinHash} else pin_hash end,
           updated_at = now()
@@ -2816,7 +2816,7 @@ export async function saveProject(payload: Record<string, unknown>) {
 
   await sql`
     insert into gp_projects (code, organization_id, name, owner, contact, referrer, start_date, status, failure_reason, pin_hash, updated_at)
-    values (${code}, ${organizationId}, ${name}, ${text(payload.owner)}, ${text(payload.contact)}, ${text(payload.referrer)}, ${dateOnly(payload.startDate) || null}, ${text(payload.status) || "Äang thi cÃ´ng"}, ${text(payload.failureReason)}, ${pinHash}, now())
+    values (${code}, ${organizationId}, ${name}, ${text(payload.owner)}, ${text(payload.contact)}, ${text(payload.referrer)}, ${dateOnly(payload.startDate) || null}, ${text(payload.status) || "Đang thi công"}, ${text(payload.failureReason)}, ${pinHash}, now())
   `;
 }
 
@@ -2846,7 +2846,7 @@ export async function deleteProject(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const code = text(payload.code).trim();
-  if (!code) throw new Error("Thiáº¿u mÃ£ cÃ´ng trÃ¬nh Ä‘á»ƒ xÃ³a.");
+  if (!code) throw new Error("Thiếu mã công trình để xóa.");
   await sql`delete from gp_projects where organization_id = ${organizationId} and code = ${code}`;
 }
 
@@ -3027,9 +3027,9 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   if (!catalogKinds.includes(kind)) throw new Error("Loại danh mục không hợp lệ.");
   const labels = catalogFieldLabels[kind];
   const name = text(payload.name).trim();
-  if (!name) throw new Error(`Thiáº¿u ${labels.name.toLowerCase()}.`);
+  if (!name) throw new Error(`Thiếu ${labels.name.toLowerCase()}.`);
   const code = normalizeCatalogCode(text(payload.code).trim() || (await getNextCatalogCode(kind, organizationId)));
-  if (!code) throw new Error(`Thiáº¿u ${labels.code.toLowerCase()}.`);
+  if (!code) throw new Error(`Thiếu ${labels.code.toLowerCase()}.`);
   const unit = text(payload.unit).trim();
   const supplier = kind === "vatTu" || kind === "vatTuPhu" ? text(payload.supplier).trim() : "";
   const contact = text(payload.contact).trim();
@@ -3098,9 +3098,8 @@ export async function manageStaff(payload: Record<string, unknown>) {
   const resigned = bool(payload.resigned);
   const offDate = dateOnly(payload.offDate);
 
-  if (!name) throw new Error("Thiáº¿u tÃªn nhÃ¢n sá»±.");
-  if (resigned && !offDate)
-    throw new Error("Vui lÃ²ng chá»n thá»i gian nghá»‰ khi Ä‘Ã¡nh dáº¥u nhÃ¢n sá»± Ä‘Ã£ nghá»‰ viá»‡c.");
+  if (!name) throw new Error("Thiếu tên nhân sự.");
+  if (resigned && !offDate) throw new Error("Vui lòng chọn thời gian nghỉ khi đánh dấu nhân sự đã nghỉ việc.");
 
   const existingRows = (await sql`select organization_id from gp_staff where id = ${id} limit 1`) as Row[];
   const existingOrgId = text(existingRows[0]?.organization_id);
@@ -3124,9 +3123,7 @@ export async function manageStaff(payload: Record<string, unknown>) {
 }
 
 export async function deleteStaff(_payload: Record<string, unknown>) {
-  throw new Error(
-    "KhÃ´ng thá»ƒ xÃ³a nhÃ¢n sá»±. HÃ£y Ä‘Ã¡nh dáº¥u ÄÃ£ nghá»‰ viá»‡c vÃ  chá»n thá»i gian nghá»‰ Ä‘á»ƒ lÆ°u trá»¯ há»“ sÆ¡ nhÃ¢n sá»±.",
-  );
+  throw new Error("Không thể xóa nhân sự. Hãy đánh dấu Đã nghỉ việc và chọn thời gian nghỉ để lưu trữ hồ sơ nhân sự.");
 }
 
 export async function saveMaterial(payload: Record<string, unknown>) {
@@ -3151,9 +3148,9 @@ export async function saveMaterial(payload: Record<string, unknown>) {
           price = ${price},
           debt = ${text(payload.debt)},
           status = ${text(payload.status)},
-          payment_status = ${text(payload.paymentStatus) || "ChÆ°a TT"},
+          payment_status = ${text(payload.paymentStatus) || "Chưa TT"},
           payment_info = ${text(payload.paymentInfo)},
-          material_type = ${text(payload.materialType) || "VT ChÃ­nh"},
+          material_type = ${text(payload.materialType) || "VT Chính"},
           supplier = ${text(payload.supplier)},
           updated_at = now()
       where organization_id = ${organizationId} and id = ${id}
@@ -3169,8 +3166,8 @@ export async function saveMaterial(payload: Record<string, unknown>) {
     values (
       ${date}, ${text(payload.week) || weekFromDate(date)}, ${text(payload.shift)}, ${organizationId}, ${text(payload.projectCode)}, ${text(payload.category)},
       ${text(payload.materialCode)}, ${text(payload.materialName)}, ${quantity}, ${text(payload.unit)}, ${price},
-      ${text(payload.debt)}, ${text(payload.status)}, ${text(payload.paymentStatus) || "ChÆ°a TT"}, ${text(payload.paymentInfo)},
-      ${text(payload.materialType) || "VT ChÃ­nh"}, ${text(payload.supplier)}
+      ${text(payload.debt)}, ${text(payload.status)}, ${text(payload.paymentStatus) || "Chưa TT"}, ${text(payload.paymentInfo)},
+      ${text(payload.materialType) || "VT Chính"}, ${text(payload.supplier)}
     )
   `;
 }
@@ -3179,15 +3176,14 @@ export async function saveZaloMaterialBreakdown(payload: Record<string, unknown>
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const projectCode = text(payload.projectCode).trim();
-  const materialType = text(payload.materialType).trim() || "VT ChÃ­nh";
+  const materialType = text(payload.materialType).trim() || "VT Chính";
   const rows = Array.isArray(payload.rows) ? payload.rows : [];
 
-  if (!projectCode) throw new Error("Thiáº¿u cÃ´ng trÃ¬nh.");
-  if (!rows.length) throw new Error("ChÆ°a cÃ³ dÃ²ng phÃ¢n rÃ£ Zalo há»£p lá»‡.");
-  if (rows.length > 500)
-    throw new Error("Má»—i láº§n chá»‰ nÃªn nháº­p tá»‘i Ä‘a 500 dÃ²ng Ä‘á»ƒ há»‡ thá»‘ng xá»­ lÃ½ á»•n Ä‘á»‹nh.");
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!rows.length) throw new Error("Chưa có dòng phân rã Zalo hợp lệ.");
+  if (rows.length > 500) throw new Error("Mỗi lần chỉ nên nhập tối đa 500 dòng để hệ thống xử lý ổn định.");
 
-  if (materialType === "VT ChÃ­nh") {
+  if (materialType === "VT Chính") {
     const catalogRows =
       await sql`select name from gp_catalog_items where organization_id = ${organizationId} and kind = 'vatTu'`;
     const catalogKeys = new Set((catalogRows as Row[]).map((row) => materialCatalogKey(row.name)).filter(Boolean));
@@ -3197,7 +3193,7 @@ export async function saveZaloMaterialBreakdown(payload: Record<string, unknown>
       .filter((materialName) => materialName && !catalogKeys.has(materialCatalogKey(materialName)));
 
     if (missingMaterials.length) {
-      throw new Error(`Váº­t tÆ° chÃ­nh chÆ°a khá»›p danh má»¥c cÃ´ng ty: ${missingMaterials.slice(0, 5).join(", ")}`);
+      throw new Error(`Vật tư chính chưa khớp danh mục công ty: ${missingMaterials.slice(0, 5).join(", ")}`);
     }
   }
 
@@ -3228,8 +3224,8 @@ export async function saveZaloMaterialBreakdown(payload: Record<string, unknown>
 
     if (!materialName) continue;
     if (quantity <= 0) continue;
-    if (!category) throw new Error(`Thiáº¿u háº¡ng má»¥c cho váº­t tÆ° ${materialName}.`);
-    if (!unit) throw new Error(`Thiáº¿u Ä‘Æ¡n vá»‹ cho váº­t tÆ° ${materialName}.`);
+    if (!category) throw new Error(`Thiếu hạng mục cho vật tư ${materialName}.`);
+    if (!unit) throw new Error(`Thiếu đơn vị cho vật tư ${materialName}.`);
 
     preparedRows.push({
       date,
@@ -3242,8 +3238,8 @@ export async function saveZaloMaterialBreakdown(payload: Record<string, unknown>
       unit,
       price: money(row.price),
       debt: text(row.debt),
-      status: text(row.status) || "Nháº­p tá»« phÃ¢n rÃ£ Zalo",
-      payment_status: text(row.paymentStatus) || text(payload.paymentStatus) || "ChÆ°a TT",
+      status: text(row.status) || "Nhập từ phân rã Zalo",
+      payment_status: text(row.paymentStatus) || text(payload.paymentStatus) || "Chưa TT",
       payment_info: text(row.paymentInfo) || text(payload.paymentInfo),
       supplier: text(row.supplier) || text(payload.supplier),
     });
@@ -3319,8 +3315,8 @@ export async function markMaterialPaid(payload: Record<string, unknown>) {
 
   await sql`
     update gp_materials
-    set payment_status = 'ÄÃ£ TT',
-        payment_info = ${text(payload.paymentInfo) || `ÄÃ£ TT Â· ${dateOnly(new Date())}`},
+    set payment_status = 'Đã TT',
+        payment_info = ${text(payload.paymentInfo) || `Đã TT · ${dateOnly(new Date())}`},
         updated_at = now()
     where organization_id = ${organizationId} and id = any(${ids})
   `;
@@ -3331,45 +3327,44 @@ export async function saveWeeklyAttendance(payload: Record<string, unknown>) {
   const organizationId = requireOrganizationId(payload.organizationId);
   const rows = Array.isArray(payload.rows) ? (payload.rows as Record<string, unknown>[]) : [payload];
   const savedRows: AttendanceRow[] = [];
-  const firstDate = requireDateInput(rows[0]?.date ?? payload.date, "NgÃ y cháº¥m cÃ´ng");
+  const firstDate = requireDateInput(rows[0]?.date ?? payload.date, "Ngày chấm công");
   const projectCode = text(payload.projectCode || rows[0]?.projectCode).trim();
   const category = text(payload.category || rows[0]?.category).trim();
   const week = weekFromDate(firstDate);
 
-  if (!projectCode) throw new Error("Thiáº¿u cÃ´ng trÃ¬nh.");
-  if (!category) throw new Error("Thiáº¿u háº¡ng má»¥c.");
-  if (!week) throw new Error("Tuáº§n cháº¥m cÃ´ng khÃ´ng há»£p lá»‡.");
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+  if (!week) throw new Error("Tuần chấm công không hợp lệ.");
 
   const lockKey = attendanceLockKey(organizationId, projectCode, week, category);
   const [lock] =
     (await sql`select status from gp_attendance_locks where organization_id = ${organizationId} and lock_key = ${lockKey}`) as Row[];
-  if (text(lock?.status) === "CLOSED")
-    throw new Error("Tuáº§n/háº¡ng má»¥c Ä‘Ã£ káº¿t sá»•, khÃ´ng thá»ƒ sá»­a cháº¥m cÃ´ng.");
+  if (text(lock?.status) === "CLOSED") throw new Error("Tuần/hạng mục đã kết sổ, không thể sửa chấm công.");
 
   if (Array.isArray(payload.rows)) {
     await sql`delete from gp_attendance where organization_id = ${organizationId} and project_code = ${projectCode} and week = ${week} and category = ${category}`;
   }
 
   for (const row of rows) {
-    const date = requireDateInput(row.date, "NgÃ y cháº¥m cÃ´ng");
+    const date = requireDateInput(row.date, "Ngày chấm công");
     const rowWeek = weekFromDate(date);
     const shift = text(row.shift).trim();
     const staffName = text(row.staffName).trim();
     const position = text(row.position).trim();
     const status = text(row.status).trim();
-    const halfDaySalary = requireNumericInput(row.halfDaySalary, "LÆ°Æ¡ng 1/2 ngÃ y");
-    const coefficient = requireNumericInput(row.coefficient, "Há»‡ sá»‘");
-    const allowance = requireNumericInput(row.allowance, "Phá»¥ cáº¥p");
-    const overtimeHours = requireNumericInput(row.overtimeHours, "OT giá»");
-    const overtimeAmount = requireNumericInput(row.overtimeAmount, "OT tiá»n");
+    const halfDaySalary = requireNumericInput(row.halfDaySalary, "Lương 1/2 ngày");
+    const coefficient = requireNumericInput(row.coefficient, "Hệ số");
+    const allowance = requireNumericInput(row.allowance, "Phụ cấp");
+    const overtimeHours = requireNumericInput(row.overtimeHours, "OT giờ");
+    const overtimeAmount = requireNumericInput(row.overtimeAmount, "OT tiền");
     const total = money(row.total) || halfDaySalary * coefficient + allowance + overtimeAmount;
     const id = number(row.id);
 
-    if (rowWeek !== week) throw new Error("CÃ¡c dÃ²ng cháº¥m cÃ´ng pháº£i cÃ¹ng tuáº§n.");
-    if (!shift) throw new Error("Thiáº¿u ca.");
-    if (!staffName) throw new Error("Thiáº¿u nhÃ¢n sá»±.");
-    if (!position) throw new Error("Thiáº¿u chá»©c vá»¥.");
-    if (!status) throw new Error("Thiáº¿u tráº¡ng thÃ¡i.");
+    if (rowWeek !== week) throw new Error("Các dòng chấm công phải cùng tuần.");
+    if (!shift) throw new Error("Thiếu ca.");
+    if (!staffName) throw new Error("Thiếu nhân sự.");
+    if (!position) throw new Error("Thiếu chức vụ.");
+    if (!status) throw new Error("Thiếu trạng thái.");
 
     if (id > 0) {
       const [savedRow] = (await sql`
@@ -3423,22 +3418,22 @@ export async function saveStaffWeeklyAttendance(payload: Record<string, unknown>
   const category = text(payload.category).trim();
   const staffName = text(payload.staffName).trim();
   const preparedRows = rows.map((row) => {
-    const date = requireDateInput(row.date, "NgÃ y cháº¥m cÃ´ng");
+    const date = requireDateInput(row.date, "Ngày chấm công");
     const rowWeek = weekFromDate(date);
     const shift = text(row.shift).trim();
     const position = text(row.position).trim();
     const status = text(row.status).trim();
-    const halfDaySalary = requireNumericInput(row.halfDaySalary, "LÆ°Æ¡ng ngÃ y");
-    const coefficient = requireNumericInput(row.coefficient, "Há»‡ sá»‘");
-    const allowance = requireNumericInput(row.allowance, "Phá»¥ cáº¥p");
-    const overtimeHours = requireNumericInput(row.overtimeHours, "OT giá»");
-    const overtimeAmount = requireNumericInput(row.overtimeAmount, "OT tiá»n");
+    const halfDaySalary = requireNumericInput(row.halfDaySalary, "Lương ngày");
+    const coefficient = requireNumericInput(row.coefficient, "Hệ số");
+    const allowance = requireNumericInput(row.allowance, "Phụ cấp");
+    const overtimeHours = requireNumericInput(row.overtimeHours, "OT giờ");
+    const overtimeAmount = requireNumericInput(row.overtimeAmount, "OT tiền");
     const total = money(row.total) || halfDaySalary * coefficient + allowance + overtimeAmount;
 
-    if (rowWeek !== week) throw new Error("CÃ¡c dÃ²ng cháº¥m cÃ´ng pháº£i cÃ¹ng tuáº§n.");
-    if (!shift) throw new Error("Thiáº¿u ca.");
-    if (!position) throw new Error("Thiáº¿u chá»©c vá»¥.");
-    if (!status) throw new Error("Thiáº¿u tráº¡ng thÃ¡i.");
+    if (rowWeek !== week) throw new Error("Các dòng chấm công phải cùng tuần.");
+    if (!shift) throw new Error("Thiếu ca.");
+    if (!position) throw new Error("Thiếu chức vụ.");
+    if (!status) throw new Error("Thiếu trạng thái.");
 
     return {
       date,
@@ -3454,18 +3449,17 @@ export async function saveStaffWeeklyAttendance(payload: Record<string, unknown>
     };
   });
 
-  if (!projectCode) throw new Error("Thiáº¿u cÃ´ng trÃ¬nh.");
-  if (!week) throw new Error("Tuáº§n cháº¥m cÃ´ng khÃ´ng há»£p lá»‡.");
-  if (!category) throw new Error("Thiáº¿u háº¡ng má»¥c.");
-  if (!staffName) throw new Error("Thiáº¿u nhÃ¢n sá»±.");
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!week) throw new Error("Tuần chấm công không hợp lệ.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+  if (!staffName) throw new Error("Thiếu nhân sự.");
 
   async function persist(database: ReturnType<typeof getSql>) {
     const savedRows: AttendanceRow[] = [];
     const lockKey = attendanceLockKey(organizationId, projectCode, week, category);
     const [lock] =
       (await database`select status from gp_attendance_locks where organization_id = ${organizationId} and lock_key = ${lockKey}`) as Row[];
-    if (text(lock?.status) === "CLOSED")
-      throw new Error("Tuáº§n/háº¡ng má»¥c Ä‘Ã£ káº¿t sá»•, khÃ´ng thá»ƒ sá»­a cháº¥m cÃ´ng.");
+    if (text(lock?.status) === "CLOSED") throw new Error("Tuần/hạng mục đã kết sổ, không thể sửa chấm công.");
 
     const existingRows = (await database`
       select id
@@ -3554,15 +3548,14 @@ export async function deleteAttendanceRow(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = number(payload.id);
-  if (!id) throw new Error("Thiáº¿u dÃ²ng cháº¥m cÃ´ng Ä‘á»ƒ xÃ³a.");
+  if (!id) throw new Error("Thiếu dòng chấm công để xóa.");
   const [row] =
     (await sql`select project_code, week, category from gp_attendance where organization_id = ${organizationId} and id = ${id}`) as Row[];
   if (!row) return;
   const lockKey = attendanceLockKey(organizationId, text(row.project_code), text(row.week), text(row.category));
   const [lock] =
     (await sql`select status from gp_attendance_locks where organization_id = ${organizationId} and lock_key = ${lockKey}`) as Row[];
-  if (text(lock?.status) === "CLOSED")
-    throw new Error("Tuáº§n/háº¡ng má»¥c Ä‘Ã£ káº¿t sá»•, khÃ´ng thá»ƒ xÃ³a cháº¥m cÃ´ng.");
+  if (text(lock?.status) === "CLOSED") throw new Error("Tuần/hạng mục đã kết sổ, không thể xóa chấm công.");
   await sql`delete from gp_attendance where organization_id = ${organizationId} and id = ${id}`;
   return [id];
 }
@@ -3681,7 +3674,7 @@ export async function saveSubcontractorContract(payload: Record<string, unknown>
           note = ${text(payload.note)},
           file_url = ${text(payload.fileUrl)},
           file_id = ${text(payload.fileId)},
-          status = ${text(payload.status) || "Chá» duyá»‡t"},
+          status = ${text(payload.status) || "Chờ duyệt"},
           updated_at = now()
       where organization_id = ${organizationId} and id = ${id}
     `;
@@ -3690,7 +3683,7 @@ export async function saveSubcontractorContract(payload: Record<string, unknown>
 
   await sql`
     insert into gp_subcontractor_contracts (organization_id, project_code, contractor_name, approved_cost, note, file_url, file_id, status, updated_at)
-    values (${organizationId}, ${text(payload.projectCode)}, ${text(payload.contractorName)}, ${money(payload.approvedCost)}, ${text(payload.note)}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, ${text(payload.status) || "Chá» duyá»‡t"}, now())
+    values (${organizationId}, ${text(payload.projectCode)}, ${text(payload.contractorName)}, ${money(payload.approvedCost)}, ${text(payload.note)}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, ${text(payload.status) || "Chờ duyệt"}, now())
     on conflict (organization_id, project_code, lower(contractor_name)) do update set
       approved_cost = excluded.approved_cost,
       note = excluded.note,
@@ -3712,7 +3705,7 @@ export async function approveSubcontractorContract(payload: Record<string, unkno
   const organizationId = requireOrganizationId(payload.organizationId);
   await sql`
     update gp_subcontractor_contracts
-    set status = 'ÄÃ£ duyá»‡t', approved_by = ${text(payload.by) || "Admin"}, approved_at = now(), updated_at = now()
+    set status = 'Đã duyệt', approved_by = ${text(payload.by) || "Admin"}, approved_at = now(), updated_at = now()
     where organization_id = ${organizationId} and project_code = ${text(payload.projectCode)} and lower(contractor_name) = lower(${text(payload.contractorName)})
   `;
 }
@@ -3755,11 +3748,11 @@ export async function saveLaborNorm(payload: Record<string, unknown>) {
   const id = number(payload.id);
   const projectCode = text(payload.projectCode).trim();
   const category = text(payload.category).trim();
-  const workdays = requireNumericInput(payload.workdays, "Sá»‘ cÃ´ng Ä‘á»‹nh má»©c");
-  const cost = requireNumericInput(payload.cost, "Chi phÃ­ Ä‘á»‹nh má»©c");
+  const workdays = requireNumericInput(payload.workdays, "Số công định mức");
+  const cost = requireNumericInput(payload.cost, "Chi phí định mức");
 
-  if (!projectCode) throw new Error("Thiáº¿u cÃ´ng trÃ¬nh.");
-  if (!category) throw new Error("Thiáº¿u háº¡ng má»¥c.");
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!category) throw new Error("Thiếu hạng mục.");
 
   if (id > 0) {
     await sql`
@@ -3797,17 +3790,17 @@ export async function saveProgress(payload: Record<string, unknown>) {
   const id = number(payload.id);
   const projectCode = text(payload.projectCode).trim();
   const category = text(payload.category).trim();
-  const startDate = requireDateInput(payload.startDate, "NgÃ y báº¯t Ä‘áº§u");
-  const durationDays = Math.round(requireNumericInput(payload.durationDays, "Sá»‘ ngÃ y"));
-  const workdays = requireNumericInput(payload.workdays, "Sá»‘ cÃ´ng");
-  const planEndDate = requireDateInput(payload.planEndDate, "NgÃ y HT dá»± kiáº¿n");
-  const confirmedEndDate = requireDateInput(payload.confirmedEndDate, "NgÃ y HT xÃ¡c nháº­n");
+  const startDate = requireDateInput(payload.startDate, "Ngày bắt đầu");
+  const durationDays = Math.round(requireNumericInput(payload.durationDays, "Số ngày"));
+  const workdays = requireNumericInput(payload.workdays, "Số công");
+  const planEndDate = requireDateInput(payload.planEndDate, "Ngày HT dự kiến");
+  const confirmedEndDate = requireDateInput(payload.confirmedEndDate, "Ngày HT xác nhận");
   const evaluation = text(payload.evaluation).trim();
 
-  if (!projectCode) throw new Error("Thiáº¿u cÃ´ng trÃ¬nh.");
-  if (!category) throw new Error("Thiáº¿u háº¡ng má»¥c.");
-  if (durationDays <= 0) throw new Error("Sá»‘ ngÃ y pháº£i lá»›n hÆ¡n 0.");
-  if (workdays <= 0) throw new Error("Sá»‘ cÃ´ng pháº£i lá»›n hÆ¡n 0.");
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+  if (durationDays <= 0) throw new Error("Số ngày phải lớn hơn 0.");
+  if (workdays <= 0) throw new Error("Số công phải lớn hơn 0.");
 
   assertProgressDateRules(startDate, planEndDate, confirmedEndDate);
 
@@ -3872,10 +3865,10 @@ export async function saveDocument(payload: Record<string, unknown>) {
   const note = text(payload.note).trim();
   const previewText = text(payload.previewText).trim();
 
-  if (!projectCode) throw new Error("Thiáº¿u cÃ´ng trÃ¬nh.");
-  if (!docType) throw new Error("Thiáº¿u loáº¡i há»“ sÆ¡.");
-  if (!fileName) throw new Error("Thiáº¿u tÃªn file.");
-  if (id <= 0 && !hasFileData) throw new Error("Vui lÃ²ng chá»n tá»‡p há»“ sÆ¡.");
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!docType) throw new Error("Thiếu loại hồ sơ.");
+  if (!fileName) throw new Error("Thiếu tên file.");
+  if (id <= 0 && !hasFileData) throw new Error("Vui lòng chọn tệp hồ sơ.");
 
   if (id > 0) {
     if (hasFileData) {
@@ -3999,10 +3992,10 @@ export async function getDocumentFile(payload: Record<string, unknown>) {
   `) as Row[];
   const document = rows[0];
 
-  if (!document) throw new Error("KhÃ´ng tÃ¬m tháº¥y há»“ sÆ¡.");
+  if (!document) throw new Error("Không tìm thấy hồ sơ.");
 
   const fileData = text(document.file_data);
-  if (!fileData) throw new Error("Há»“ sÆ¡ nÃ y chÆ°a cÃ³ tá»‡p Ä‘Ã­nh kÃ¨m. Vui lÃ²ng táº£i tá»‡p lÃªn láº¡i.");
+  if (!fileData) throw new Error("Hồ sơ này chưa có tệp đính kèm. Vui lòng tải tệp lên lại.");
 
   return {
     fileName: text(document.file_name) || "ho-so",
