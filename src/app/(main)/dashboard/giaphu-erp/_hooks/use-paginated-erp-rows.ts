@@ -43,6 +43,7 @@ export function usePaginatedErpRows<T>({
   const [rows, setRows] = React.useState<T[]>(initialRows);
   const [total, setTotal] = React.useState(initialRows.length);
   const [loading, setLoading] = React.useState(false);
+  const [exportLoading, setExportLoading] = React.useState(false);
   const [filterOptionsLoading, setFilterOptionsLoading] = React.useState(false);
   const [filterOptions, setFilterOptions] = React.useState<Record<string, Array<{ label: string; value: string }>>>({});
   const [refreshToken, setRefreshToken] = React.useState(0);
@@ -214,16 +215,52 @@ export function usePaginatedErpRows<T>({
     });
   }, []);
 
+  const getExportRows = React.useCallback(
+    async (exportState: DataTableServerState) => {
+      if (!enabled) return [];
+      if (projectScopedDatasets.has(dataset) && !projectCode) return [];
+
+      setExportLoading(true);
+      try {
+        const result = await fetchGiaPhuPagedRows<T>({
+          dataset,
+          projectCode,
+          pageIndex: 0,
+          pageSize: Math.max(exportState.pageSize, total, 1),
+          search: exportState.query,
+          sorting: exportState.sorting,
+          filters: { ...fixedFilters, ...exportState.filters },
+        });
+
+        return result.rows;
+      } finally {
+        setExportLoading(false);
+      }
+    },
+    [dataset, enabled, fixedFilters, projectCode, total],
+  );
+
   const serverSide = React.useMemo(
     () => ({
       rowCount: total,
       loading,
+      exportLoading,
       filterOptionsLoading,
       filterOptions,
       onFilterOptionsRequest: loadFilterOptions,
       onStateChange,
+      getExportRows,
     }),
-    [filterOptions, filterOptionsLoading, loadFilterOptions, loading, onStateChange, total],
+    [
+      exportLoading,
+      filterOptions,
+      filterOptionsLoading,
+      getExportRows,
+      loadFilterOptions,
+      loading,
+      onStateChange,
+      total,
+    ],
   );
 
   const refresh = React.useCallback(() => setRefreshToken((current) => current + 1), []);

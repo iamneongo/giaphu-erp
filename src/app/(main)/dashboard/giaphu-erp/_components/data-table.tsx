@@ -82,10 +82,12 @@ export interface DataTableServerState {
 export interface DataTableServerSideOptions {
   rowCount: number;
   loading?: boolean;
+  exportLoading?: boolean;
   filterOptionsLoading?: boolean;
   filterOptions?: Record<string, Array<{ label: string; value: string }>>;
   onFilterOptionsRequest?: () => void;
   onStateChange: (state: DataTableServerState) => void;
+  getExportRows?: (state: DataTableServerState) => Promise<unknown[]>;
 }
 
 function normalizeText(value: unknown) {
@@ -505,6 +507,7 @@ export function DataTable<T>({
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] = React.useState<Record<string, boolean>>({});
   const [filterValues, setFilterValues] = React.useState<Record<string, string>>({});
+  const [exporting, setExporting] = React.useState(false);
   const handleSortingChange = React.useCallback<React.Dispatch<React.SetStateAction<SortingState>>>((updater) => {
     setSorting((currentSorting) => {
       const nextSorting = typeof updater === "function" ? updater(currentSorting) : updater;
@@ -698,12 +701,22 @@ export function DataTable<T>({
     [skeletonColumnCount],
   );
 
-  function exportExcel() {
+  async function exportExcel() {
     const exportColumns = normalizedColumns.filter(
       (column) => column.key !== "actions" && table.getColumn(column.key)?.getIsVisible() !== false,
     );
     const header = exportColumns.map((column) => column.label);
-    const body = filteredRows.map((row) =>
+    const rowsToExport =
+      isServerSide && serverSide?.getExportRows
+        ? ((await serverSide.getExportRows({
+            pageIndex: 0,
+            pageSize: Math.max(serverSide.rowCount, 1),
+            query: debouncedQuery,
+            sorting,
+            filters: filterValues,
+          })) as T[])
+        : filteredRows;
+    const body = rowsToExport.map((row) =>
       exportColumns.map((column) =>
         column.exportValue
           ? column.exportValue(row)
@@ -719,6 +732,17 @@ export function DataTable<T>({
     link.download = `${exportFileName}.xlsx`;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function handleExportExcel() {
+    if (exporting || serverSide?.exportLoading) return;
+
+    setExporting(true);
+    try {
+      await exportExcel();
+    } finally {
+      setExporting(false);
+    }
   }
 
   function getDetailHref(row: T) {
@@ -803,9 +827,15 @@ export function DataTable<T>({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="outline" size="sm" className="h-9 rounded-md" onClick={exportExcel}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 rounded-md"
+            disabled={exporting || serverSide?.exportLoading}
+            onClick={() => void handleExportExcel()}
+          >
             <Download />
-            Xuất Excel
+            {exporting || serverSide?.exportLoading ? "Đang xuất..." : "Xuất Excel"}
           </Button>
         </div>
       </div>
