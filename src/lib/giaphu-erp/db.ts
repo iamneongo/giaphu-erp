@@ -118,11 +118,11 @@ function emptyDashboardData(): GiaPhuDashboardData {
 }
 
 const catalogFieldLabels: Record<CatalogItem["kind"], { code: string; name: string }> = {
-  hangMuc: { code: "MÃ£ háº¡ng má»¥c", name: "TÃªn háº¡ng má»¥c" },
-  vatTu: { code: "MÃ£ váº­t tÆ°", name: "TÃªn váº­t tÆ°" },
-  vatTuPhu: { code: "MÃ£ váº­t tÆ° phá»¥", name: "TÃªn váº­t tÆ° phá»¥" },
-  thauPhu: { code: "MÃ£ tháº§u phá»¥", name: "TÃªn tháº§u phá»¥" },
-  nhaCungCap: { code: "MÃ£ nhÃ  cung cáº¥p", name: "TÃªn nhÃ  cung cáº¥p" },
+  hangMuc: { code: "Mã hạng mục", name: "Tên hạng mục" },
+  vatTu: { code: "Mã vật tư", name: "Tên vật tư" },
+  vatTuPhu: { code: "Mã vật tư phụ", name: "Tên vật tư phụ" },
+  thauPhu: { code: "Mã thầu phụ", name: "Tên thầu phụ" },
+  nhaCungCap: { code: "Mã nhà cung cấp", name: "Tên nhà cung cấp" },
 };
 
 function text(value: unknown) {
@@ -2950,10 +2950,10 @@ async function assertUniqueCatalogItem({
 
   const labels = catalogFieldLabels[kind];
   if (text(duplicate.code).toLowerCase() === code.toLowerCase()) {
-    throw new Error(`${labels.code} "${code}" Ä‘Ã£ tá»“n táº¡i. Vui lÃ²ng nháº­p mÃ£ khÃ¡c.`);
+    throw new Error(`${labels.code} "${code}" đã tồn tại. Vui lòng nhập mã khác.`);
   }
 
-  throw new Error(`${labels.name} "${name}" Ä‘Ã£ tá»“n táº¡i. Vui lÃ²ng nháº­p tÃªn khÃ¡c.`);
+  throw new Error(`${labels.name} "${name}" đã tồn tại. Vui lòng nhập tên khác.`);
 }
 
 async function assertCatalogCanBeDeleted(item: CatalogItem, organizationId: string) {
@@ -2975,22 +2975,20 @@ async function assertCatalogCanBeDeleted(item: CatalogItem, organizationId: stri
   const usedInLaborNorms = number((laborNormUsage as Row[])[0]?.count);
   const usedInProgress = number((progressUsage as Row[])[0]?.count);
   const usedIn = [
-    usedInLaborNorms > 0 ? "NhÃ¢n cÃ´ng > Äá»‹nh má»©c" : "",
-    usedInProgress > 0 ? "NhÃ¢n cÃ´ng > Tiáº¿n Ä‘á»™" : "",
+    usedInLaborNorms > 0 ? "Nhân công > Định mức" : "",
+    usedInProgress > 0 ? "Nhân công > Tiến độ" : "",
   ].filter(Boolean);
 
   if (!usedIn.length) return;
 
-  throw new Error(
-    `KhÃ´ng thá»ƒ xÃ³a háº¡ng má»¥c "${item.name}" vÃ¬ Ä‘ang Ä‘Æ°á»£c sá»­ dá»¥ng á»Ÿ ${usedIn.join(" vÃ  ")}.`,
-  );
+  throw new Error(`Không thể xóa hạng mục "${item.name}" vì đang được sử dụng ở ${usedIn.join(" và ")}.`);
 }
 
 export async function manageCatalog(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const kind = text(payload.kind) as CatalogItem["kind"];
-  if (!catalogKinds.includes(kind)) throw new Error("Loáº¡i danh má»¥c khÃ´ng há»£p lá»‡.");
+  if (!catalogKinds.includes(kind)) throw new Error("Loại danh mục không hợp lệ.");
   const labels = catalogFieldLabels[kind];
   const name = text(payload.name).trim();
   if (!name) throw new Error(`Thiáº¿u ${labels.name.toLowerCase()}.`);
@@ -3006,8 +3004,8 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   }
 
   if (kind === "thauPhu" || kind === "nhaCungCap") {
-    if (!contact) throw new Error("Thiáº¿u liÃªn há»‡.");
-    if (!isValidPhoneNumber(contact)) throw new Error("LiÃªn há»‡ pháº£i lÃ  sá»‘ Ä‘iá»‡n thoáº¡i há»£p lá»‡.");
+    if (!contact) throw new Error("Thiếu liên hệ.");
+    if (!isValidPhoneNumber(contact)) throw new Error("Liên hệ phải là số điện thoại hợp lệ.");
   }
 
   const nextId = `${organizationId}:${kind}:${code}`;
@@ -3050,7 +3048,7 @@ export async function deleteCatalog(payload: Record<string, unknown>) {
   `) as Row[];
   const item = rows[0] ? catalogFromRow(rows[0]) : null;
 
-  if (!item) throw new Error("KhÃ´ng tÃ¬m tháº¥y danh má»¥c cáº§n xÃ³a.");
+  if (!item) throw new Error("Không tìm thấy danh mục cần xóa.");
 
   await assertCatalogCanBeDeleted(item, organizationId);
   await sql`delete from gp_catalog_items where organization_id = ${organizationId} and id = ${id}`;
