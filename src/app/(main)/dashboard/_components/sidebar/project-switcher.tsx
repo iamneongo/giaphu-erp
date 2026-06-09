@@ -62,7 +62,9 @@ export function ProjectSwitcher({
   const [pendingProjectPath, setPendingProjectPath] = React.useState("");
   const [pending, startTransition] = React.useTransition();
 
-  const activeProject = projects.find((project) => project.code === activeProjectCode) ?? projects[0];
+  const routeProject = projects.find((project) => project.id === routeProjectId || project.code === routeProjectId);
+  const activeProject = routeProject ?? projects.find((project) => project.code === activeProjectCode) ?? projects[0];
+  const currentActiveProjectCode = activeProject?.code ?? activeProjectCode;
 
   const loadProjects = React.useCallback(() => {
     startTransition(async () => {
@@ -222,11 +224,11 @@ export function ProjectSwitcher({
             {projects.map((project) => (
               <DropdownMenuItem
                 key={project.code}
-                className={cn("gap-2", project.code === activeProjectCode && "bg-accent/50")}
+                className={cn("gap-2", project.code === currentActiveProjectCode && "bg-accent/50")}
                 onSelect={(event) => {
                   event.preventDefault();
                   const targetPath = switchProjectInPath(pathname, project.id);
-                  if (project.code === activeProjectCode) return;
+                  if (project.code === currentActiveProjectCode) return;
 
                   if (project.hasPin) {
                     setPinProject(project);
@@ -244,7 +246,7 @@ export function ProjectSwitcher({
                   <span className="truncate font-medium">{project.name}</span>
                   <span className="truncate text-muted-foreground text-xs">{project.code}</span>
                 </div>
-                <Check className={cn("size-4 opacity-0", project.code === activeProjectCode && "opacity-100")} />
+                <Check className={cn("size-4 opacity-0", project.code === currentActiveProjectCode && "opacity-100")} />
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
