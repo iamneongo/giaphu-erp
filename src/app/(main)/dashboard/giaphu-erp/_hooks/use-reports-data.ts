@@ -85,6 +85,7 @@ function emptyReportsData(projectCode: string): GiaPhuReportsData {
 export function useReportsData(projectCode: string) {
   const [data, setData] = React.useState<GiaPhuReportsData>(() => emptyReportsData(projectCode));
   const [loading, setLoading] = React.useState(Boolean(projectCode));
+  const [exportingTable, setExportingTable] = React.useState<ReportTableKey | null>(null);
   const [states, setStates] = React.useState<Record<ReportTableKey, Required<ReportTableState>>>({
     labor: defaultTableState,
     materials: defaultTableState,
@@ -135,32 +136,75 @@ export function useReportsData(projectCode: string) {
     });
   }, []);
 
+  const getExportRows = React.useCallback(
+    async <T>(key: ReportTableKey, nextState: DataTableServerState, total: number) => {
+      if (!projectCode) return [];
+
+      const reportState = toReportTableState(nextState);
+      const exportState = {
+        ...reportState,
+        pageIndex: 0,
+        pageSize: Math.max(reportState.pageSize, total, 1),
+      };
+      const tables = { [key]: exportState };
+
+      setExportingTable(key);
+      try {
+        const exportData = await fetchGiaPhuReportsData({ projectCode, tables });
+        return exportData.tables[key].rows as T[];
+      } finally {
+        setExportingTable((current) => (current === key ? null : current));
+      }
+    },
+    [projectCode],
+  );
+
   const laborServerSide = React.useMemo<DataTableServerSideOptions>(
     () => ({
       rowCount: data.tables.labor.total,
       loading,
+      exportLoading: exportingTable === "labor",
       filterOptions: data.tables.labor.filterOptions,
       onStateChange: (nextState) => setTableState("labor", nextState),
+      getExportRows: (nextState) => getExportRows<AttendanceRow>("labor", nextState, data.tables.labor.total),
     }),
-    [data.tables.labor.filterOptions, data.tables.labor.total, loading, setTableState],
+    [data.tables.labor.filterOptions, data.tables.labor.total, exportingTable, getExportRows, loading, setTableState],
   );
   const materialsServerSide = React.useMemo<DataTableServerSideOptions>(
     () => ({
       rowCount: data.tables.materials.total,
       loading,
+      exportLoading: exportingTable === "materials",
       filterOptions: data.tables.materials.filterOptions,
       onStateChange: (nextState) => setTableState("materials", nextState),
+      getExportRows: (nextState) => getExportRows<MaterialRow>("materials", nextState, data.tables.materials.total),
     }),
-    [data.tables.materials.filterOptions, data.tables.materials.total, loading, setTableState],
+    [
+      data.tables.materials.filterOptions,
+      data.tables.materials.total,
+      exportingTable,
+      getExportRows,
+      loading,
+      setTableState,
+    ],
   );
   const operationsServerSide = React.useMemo<DataTableServerSideOptions>(
     () => ({
       rowCount: data.tables.operations.total,
       loading,
+      exportLoading: exportingTable === "operations",
       filterOptions: data.tables.operations.filterOptions,
       onStateChange: (nextState) => setTableState("operations", nextState),
+      getExportRows: (nextState) => getExportRows<OperationRow>("operations", nextState, data.tables.operations.total),
     }),
-    [data.tables.operations.filterOptions, data.tables.operations.total, loading, setTableState],
+    [
+      data.tables.operations.filterOptions,
+      data.tables.operations.total,
+      exportingTable,
+      getExportRows,
+      loading,
+      setTableState,
+    ],
   );
 
   return {
