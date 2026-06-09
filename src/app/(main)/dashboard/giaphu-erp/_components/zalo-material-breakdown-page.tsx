@@ -57,7 +57,6 @@ import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, isoWeekFromDate, todayIso } from "../_lib/date-utils";
 import { catalogOptions, materialTypeOptions, uniqueOptions } from "../_lib/form-options";
 import { formatCount, formatMoney } from "../_lib/formatters";
-import { ActionDialog } from "./action-dialog";
 import { DataTable, type DataTableColumn } from "./data-table";
 import { ExcelImportDialog } from "./excel-import-dialog";
 import { ModuleHeader } from "./module-header";
@@ -302,10 +301,12 @@ function materialTotal(row: MaterialRow) {
 
 function buildSavedMaterialColumns({
   canManage,
+  getEditHref,
   runAction,
   refresh,
 }: {
   canManage: boolean;
+  getEditHref: (row: MaterialRow) => string;
   runAction: (action: string, payload: Record<string, unknown>) => Promise<unknown>;
   refresh: () => void;
 }): DataTableColumn<MaterialRow>[] {
@@ -371,18 +372,7 @@ function buildSavedMaterialColumns({
             render: (row: MaterialRow) => (
               <div className="flex justify-end">
                 <TableRowActions
-                  edit={{
-                    title: "Cập nhật đơn giá vật tư",
-                    action: "updateMaterialPrice",
-                    onAction: async (action, payload) => {
-                      await runAction(action, { ...payload, __returnData: false });
-                      refresh();
-                    },
-                    fields: [
-                      { name: "id", label: "ID", type: "hidden", value: row.id },
-                      { name: "price", label: "Đơn giá", type: "number", value: row.price },
-                    ],
-                  }}
+                  editHref={getEditHref(row)}
                   actions={[
                     {
                       label: "Đánh dấu đã TT",
@@ -531,12 +521,15 @@ export function ZaloMaterialBreakdownPage({
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.materialsManage);
   const resolvedBackHref =
     backHref ?? (pathname.replace(/\/(?:create|zalo)\/?$/, "") || "/dashboard/giaphu-erp/catalogs/vat-tu");
+  const materialListHref = pathname.replace(/\/$/, "");
+  const materialCreateHref = `${materialListHref}/new`;
+  const getMaterialEditHref = React.useCallback(
+    (row: MaterialRow) => `${materialListHref}/edit/${row.id}`,
+    [materialListHref],
+  );
   const categorySelectOptions = catalogOptions(data.catalogs.hangMuc);
   const categoryOptions = categorySelectOptions.map((option) => option.value);
   const mainMaterials = catalogOptions(data.catalogs.vatTu).map((option) => option.value);
-  const materialSelectOptions = catalogOptions(
-    materialType === "VT Chính" ? data.catalogs.vatTu : data.catalogs.vatTuPhu,
-  );
   const supplierSelectOptions = catalogOptions(data.catalogs.nhaCungCap);
   const supplierOptions = supplierSelectOptions.map((option) => option.value);
   const unitOptions = uniqueTextOptions([
@@ -570,10 +563,11 @@ export function ZaloMaterialBreakdownPage({
     () =>
       buildSavedMaterialColumns({
         canManage,
+        getEditHref: getMaterialEditHref,
         runAction,
         refresh: paginatedMaterials.refresh,
       }),
-    [canManage, paginatedMaterials.refresh, runAction],
+    [canManage, getMaterialEditHref, paginatedMaterials.refresh, runAction],
   );
   const savedMaterialWeekOptions = uniqueOptions(savedMaterialRows.map((row) => row.week));
   const savedMaterialCategoryOptions = uniqueOptions(savedMaterialRows.map((row) => row.category));
@@ -776,102 +770,12 @@ export function ZaloMaterialBreakdownPage({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            <ActionDialog
-              title={`Thêm ${materialType}`}
-              description="Nhập một dòng vật tư và lưu vào ERP."
-              button="Thêm tay"
-              icon={Plus}
-              action="saveMaterial"
-              trigger={
-                <Button size="sm" variant="outline">
-                  <Plus />
-                  Thêm tay
-                </Button>
-              }
-              onAction={async (action, payload) => {
-                const result = await runAction(action, { ...payload, __returnData: false });
-                paginatedMaterials.refresh();
-                return result;
-              }}
-              fields={[
-                { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-                { name: "materialType", label: "Loại", type: "hidden", value: materialType },
-                { name: "status", label: "Trạng thái", type: "hidden", value: "Thêm tay" },
-                { name: "date", label: "Ngày", type: "date", value: todayIso(), required: true },
-                {
-                  name: "week",
-                  label: "Tuần",
-                  value: currentIsoWeek(),
-                  deriveValue: (payload) => isoWeekFromDate(String(payload.date ?? "")) || currentIsoWeek(),
-                  readOnly: true,
-                },
-                {
-                  name: "category",
-                  label: "Hạng mục",
-                  type: "select",
-                  options: categorySelectOptions,
-                  required: true,
-                },
-                {
-                  name: "materialName",
-                  label: "Vật tư",
-                  type: "select",
-                  options: materialSelectOptions,
-                  required: true,
-                },
-                {
-                  name: "supplier",
-                  label: "NCC",
-                  type: "select",
-                  options: supplierSelectOptions,
-                  placeholder: "Chọn NCC từ danh mục",
-                  helperText: supplierSelectOptions.length
-                    ? "Lấy thông tin từ Danh mục > Nhà cung cấp."
-                    : "Chưa có NCC. Vui lòng thêm ở Danh mục > Nhà cung cấp trước.",
-                  validate: (value) => {
-                    const supplier = value.trim();
-                    if (!supplierSelectOptions.length) {
-                      return "Chưa có NCC trong danh mục. Vui lòng thêm nhà cung cấp trước.";
-                    }
-                    if (!supplier) return "Vui lòng chọn NCC từ danh mục nhà cung cấp.";
-                    if (!supplierSelectOptions.some((option) => option.value === supplier)) {
-                      return "NCC phải được chọn từ danh mục nhà cung cấp.";
-                    }
-                    return undefined;
-                  },
-                },
-                { name: "quantity", label: "Số lượng", type: "number", value: 1, required: true },
-                {
-                  name: "unit",
-                  label: "Đơn vị",
-                  type: "select",
-                  options: unitOptions.map((value) => ({ label: value, value })),
-                  required: true,
-                },
-                { name: "price", label: "Đơn giá", type: "number", value: 0 },
-                {
-                  name: "debt",
-                  label: "Công nợ",
-                  type: "select",
-                  value: "Không",
-                  options: [
-                    { label: "Không", value: "Không" },
-                    { label: "Có", value: "Có" },
-                  ],
-                },
-                {
-                  name: "paymentStatus",
-                  label: "Thanh toán",
-                  type: "select",
-                  value: "Đã TT",
-                  options: [
-                    { label: "Đã TT", value: "Đã TT" },
-                    { label: "Chưa TT", value: "Chưa TT" },
-                  ],
-                },
-                { name: "paymentInfo", label: "Ghi chú thanh toán", type: "textarea" },
-              ]}
-            />
+            <Button asChild size="sm" variant="outline">
+              <DashboardLink href={materialCreateHref}>
+                <Plus />
+                Thêm tay
+              </DashboardLink>
+            </Button>
             {rows.length ? (
               <Button disabled={pending} size="sm" onClick={saveRows}>
                 {pending ? <RefreshCw className="animate-spin" /> : <Save />}

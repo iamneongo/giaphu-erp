@@ -9,6 +9,7 @@ import { DetailPageContent } from "../../../giaphu-erp/_components/detail-page-c
 import { DocumentsWorkspace } from "../../../giaphu-erp/_components/documents-workspace";
 import { ExcelImportPage } from "../../../giaphu-erp/_components/excel-import-page";
 import { MaterialDebtWorkspace } from "../../../giaphu-erp/_components/material-debt-workspace";
+import { MaterialEditorPage } from "../../../giaphu-erp/_components/material-editor-page";
 import { OverviewDashboard } from "../../../giaphu-erp/_components/overview-dashboard";
 import { ReportsWorkspace } from "../../../giaphu-erp/_components/reports-workspace";
 import { SubcontractorsWorkspace } from "../../../giaphu-erp/_components/subcontractors-workspace";
@@ -88,6 +89,15 @@ export default async function ProjectPage({
           description="Nhập vật tư chính từ tin nhắn Zalo hoặc thêm thủ công."
         />
       );
+    case "materials/vat-tu-chinh/new":
+      await enforceErpRoutePermission(ERP_PERMISSIONS.materialsManage);
+      return (
+        <MaterialEditorPage
+          listHref={projectScopedPath(decodedProjectId, "/materials/vat-tu-chinh")}
+          materialType="VT Chính"
+          mode="create"
+        />
+      );
     case "materials/vat-tu-phu":
     case "materials/vat-tu-mep-hvac":
       await enforceErpRoutePermission(ERP_PERMISSIONS.materialsManage);
@@ -97,6 +107,16 @@ export default async function ProjectPage({
           initialMaterialType="VT Phụ"
           title="Vật tư phụ"
           description="Nhập vật tư phụ từ tin nhắn Zalo hoặc thêm thủ công."
+        />
+      );
+    case "materials/vat-tu-phu/new":
+    case "materials/vat-tu-mep-hvac/new":
+      await enforceErpRoutePermission(ERP_PERMISSIONS.materialsManage);
+      return (
+        <MaterialEditorPage
+          listHref={projectScopedPath(decodedProjectId, "/materials/vat-tu-phu")}
+          materialType="VT Phụ"
+          mode="create"
         />
       );
     case "materials/debt":
@@ -145,6 +165,32 @@ export default async function ProjectPage({
     const section = getCatalogSectionBySlug(path[1]);
     if (!section) notFound();
     return <CatalogsWorkspace kind={section.kind} />;
+  }
+
+  if (path[0] === "materials" && path[2] === "edit" && path[3] && !path[4]) {
+    await enforceErpRoutePermission(ERP_PERMISSIONS.materialsManage);
+
+    if (path[1] === "vat-tu-chinh") {
+      return (
+        <MaterialEditorPage
+          listHref={projectScopedPath(decodedProjectId, "/materials/vat-tu-chinh")}
+          materialId={path[3]}
+          materialType="VT Chính"
+          mode="edit"
+        />
+      );
+    }
+
+    if (path[1] === "vat-tu-phu" || path[1] === "vat-tu-mep-hvac") {
+      return (
+        <MaterialEditorPage
+          listHref={projectScopedPath(decodedProjectId, "/materials/vat-tu-phu")}
+          materialId={path[3]}
+          materialType="VT Phụ"
+          mode="edit"
+        />
+      );
+    }
   }
 
   if (path[0] === "catalogs" && path[1] && path[2] === "zalo") {

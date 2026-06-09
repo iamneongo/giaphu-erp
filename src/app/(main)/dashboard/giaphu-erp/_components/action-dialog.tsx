@@ -63,6 +63,17 @@ export function collectFormPayload(form: HTMLFormElement) {
   return payload;
 }
 
+type ActionFormProps = {
+  action: string;
+  fields: FormFieldDefinition[];
+  onAction: (action: string, payload: FormPayload) => Promise<unknown>;
+  onSubmitted?: () => void;
+  formActive?: boolean;
+  submitLabel?: string;
+  className?: string;
+  fieldGroupClassName?: string;
+};
+
 function focusField(form: HTMLFormElement, fieldName: string) {
   const control = form.elements.namedItem(fieldName);
 
@@ -200,9 +211,6 @@ export function ActionDialog({
   hideTrigger?: boolean;
 }) {
   const [internalOpen, setInternalOpen] = React.useState(initialOpen);
-  const [fieldValues, setFieldValues] = React.useState<FormPayload>(() => buildInitialValues(fields));
-  const [pending, startTransition] = React.useTransition();
-
   const resolvedOpen = open ?? internalOpen;
 
   const setResolvedOpen = React.useCallback(
@@ -222,12 +230,6 @@ export function ActionDialog({
   }, [initialOpen, open]);
 
   React.useEffect(() => {
-    if (resolvedOpen) {
-      setFieldValues(buildInitialValues(fields));
-    }
-  }, [fields, resolvedOpen]);
-
-  React.useEffect(() => {
     if (resolvedOpen) return;
 
     const timeout = window.setTimeout(() => {
@@ -238,6 +240,52 @@ export function ActionDialog({
 
     return () => window.clearTimeout(timeout);
   }, [resolvedOpen]);
+
+  return (
+    <Dialog open={resolvedOpen} onOpenChange={setResolvedOpen}>
+      {hideTrigger ? null : (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button size="sm">
+              <Icon />
+              {button}
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {description ? <DialogDescription>{description}</DialogDescription> : null}
+        </DialogHeader>
+        <ActionForm
+          action={action}
+          fields={fields}
+          formActive={resolvedOpen}
+          onAction={onAction}
+          onSubmitted={() => setResolvedOpen(false)}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function ActionForm({
+  action,
+  fields,
+  onAction,
+  onSubmitted,
+  formActive = true,
+  submitLabel = "Lưu",
+  className,
+  fieldGroupClassName = "grid gap-4 md:grid-cols-2",
+}: ActionFormProps) {
+  const [fieldValues, setFieldValues] = React.useState<FormPayload>(() => buildInitialValues(fields));
+  const [pending, startTransition] = React.useTransition();
+
+  React.useEffect(() => {
+    setFieldValues(buildInitialValues(fields));
+  }, [fields]);
 
   const updateFieldValue = React.useCallback(
     (name: string, value: string | number | boolean) => {
@@ -300,141 +348,118 @@ export function ActionDialog({
     startTransition(async () => {
       const shouldClose = await onAction(action, payload);
       if (shouldClose !== false) {
-        setResolvedOpen(false);
+        onSubmitted?.();
       }
     });
   }
 
   return (
-    <Dialog open={resolvedOpen} onOpenChange={setResolvedOpen}>
-      {hideTrigger ? null : (
-        <DialogTrigger asChild>
-          {trigger ?? (
-            <Button size="sm">
-              <Icon />
-              {button}
-            </Button>
-          )}
-        </DialogTrigger>
-      )}
-      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description ? <DialogDescription>{description}</DialogDescription> : null}
-        </DialogHeader>
-        <Form onSubmit={submit} noValidate className="space-y-4">
-          <FieldGroup className="grid gap-4 md:grid-cols-2">
-            {fields.map((field) => {
-              const fieldType = getResolvedFieldType(field);
-              const isVisible = field.visibleWhen?.(fieldValues) ?? true;
-              if (!isVisible) return null;
+    <Form onSubmit={submit} noValidate className={cn("space-y-4", className)}>
+      <FieldGroup className={fieldGroupClassName}>
+        {fields.map((field) => {
+          const fieldType = getResolvedFieldType(field);
+          const isVisible = field.visibleWhen?.(fieldValues) ?? true;
+          if (!isVisible) return null;
 
-              if (fieldType === "hidden") {
-                return (
-                  <Input
-                    key={field.name}
-                    type="hidden"
-                    name={field.name}
-                    value={String(fieldValues[field.name] ?? "")}
-                  />
-                );
-              }
+          if (fieldType === "hidden") {
+            return (
+              <Input key={field.name} type="hidden" name={field.name} value={String(fieldValues[field.name] ?? "")} />
+            );
+          }
 
-              if (fieldType === "checkbox") {
-                return (
-                  <Field key={field.name} orientation="horizontal" className="rounded-lg border p-3">
-                    <Checkbox
-                      name={field.name}
-                      checked={Boolean(fieldValues[field.name])}
-                      disabled={field.disabled}
-                      onCheckedChange={(value) => updateFieldValue(field.name, Boolean(value))}
-                    />
-                    <FieldLabel>{field.label}</FieldLabel>
-                  </Field>
-                );
-              }
+          if (fieldType === "checkbox") {
+            return (
+              <Field key={field.name} orientation="horizontal" className="rounded-lg border p-3">
+                <Checkbox
+                  name={field.name}
+                  checked={Boolean(fieldValues[field.name])}
+                  disabled={field.disabled}
+                  onCheckedChange={(value) => updateFieldValue(field.name, Boolean(value))}
+                />
+                <FieldLabel>{field.label}</FieldLabel>
+              </Field>
+            );
+          }
 
-              return (
-                <Field key={field.name} className={fieldType === "textarea" ? "md:col-span-2" : undefined}>
-                  <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
-                  {fieldType === "textarea" ? (
-                    <Textarea
-                      id={field.name}
-                      name={field.name}
-                      value={String(fieldValues[field.name] ?? "")}
-                      placeholder={field.placeholder}
-                      required={field.required}
-                      disabled={field.disabled}
-                      readOnly={field.readOnly}
-                      onChange={(event) => updateFieldValue(field.name, event.target.value)}
-                    />
-                  ) : fieldType === "date" ? (
-                    <DatePickerField
-                      name={field.name}
-                      value={fieldValues[field.name] as string | number | boolean | undefined}
-                      placeholder={field.placeholder}
-                      required={field.required}
-                      onValueChange={(value) => updateFieldValue(field.name, value)}
-                    />
-                  ) : fieldType === "file" ? (
-                    <Input
-                      accept={field.accept}
-                      disabled={field.disabled}
-                      id={field.name}
-                      name={field.name}
-                      required={field.required}
-                      type="file"
-                    />
-                  ) : fieldType === "select" ? (
-                    <SearchableFormSelect
-                      id={field.name}
-                      name={field.name}
-                      value={String(fieldValues[field.name] ?? "")}
-                      label={field.label}
-                      placeholder={field.placeholder}
-                      options={field.options ?? []}
-                      required={field.required}
-                      disabled={field.disabled}
-                      dialogOpen={resolvedOpen}
-                      onValueChange={(value) => updateFieldValue(field.name, value)}
-                    />
-                  ) : fieldType === "password" ? (
-                    <ProjectPinInput
-                      id={field.name}
-                      name={field.name}
-                      value={String(fieldValues[field.name] ?? "")}
-                      placeholder={field.placeholder}
-                      required={field.required}
-                      disabled={field.disabled}
-                      onValueChange={(value) => updateFieldValue(field.name, value)}
-                    />
-                  ) : (
-                    <Input
-                      id={field.name}
-                      name={field.name}
-                      type={fieldType}
-                      value={String(fieldValues[field.name] ?? "")}
-                      placeholder={field.placeholder}
-                      required={field.required}
-                      disabled={field.disabled}
-                      readOnly={field.readOnly}
-                      inputMode={field.inputMode}
-                      onChange={(event) => updateFieldValue(field.name, event.target.value)}
-                    />
-                  )}
-                  {field.helperText ? <p className="text-muted-foreground text-xs">{field.helperText}</p> : null}
-                </Field>
-              );
-            })}
-          </FieldGroup>
-          <DialogFooter>
-            <Button type="submit" disabled={pending}>
-              {pending ? <RefreshCw className="animate-spin" /> : <Save />}
-              Lưu
-            </Button>
-          </DialogFooter>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          return (
+            <Field key={field.name} className={fieldType === "textarea" ? "md:col-span-2" : undefined}>
+              <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
+              {fieldType === "textarea" ? (
+                <Textarea
+                  id={field.name}
+                  name={field.name}
+                  value={String(fieldValues[field.name] ?? "")}
+                  placeholder={field.placeholder}
+                  required={field.required}
+                  disabled={field.disabled}
+                  readOnly={field.readOnly}
+                  onChange={(event) => updateFieldValue(field.name, event.target.value)}
+                />
+              ) : fieldType === "date" ? (
+                <DatePickerField
+                  name={field.name}
+                  value={fieldValues[field.name] as string | number | boolean | undefined}
+                  placeholder={field.placeholder}
+                  required={field.required}
+                  onValueChange={(value) => updateFieldValue(field.name, value)}
+                />
+              ) : fieldType === "file" ? (
+                <Input
+                  accept={field.accept}
+                  disabled={field.disabled}
+                  id={field.name}
+                  name={field.name}
+                  required={field.required}
+                  type="file"
+                />
+              ) : fieldType === "select" ? (
+                <SearchableFormSelect
+                  id={field.name}
+                  name={field.name}
+                  value={String(fieldValues[field.name] ?? "")}
+                  label={field.label}
+                  placeholder={field.placeholder}
+                  options={field.options ?? []}
+                  required={field.required}
+                  disabled={field.disabled}
+                  dialogOpen={formActive}
+                  onValueChange={(value) => updateFieldValue(field.name, value)}
+                />
+              ) : fieldType === "password" ? (
+                <ProjectPinInput
+                  id={field.name}
+                  name={field.name}
+                  value={String(fieldValues[field.name] ?? "")}
+                  placeholder={field.placeholder}
+                  required={field.required}
+                  disabled={field.disabled}
+                  onValueChange={(value) => updateFieldValue(field.name, value)}
+                />
+              ) : (
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  type={fieldType}
+                  value={String(fieldValues[field.name] ?? "")}
+                  placeholder={field.placeholder}
+                  required={field.required}
+                  disabled={field.disabled}
+                  readOnly={field.readOnly}
+                  inputMode={field.inputMode}
+                  onChange={(event) => updateFieldValue(field.name, event.target.value)}
+                />
+              )}
+              {field.helperText ? <p className="text-muted-foreground text-xs">{field.helperText}</p> : null}
+            </Field>
+          );
+        })}
+      </FieldGroup>
+      <DialogFooter>
+        <Button type="submit" disabled={pending}>
+          {pending ? <RefreshCw className="animate-spin" /> : <Save />}
+          {submitLabel}
+        </Button>
+      </DialogFooter>
+    </Form>
   );
 }

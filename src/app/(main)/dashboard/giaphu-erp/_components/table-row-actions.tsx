@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import { DashboardLink } from "../../_components/dashboard-link";
 import { ActionDialog, type FormFieldDefinition, type FormPayload } from "./action-dialog";
 
 type RowActionItem = {
@@ -31,10 +32,19 @@ type EditActionConfig = {
   onAction: (action: string, payload: FormPayload) => Promise<unknown>;
 };
 
-export function TableRowActions({ edit, actions = [] }: { edit?: EditActionConfig; actions?: RowActionItem[] }) {
+export function TableRowActions({
+  edit,
+  editHref,
+  actions = [],
+}: {
+  edit?: EditActionConfig;
+  editHref?: string;
+  actions?: RowActionItem[];
+}) {
   const [editOpen, setEditOpen] = React.useState(false);
   const [pendingAction, setPendingAction] = React.useState<string | null>(null);
   const isPending = pendingAction != null;
+  const hasEditAction = Boolean(edit ?? editHref);
 
   return (
     <span data-row-action="true">
@@ -50,7 +60,14 @@ export function TableRowActions({ edit, actions = [] }: { edit?: EditActionConfi
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
-          {edit ? (
+          {editHref ? (
+            <DropdownMenuItem asChild>
+              <DashboardLink href={editHref}>
+                <Pencil />
+                Sửa
+              </DashboardLink>
+            </DropdownMenuItem>
+          ) : edit ? (
             <DropdownMenuItem
               onSelect={(event) => {
                 event.preventDefault();
@@ -61,7 +78,7 @@ export function TableRowActions({ edit, actions = [] }: { edit?: EditActionConfi
               Sửa
             </DropdownMenuItem>
           ) : null}
-          {edit && actions.length ? <DropdownMenuSeparator /> : null}
+          {hasEditAction && actions.length ? <DropdownMenuSeparator /> : null}
           {actions.map((item) => {
             const Icon = item.icon;
             const isItemPending = pendingAction === item.label;
