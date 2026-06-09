@@ -2956,7 +2956,43 @@ async function assertUniqueCatalogItem({
   throw new Error(`${labels.name} "${name}" đã tồn tại. Vui lòng nhập tên khác.`);
 }
 
+async function assertSupplierCatalogCanBeDeleted(item: CatalogItem, organizationId: string) {
+  const sql = getSql();
+  const supplierName = item.name.trim();
+  if (!supplierName) return;
+
+  const [materialUsage, materialCatalogUsage] = await Promise.all([
+    sql`
+      select count(*)::int as count
+      from gp_materials
+      where organization_id = ${organizationId} and lower(btrim(supplier)) = lower(${supplierName})
+    `,
+    sql`
+      select count(*)::int as count
+      from gp_catalog_items
+      where organization_id = ${organizationId}
+        and kind in ('vatTu', 'vatTuPhu')
+        and lower(btrim(supplier)) = lower(${supplierName})
+    `,
+  ]);
+  const usedInMaterials = number((materialUsage as Row[])[0]?.count);
+  const usedInMaterialCatalogs = number((materialCatalogUsage as Row[])[0]?.count);
+  const usedIn = [
+    usedInMaterials > 0 ? `Vật tư hiện tại (${usedInMaterials} dòng)` : "",
+    usedInMaterialCatalogs > 0 ? `Danh mục > Vật tư (${usedInMaterialCatalogs} mục)` : "",
+  ].filter(Boolean);
+
+  if (!usedIn.length) return;
+
+  throw new Error(`Không thể xóa nhà cung cấp "${item.name}" vì đang được sử dụng ở ${usedIn.join(" và ")}.`);
+}
+
 async function assertCatalogCanBeDeleted(item: CatalogItem, organizationId: string) {
+  if (item.kind === "nhaCungCap") {
+    await assertSupplierCatalogCanBeDeleted(item, organizationId);
+    return;
+  }
+
   if (item.kind !== "hangMuc") return;
 
   const sql = getSql();
