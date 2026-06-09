@@ -273,7 +273,8 @@ export function RoleManager() {
                 Danh sách vai trò
               </CardTitle>
               <CardDescription>
-                Xem role hiện có trước, sau đó vào trang riêng để tạo mới hoặc chỉnh quyền chi tiết.
+                Chỉ hiển thị role thuộc role set của workspace đang chọn, sau đó vào trang riêng để tạo mới hoặc chỉnh
+                quyền chi tiết.
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">

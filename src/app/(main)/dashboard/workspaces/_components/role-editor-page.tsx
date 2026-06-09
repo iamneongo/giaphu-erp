@@ -226,8 +226,8 @@ export function RoleEditorPage({ mode, roleId }: { mode: "create" | "edit"; role
               <CardTitle>{mode === "edit" ? "Sửa vai trò" : "Tạo vai trò mới"}</CardTitle>
               <CardDescription>
                 {mode === "edit"
-                  ? "Chỉnh thông tin và quyền ERP cho vai trò đang chọn."
-                  : "Điền thông tin vai trò rồi bật các chức năng ERP mà role này được phép dùng."}
+                  ? "Chỉnh thông tin và quyền ERP cho vai trò thuộc workspace đang chọn."
+                  : "Tạo vai trò trong role set của workspace đang chọn rồi bật các chức năng ERP được phép dùng."}
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">

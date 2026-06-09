@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 
 import type { GiaPhuDashboardData } from "../giaphu-erp/types";
-import { listOrganizationMemberships, listOrganizationRoles } from "./clerk-bapi";
+import { getOrganizationRoleSet, listOrganizationMemberships, listOrganizationRoles } from "./clerk-bapi";
 import {
   canAccessAnyClerkPermission,
   canAccessClerkPermission,
@@ -83,15 +83,21 @@ export async function getEffectiveErpPermissions(session?: ClerkAuthSession) {
   }
 
   try {
-    const [roles, memberships] = await Promise.all([
+    const [roles, memberships, roleSet] = await Promise.all([
       listOrganizationRoles(),
       listOrganizationMemberships(currentSession.orgId),
+      getOrganizationRoleSet(currentSession.orgId),
     ]);
     const membership = memberships.find((entry) => entry.publicUserData.userId === currentSession.userId);
     const roleKey = currentSession.orgRole || membership?.role || "";
+    const roleBelongsToCurrentOrganization = roleSet.roles.some((entry) => entry.key === roleKey);
 
     if (roleKey === "org:admin") {
       return allPermissions;
+    }
+
+    if (!roleBelongsToCurrentOrganization) {
+      return Array.from(permissionKeys);
     }
 
     for (const permissionKey of membership?.permissions ?? []) {

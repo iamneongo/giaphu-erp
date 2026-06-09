@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import {
+  type ClerkOrganizationRole,
+  type ClerkRoleSet,
   createOrganizationInvitation,
   createRoleWithPermissions,
   deleteOrganizationMembership,
@@ -108,6 +110,20 @@ function isAdminRole(role: string | null | undefined) {
   return role === "org:admin";
 }
 
+function getRoleSetKeys(roleSet: ClerkRoleSet) {
+  return new Set(roleSet.roles.map((role) => role.key));
+}
+
+function filterRolesByRoleSet(roles: ClerkOrganizationRole[], roleSet: ClerkRoleSet) {
+  const roleSetKeys = getRoleSetKeys(roleSet);
+  return roles.filter((role) => roleSetKeys.has(role.key));
+}
+
+function findRoleInRoleSet(roles: ClerkOrganizationRole[], roleSet: ClerkRoleSet, roleId: string) {
+  const roleSetKeys = getRoleSetKeys(roleSet);
+  return roles.find((role) => role.id === roleId && roleSetKeys.has(role.key));
+}
+
 export async function GET() {
   const session = await auth();
 
@@ -135,7 +151,7 @@ export async function GET() {
     status: "success",
     currentUserId: session.userId,
     roleSet,
-    roles,
+    roles: filterRolesByRoleSet(roles, roleSet),
     permissions,
     memberships,
     invitations,
@@ -181,8 +197,18 @@ export async function POST(request: Request) {
     }
 
     if (action === "updateRolePermissions") {
+      const [roleSet, roles] = await Promise.all([getOrganizationRoleSet(session.orgId), listOrganizationRoles()]);
+      const roleId = String(payload.roleId ?? "");
+
+      if (!findRoleInRoleSet(roles, roleSet, roleId)) {
+        return NextResponse.json(
+          { status: "error", message: "Vai trò này không thuộc workspace hiện tại." },
+          { status: 403 },
+        );
+      }
+
       const role = await updateRolePermissions({
-        roleId: String(payload.roleId ?? ""),
+        roleId,
         permissionKeys: Array.isArray(payload.permissionKeys) ? (payload.permissionKeys as ErpPermissionKey[]) : [],
       });
 
@@ -190,7 +216,22 @@ export async function POST(request: Request) {
     }
 
     if (action === "deleteRole") {
-      await deleteOrganizationRole(String(payload.roleId ?? ""));
+      const [roleSet, roles] = await Promise.all([getOrganizationRoleSet(session.orgId), listOrganizationRoles()]);
+      const roleId = String(payload.roleId ?? "");
+      const role = findRoleInRoleSet(roles, roleSet, roleId);
+
+      if (!role) {
+        return NextResponse.json(
+          { status: "error", message: "Vai trò này không thuộc workspace hiện tại." },
+          { status: 403 },
+        );
+      }
+
+      if (isAdminRole(role.key)) {
+        return NextResponse.json({ status: "error", message: "Không thể xóa role admin hệ thống." }, { status: 400 });
+      }
+
+      await deleteOrganizationRole(roleId);
       return NextResponse.json({ status: "success" });
     }
 
@@ -209,6 +250,14 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { status: "error", message: "Không tìm thấy thành viên cần cập nhật." },
           { status: 404 },
+        );
+      }
+
+      const roleSet = await getOrganizationRoleSet(session.orgId);
+      if (!getRoleSetKeys(roleSet).has(role)) {
+        return NextResponse.json(
+          { status: "error", message: "Vai trò này không thuộc workspace hiện tại." },
+          { status: 400 },
         );
       }
 
