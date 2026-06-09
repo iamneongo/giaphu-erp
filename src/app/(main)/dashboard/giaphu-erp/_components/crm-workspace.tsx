@@ -205,6 +205,12 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                               onAction: runAction,
                               fields: [
                                 {
+                                  name: "originalCode",
+                                  label: "Mã gốc",
+                                  type: "hidden",
+                                  value: project.code,
+                                },
+                                {
                                   name: "code",
                                   label: "Mã công trình",
                                   value: project.code,

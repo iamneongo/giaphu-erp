@@ -2774,27 +2774,49 @@ export async function saveProject(payload: Record<string, unknown>) {
   const name = text(payload.name).trim();
   if (!code || !name) throw new Error("Thiáº¿u mÃ£ hoáº·c tÃªn cÃ´ng trÃ¬nh.");
   const pinHash = await hashProjectPin(payload.pin ?? payload.projectPin);
+  const originalCode = text(payload.originalCode).trim();
 
-  const existingRows = (await sql`select organization_id from gp_projects where code = ${code} limit 1`) as Row[];
+  if (originalCode) {
+    if (originalCode.toLowerCase() !== code.toLowerCase()) {
+      throw new Error("Không thể đổi mã công trình sau khi đã tạo. Vui lòng tạo công trình mới nếu cần mã khác.");
+    }
+
+    const updatedRows = (await sql`
+      update gp_projects
+      set name = ${name},
+          owner = ${text(payload.owner)},
+          contact = ${text(payload.contact)},
+          referrer = ${text(payload.referrer)},
+          start_date = ${dateOnly(payload.startDate) || null},
+          status = ${text(payload.status) || "Äang thi cÃ´ng"},
+          failure_reason = ${text(payload.failureReason)},
+          pin_hash = case when ${pinHash} <> '' then ${pinHash} else pin_hash end,
+          updated_at = now()
+      where organization_id = ${organizationId} and lower(code) = lower(${originalCode})
+      returning code
+    `) as Row[];
+
+    if (!updatedRows.length) {
+      throw new Error("Không tìm thấy công trình cần sửa trong workspace hiện tại.");
+    }
+
+    return;
+  }
+
+  const existingRows =
+    (await sql`select code, organization_id from gp_projects where lower(code) = lower(${code}) limit 1`) as Row[];
   const existingOrgId = text(existingRows[0]?.organization_id);
-  if (existingRows.length && existingOrgId !== organizationId) {
-    throw new Error("Mã công trình đã tồn tại ở tổ chức khác hoặc chưa được gán tổ chức. Vui lòng dùng mã khác.");
+  if (existingRows.length) {
+    if (existingOrgId === organizationId) {
+      throw new Error(`Mã công trình "${code}" đã tồn tại trong workspace này. Vui lòng dùng mã khác.`);
+    }
+
+    throw new Error(`Mã công trình "${code}" đã tồn tại ở workspace khác hoặc dữ liệu cũ. Vui lòng dùng mã khác.`);
   }
 
   await sql`
     insert into gp_projects (code, organization_id, name, owner, contact, referrer, start_date, status, failure_reason, pin_hash, updated_at)
     values (${code}, ${organizationId}, ${name}, ${text(payload.owner)}, ${text(payload.contact)}, ${text(payload.referrer)}, ${dateOnly(payload.startDate) || null}, ${text(payload.status) || "Äang thi cÃ´ng"}, ${text(payload.failureReason)}, ${pinHash}, now())
-    on conflict (code) do update set
-      organization_id = excluded.organization_id,
-      name = excluded.name,
-      owner = excluded.owner,
-      contact = excluded.contact,
-      referrer = excluded.referrer,
-      start_date = excluded.start_date,
-      status = excluded.status,
-      failure_reason = excluded.failure_reason,
-      pin_hash = case when excluded.pin_hash <> '' then excluded.pin_hash else gp_projects.pin_hash end,
-      updated_at = now()
   `;
 }
 
