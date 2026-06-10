@@ -88,7 +88,7 @@ export type ClerkOrganizationInvitation = {
   status?: "pending" | "accepted" | "revoked" | "expired";
 };
 
-export const CLERK_UNLIMITED_MEMBERSHIPS = 0;
+export const CLERK_COMPANY_MEMBER_LIMIT = 0;
 
 const CLERK_BAPI_BASE = "https://api.clerk.com/v1";
 
@@ -160,19 +160,33 @@ export async function setOrganizationMembershipLimit(input: {
   const client = await clerkClient();
 
   return client.organizations.updateOrganization(input.organizationId, {
-    maxAllowedMemberships: input.maxAllowedMemberships ?? CLERK_UNLIMITED_MEMBERSHIPS,
+    maxAllowedMemberships: input.maxAllowedMemberships ?? CLERK_COMPANY_MEMBER_LIMIT,
   });
 }
 
-export async function ensureUnlimitedOrganizationMemberships(organizationId: string) {
+export async function setDefaultOrganizationMembershipLimit(maxAllowedMemberships = CLERK_COMPANY_MEMBER_LIMIT) {
+  const client = await clerkClient();
+
+  return client.instance.updateOrganizationSettings({
+    maxAllowedMemberships,
+  });
+}
+
+export async function ensureCompanyMembershipLimit(organizationId: string) {
   const client = await clerkClient();
   const organization = await client.organizations.getOrganization({ organizationId });
 
-  if (organization.maxAllowedMemberships === CLERK_UNLIMITED_MEMBERSHIPS) {
+  if (organization.maxAllowedMemberships === CLERK_COMPANY_MEMBER_LIMIT) {
+    await setDefaultOrganizationMembershipLimit();
     return organization;
   }
 
-  return setOrganizationMembershipLimit({ organizationId });
+  const [, nextOrganization] = await Promise.all([
+    setDefaultOrganizationMembershipLimit(),
+    setOrganizationMembershipLimit({ organizationId }),
+  ]);
+
+  return nextOrganization;
 }
 
 export async function createOrganizationPermission(input: { key: string; name: string; description: string }) {
@@ -375,7 +389,7 @@ export async function createOrganizationInvitation(input: {
   redirectUrl?: string;
 }) {
   const client = await clerkClient();
-  await ensureUnlimitedOrganizationMemberships(input.organizationId);
+  await ensureCompanyMembershipLimit(input.organizationId);
 
   return client.organizations.createOrganizationInvitation({
     organizationId: input.organizationId,

@@ -24,6 +24,7 @@ type TeamManagerResponse = {
   status: "success" | "error";
   message?: string;
   currentUserId?: string;
+  currentUserIsAdmin?: boolean;
   roleSet?: ClerkRoleSet;
   roles?: ClerkOrganizationRole[];
   memberships?: ClerkOrganizationMembership[];
@@ -88,6 +89,7 @@ export function TeamManager() {
   const [invitations, setInvitations] = React.useState<ClerkOrganizationInvitation[]>([]);
   const [roleSet, setRoleSet] = React.useState<ClerkRoleSet | null>(null);
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
+  const [currentUserIsAdmin, setCurrentUserIsAdmin] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const debouncedSearch = useDebouncedValue(search);
   const [inviteEmail, setInviteEmail] = React.useState("");
@@ -154,6 +156,7 @@ export function TeamManager() {
       setInvitations(payload.invitations ?? []);
       setRoleSet(payload.roleSet ?? null);
       setCurrentUserId(payload.currentUserId ?? null);
+      setCurrentUserIsAdmin(Boolean(payload.currentUserIsAdmin));
       setInviteRole((current) => {
         if (current && !hiddenRoleKeys.has(current)) return current;
 
@@ -394,56 +397,70 @@ export function TeamManager() {
         </TabsContent>
 
         <TabsContent value="invitations" className="space-y-4">
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle className="flex items-center gap-2">
-                <MailPlus className="size-5" />
-                Mời thành viên
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form
-                className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(12rem,220px)_auto] xl:items-end"
-                onSubmit={(event) => void inviteMember(event)}
-              >
-                <div className="min-w-0 space-y-2">
-                  <Label htmlFor="invite-email">Email</Label>
-                  <Input
-                    id="invite-email"
-                    className="w-full"
-                    type="email"
-                    placeholder="name@company.com"
-                    value={inviteEmail}
-                    onChange={(event) => setInviteEmail(event.target.value)}
-                  />
-                </div>
-                <div className="min-w-0 space-y-2">
-                  <Label>Vai trò</Label>
-                  <Select value={inviteRole} onValueChange={setInviteRole}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Chọn vai trò" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableRoles.map((role) => (
-                        <SelectItem key={role.id} value={role.key}>
-                          {role.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label aria-hidden="true" className="invisible">
-                    Gửi lời mời
-                  </Label>
-                  <Button type="submit" className="w-full whitespace-nowrap xl:min-w-32" disabled={submitting}>
-                    <MailPlus />
-                    Gửi lời mời
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+          {currentUserIsAdmin ? (
+            <Card>
+              <CardHeader className="border-b">
+                <CardTitle className="flex items-center gap-2">
+                  <MailPlus className="size-5" />
+                  Mời thành viên
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form
+                  className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(12rem,220px)_auto] xl:items-end"
+                  onSubmit={(event) => void inviteMember(event)}
+                >
+                  <div className="min-w-0 space-y-2">
+                    <Label htmlFor="invite-email">Email</Label>
+                    <Input
+                      id="invite-email"
+                      className="w-full"
+                      type="email"
+                      placeholder="name@company.com"
+                      value={inviteEmail}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                    />
+                  </div>
+                  <div className="min-w-0 space-y-2">
+                    <Label>Vai trò</Label>
+                    <Select value={inviteRole} onValueChange={setInviteRole}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Chọn vai trò" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableRoles.map((role) => (
+                          <SelectItem key={role.id} value={role.key}>
+                            {role.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label aria-hidden="true" className="invisible">
+                      Gửi lời mời
+                    </Label>
+                    <Button type="submit" className="w-full whitespace-nowrap xl:min-w-32" disabled={submitting}>
+                      <MailPlus />
+                      Gửi lời mời
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader className="border-b">
+                <CardTitle className="flex items-center gap-2">
+                  <MailPlus className="size-5" />
+                  Mời thành viên
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-muted-foreground text-sm">
+                Chỉ admin workspace mới có quyền mời thành viên mới.
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="border-b">

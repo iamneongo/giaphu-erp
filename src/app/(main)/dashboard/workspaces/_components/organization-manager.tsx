@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { useRouter } from "next/navigation";
 
-import { useAuth, useOrganizationList } from "@clerk/nextjs";
+import { useAuth, useOrganizationList, useUser } from "@clerk/nextjs";
 import { Building2, CheckCircle2, Loader2, MailCheck, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +25,10 @@ function getInitials(name: string) {
     .join("");
 }
 
+function normalizeEmail(email: string | null | undefined) {
+  return email?.trim().toLowerCase() ?? "";
+}
+
 async function setUnlimitedMemberships(organizationId: string) {
   const response = await fetch("/api/clerk-organizations", {
     method: "POST",
@@ -42,6 +46,7 @@ async function setUnlimitedMemberships(organizationId: string) {
 export function OrganizationManager() {
   const router = useRouter();
   const { orgId } = useAuth();
+  const { user, isLoaded: isUserLoaded } = useUser();
   const [creating, setCreating] = React.useState(false);
   const [switchingOrgId, setSwitchingOrgId] = React.useState<string | null>(null);
   const [acceptingInvitationId, setAcceptingInvitationId] = React.useState<string | null>(null);
@@ -69,6 +74,10 @@ export function OrganizationManager() {
   const invitations = userInvitations?.data ?? [];
   const activeMembership = memberships.find((membership) => membership.organization.id === orgId) ?? null;
   const clerkUpdating = !isLoaded && hasLoadedClerk;
+  const userEmailSet = React.useMemo(
+    () => new Set(user?.emailAddresses.map((emailAddress) => normalizeEmail(emailAddress.emailAddress)) ?? []),
+    [user?.emailAddresses],
+  );
 
   async function handleCreateOrganization(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -95,7 +104,7 @@ export function OrganizationManager() {
       const organization = await createOrganization({ name });
       await setUnlimitedMemberships(organization.id);
       setOrganizationName("");
-      toast.success("Đã tạo tổ chức mới và mở không giới hạn thành viên.");
+      toast.success("Đã tạo tổ chức mới và mở giới hạn thành viên lớn hơn 5.");
 
       await setActive({ organization: organization.id });
       void userMemberships?.revalidate();
@@ -110,6 +119,11 @@ export function OrganizationManager() {
   async function handleAcceptInvitation(invitation: (typeof invitations)[number]) {
     if (!setActive) {
       toast.error("Clerk chưa sẵn sàng để nhận lời mời.");
+      return;
+    }
+
+    if (!user || !userEmailSet.has(normalizeEmail(invitation.emailAddress))) {
+      toast.error(`Lời mời này được gửi tới ${invitation.emailAddress}. Hãy đăng nhập đúng email để chấp nhận.`);
       return;
     }
 
@@ -184,6 +198,8 @@ export function OrganizationManager() {
           {invitations.map((invitation) => {
             const organization = invitation.publicOrganizationData;
             const isAccepting = acceptingInvitationId === invitation.id;
+            const isWrongRecipient = isUserLoaded && !userEmailSet.has(normalizeEmail(invitation.emailAddress));
+            const acceptDisabled = [isAccepting, clerkUpdating, !isUserLoaded, isWrongRecipient].some(Boolean);
 
             return (
               <div
@@ -199,6 +215,7 @@ export function OrganizationManager() {
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="truncate font-medium">{organization.name}</div>
                       <Badge variant="outline">Đang chờ</Badge>
+                      {isWrongRecipient ? <Badge variant="destructive">Sai email</Badge> : null}
                     </div>
                     <div className="text-muted-foreground text-sm">{invitation.emailAddress}</div>
                     <div className="flex flex-wrap gap-2 text-muted-foreground text-xs">
@@ -208,11 +225,7 @@ export function OrganizationManager() {
                   </div>
                 </div>
 
-                <Button
-                  type="button"
-                  disabled={isAccepting || clerkUpdating}
-                  onClick={() => void handleAcceptInvitation(invitation)}
-                >
+                <Button type="button" disabled={acceptDisabled} onClick={() => void handleAcceptInvitation(invitation)}>
                   {isAccepting ? <Loader2 className="animate-spin" /> : <MailCheck />}
                   Chấp nhận lời mời
                 </Button>

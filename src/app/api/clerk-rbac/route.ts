@@ -26,7 +26,6 @@ import {
   ERP_PERMISSIONS,
   type ErpPermissionKey,
 } from "@/lib/clerk/erp-rbac-shared";
-import { getAppOrigin } from "@/lib/site-url";
 
 function formatClerkApiError(error: unknown) {
   const fallback = error instanceof Error ? error.message : String(error);
@@ -150,6 +149,9 @@ export async function GET() {
   return NextResponse.json({
     status: "success",
     currentUserId: session.userId,
+    currentUserIsAdmin: memberships.some(
+      (membership) => membership.publicUserData.userId === session.userId && isAdminRole(membership.role),
+    ),
     roleSet,
     roles: filterRolesByRoleSet(roles, roleSet),
     permissions,
@@ -302,6 +304,14 @@ export async function POST(request: Request) {
         listOrganizationInvitations(session.orgId),
       ]);
       const normalizedEmail = normalizeEmail(emailAddress);
+      const currentMembership = memberships.find((membership) => membership.publicUserData.userId === session.userId);
+
+      if (!isAdminRole(currentMembership?.role)) {
+        return NextResponse.json(
+          { status: "error", message: "Chỉ admin workspace mới được mời thành viên." },
+          { status: 403 },
+        );
+      }
 
       if (!roleSet.roles.some((entry) => entry.key === role)) {
         return NextResponse.json(
@@ -329,7 +339,6 @@ export async function POST(request: Request) {
         emailAddress,
         role,
         inviterUserId: session.userId,
-        redirectUrl: `${getAppOrigin(request.headers, request.url)}/dashboard/workspaces/team`,
       });
 
       return NextResponse.json({ status: "success", invitation });

@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@clerk/nextjs/server";
 
-import { getOrganizationMembershipForUser, setOrganizationMembershipLimit } from "@/lib/clerk/clerk-bapi";
+import {
+  getOrganizationMembershipForUser,
+  setDefaultOrganizationMembershipLimit,
+  setOrganizationMembershipLimit,
+} from "@/lib/clerk/clerk-bapi";
 
 function isAdminRole(role: string | null | undefined) {
   return role === "org:admin";
@@ -44,7 +48,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const organization = await setOrganizationMembershipLimit({ organizationId });
+    const [organization] = await Promise.all([
+      setOrganizationMembershipLimit({ organizationId }),
+      setDefaultOrganizationMembershipLimit(),
+    ]);
+
     return NextResponse.json({ status: "success", organization });
   } catch (error) {
     return NextResponse.json(
