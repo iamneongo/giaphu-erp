@@ -488,6 +488,19 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             serverSide={paginatedSubcontractors.serverSide}
             detailType="subcontractors"
             selectable
+            bulkDeleteAction={
+              canManage
+                ? {
+                    confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} dòng tạm ứng đã chọn?`,
+                    onDelete: async (rows) => {
+                      for (const row of rows) {
+                        await runAction("deleteSubcontractor", { id: row.id, __returnData: false });
+                      }
+                      paginatedSubcontractors.refresh();
+                    },
+                  }
+                : undefined
+            }
             exportFileName="thau-phu-tam-ung"
             searchPlaceholder="Tìm thầu phụ, hạng mục..."
             filters={subcontractorFilters}
@@ -598,6 +611,19 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             serverSide={paginatedSubcontractorContracts.serverSide}
             detailType="subcontractor-contracts"
             selectable
+            bulkDeleteAction={
+              canManage
+                ? {
+                    confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} hợp đồng thầu phụ đã chọn?`,
+                    onDelete: async (rows) => {
+                      for (const row of rows) {
+                        await runSubcontractorContractAction("deleteSubcontractorContract", { id: row.id });
+                      }
+                      paginatedSubcontractorContracts.refresh();
+                    },
+                  }
+                : undefined
+            }
             exportFileName="hop-dong-thau-phu"
             filters={subcontractorContractFilters}
           />
@@ -713,6 +739,19 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             serverSide={paginatedOperations.serverSide}
             detailType="operations"
             selectable
+            bulkDeleteAction={
+              canManage
+                ? {
+                    confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} chi phí vận hành đã chọn?`,
+                    onDelete: async (rows) => {
+                      for (const row of rows) {
+                        await runAction("deleteOperation", { id: row.id, __returnData: false });
+                      }
+                      paginatedOperations.refresh();
+                    },
+                  }
+                : undefined
+            }
             exportFileName="chi-phi-van-hanh"
             filters={operationFilters}
             initialSorting={[{ id: "date", desc: true }]}

@@ -289,6 +289,19 @@ export function MaterialDebtWorkspace() {
           exportFileName="cong-no-vat-tu"
           detailType="materials"
           selectable
+          bulkDeleteAction={
+            canManage
+              ? {
+                  confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} dòng vật tư đã chọn?`,
+                  onDelete: async (rows) => {
+                    for (const row of rows) {
+                      await runAction("deleteMaterial", { id: row.id, __returnData: false });
+                    }
+                    refreshDebtData();
+                  },
+                }
+              : undefined
+          }
           initialSorting={[{ id: "date", desc: true }]}
         />
       </SectionBlock>

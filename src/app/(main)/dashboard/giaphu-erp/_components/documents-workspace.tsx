@@ -717,6 +717,22 @@ export function DocumentsWorkspace() {
             detailType="documents"
             empty="Chưa có hồ sơ cho công trình hiện tại."
             selectable
+            bulkDeleteAction={
+              canManage
+                ? {
+                    confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} hồ sơ đã chọn?`,
+                    onDelete: async (rows) => {
+                      for (const row of rows) {
+                        await runDocumentAction("deleteDocument", {
+                          id: row.id,
+                          projectCode: activeProjectCode,
+                        });
+                      }
+                      paginatedDocuments.refresh();
+                    },
+                  }
+                : undefined
+            }
             exportFileName="ho-so-cong-trinh"
             searchPlaceholder="Lọc nhanh trong kết quả hồ sơ..."
             filters={[

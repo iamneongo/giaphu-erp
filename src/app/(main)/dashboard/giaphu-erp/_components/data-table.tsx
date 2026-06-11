@@ -474,6 +474,7 @@ export function DataTable<T>({
   rowDetailHref,
   footerRow,
   toolbarActions,
+  bulkDeleteAction,
   serverSide,
 }: {
   columns: DataTableColumn<T>[];
@@ -498,6 +499,11 @@ export function DataTable<T>({
     selectedCount: number;
     resetSelection: () => void;
   }) => React.ReactNode;
+  bulkDeleteAction?: {
+    label?: string;
+    confirmMessage?: (rows: T[]) => string;
+    onDelete: (rows: T[]) => Promise<void> | void;
+  };
   serverSide?: DataTableServerSideOptions;
 }) {
   const router = useRouter();
@@ -755,6 +761,19 @@ export function DataTable<T>({
     }
   }
 
+  async function handleBulkDelete() {
+    if (!bulkDeleteAction || !selectedRows.length) return;
+
+    const message =
+      bulkDeleteAction.confirmMessage?.(selectedRows) ??
+      `Xóa ${selectedRows.length.toLocaleString("vi-VN")} dòng đã chọn?`;
+
+    if (!window.confirm(message)) return;
+
+    await bulkDeleteAction.onDelete(selectedRows);
+    setRowSelection({});
+  }
+
   function getDetailHref(row: T) {
     const customHref = rowDetailHref?.(row);
     if (customHref) return customHref;
@@ -815,6 +834,12 @@ export function DataTable<T>({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {bulkDeleteAction && selectedCount > 0 ? (
+            <Button variant="destructive" size="sm" className="h-9 rounded-md" onClick={() => void handleBulkDelete()}>
+              {bulkDeleteAction.label ?? `Xóa đã chọn (${selectedCount.toLocaleString("vi-VN")})`}
+            </Button>
+          ) : null}
+
           {toolbarActions?.({
             filteredRows,
             selectedRows,

@@ -1771,6 +1771,19 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             serverSide={paginatedLaborNorms.serverSide}
             detailType="labor-norms"
             selectable
+            bulkDeleteAction={
+              canManage
+                ? {
+                    confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} dòng định mức đã chọn?`,
+                    onDelete: async (rows) => {
+                      for (const row of rows) {
+                        await runLaborNormAction("deleteLaborNorm", { id: row.id });
+                      }
+                      paginatedLaborNorms.refresh();
+                    },
+                  }
+                : undefined
+            }
             exportFileName="dinh-muc-nhan-cong"
             filters={[{ key: "category", label: "Hạng mục", options: laborNormCategoryOptions }]}
           />
@@ -1901,6 +1914,19 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             serverSide={paginatedProgress.serverSide}
             detailType="progress"
             selectable
+            bulkDeleteAction={
+              canManage
+                ? {
+                    confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} dòng tiến độ đã chọn?`,
+                    onDelete: async (rows) => {
+                      for (const row of rows) {
+                        await runProgressAction("deleteProgress", { id: row.id });
+                      }
+                      paginatedProgress.refresh();
+                    },
+                  }
+                : undefined
+            }
             exportFileName="tien-do-hang-muc"
             filters={[{ key: "category", label: "Hạng mục", options: progressCategoryOptions }]}
             initialSorting={[{ id: "startDate", desc: true }]}

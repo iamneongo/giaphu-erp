@@ -244,6 +244,20 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
           serverSide={paginatedCatalogs.serverSide}
           detailType="catalogs"
           selectable
+          bulkDeleteAction={
+            canManage
+              ? {
+                  confirmMessage: (selectedRows) =>
+                    `Xóa ${selectedRows.length.toLocaleString("vi-VN")} mục đã chọn khỏi danh mục?`,
+                  onDelete: async (selectedRows) => {
+                    for (const row of selectedRows) {
+                      await runAction("deleteCatalog", { id: row.id });
+                    }
+                    paginatedCatalogs.refresh();
+                  },
+                }
+              : undefined
+          }
           exportFileName={`danh-muc-${section.kind}`}
           searchPlaceholder={`Tìm ${section.navigationTitle.toLowerCase()}...`}
           filters={[

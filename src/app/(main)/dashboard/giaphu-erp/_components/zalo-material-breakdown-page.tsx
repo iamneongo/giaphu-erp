@@ -950,6 +950,20 @@ export function ZaloMaterialBreakdownPage({
           serverSide={paginatedMaterials.serverSide}
           detailType="materials"
           selectable
+          bulkDeleteAction={
+            canManage
+              ? {
+                  confirmMessage: (rows) =>
+                    `Xóa ${rows.length.toLocaleString("vi-VN")} dòng ${materialType.toLowerCase()} đã chọn?`,
+                  onDelete: async (rows) => {
+                    for (const row of rows) {
+                      await runAction("deleteMaterial", { id: row.id, __returnData: false });
+                    }
+                    paginatedMaterials.refresh();
+                  },
+                }
+              : undefined
+          }
           exportFileName={materialType === "VT Chính" ? "vat-tu-chinh" : "vat-tu-phu"}
           searchPlaceholder="Tìm vật tư, hạng mục, nhà cung cấp..."
           empty={`Chưa có dữ liệu ${materialType}.`}

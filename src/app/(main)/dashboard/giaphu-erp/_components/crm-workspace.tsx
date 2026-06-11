@@ -219,6 +219,20 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
             serverSide={paginatedProjects.serverSide}
             detailType="projects"
             selectable
+            bulkDeleteAction={
+              canManageProjects
+                ? {
+                    confirmMessage: (rows) =>
+                      `Xóa ${rows.length.toLocaleString("vi-VN")} công trình đã chọn? Toàn bộ dữ liệu liên quan sẽ bị xóa.`,
+                    onDelete: async (rows) => {
+                      for (const project of rows) {
+                        await runAction("deleteProject", { code: project.code });
+                      }
+                      paginatedProjects.refresh();
+                    },
+                  }
+                : undefined
+            }
             exportFileName="crm-cong-trinh"
             searchPlaceholder="Tìm theo mã, tên, chủ đầu tư..."
             filters={[
@@ -342,6 +356,19 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
             serverSide={paginatedContracts.serverSide}
             detailType="contracts"
             selectable
+            bulkDeleteAction={
+              canManage
+                ? {
+                    confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} hợp đồng đã chọn?`,
+                    onDelete: async (rows) => {
+                      for (const row of rows) {
+                        await runContractAction("deleteContract", { id: row.id });
+                      }
+                      paginatedContracts.refresh();
+                    },
+                  }
+                : undefined
+            }
             exportFileName="crm-hop-dong"
             searchPlaceholder="Tìm hợp đồng, ghi chú..."
             initialSorting={[{ id: "signedDate", desc: true }]}
@@ -454,6 +481,19 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
             serverSide={paginatedPayments.serverSide}
             detailType="payments"
             selectable
+            bulkDeleteAction={
+              canManage
+                ? {
+                    confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} phiếu thu đã chọn?`,
+                    onDelete: async (rows) => {
+                      for (const row of rows) {
+                        await runPaymentAction("deletePayment", { id: row.id });
+                      }
+                      paginatedPayments.refresh();
+                    },
+                  }
+                : undefined
+            }
             exportFileName="crm-thu-tien"
             searchPlaceholder="Tìm ghi chú thanh toán..."
             initialSorting={[{ id: "date", desc: true }]}
