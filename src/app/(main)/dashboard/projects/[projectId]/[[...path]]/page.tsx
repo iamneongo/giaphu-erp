@@ -137,6 +137,12 @@ export default async function ProjectPage({
     case "workforce/attendance":
       await enforceErpRoutePermission(ERP_PERMISSIONS.workforceRead);
       return <WorkforceWorkspace section="attendance" />;
+    case "workforce/payroll":
+      await enforceErpRoutePermission(ERP_PERMISSIONS.workforceRead);
+      return <WorkforceWorkspace section="payroll" />;
+    case "workforce/payslips":
+      await enforceErpRoutePermission(ERP_PERMISSIONS.workforceRead);
+      return <WorkforceWorkspace section="payslips" />;
     case "workforce/staff":
       await enforceErpRoutePermission(ERP_PERMISSIONS.workforceRead);
       return <WorkforceWorkspace section="staff" />;

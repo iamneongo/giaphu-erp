@@ -130,6 +130,18 @@ export const sidebarItems: NavGroup[] = [
             icon: HardHat,
             permission: ERP_PERMISSIONS.workforceRead,
           },
+          {
+            title: "Bảng lương",
+            url: "/dashboard/giaphu-erp/workforce/payroll",
+            icon: CircleDollarSign,
+            permission: ERP_PERMISSIONS.workforceRead,
+          },
+          {
+            title: "Phiếu lương",
+            url: "/dashboard/giaphu-erp/workforce/payslips",
+            icon: FileText,
+            permission: ERP_PERMISSIONS.workforceRead,
+          },
         ],
       },
       {

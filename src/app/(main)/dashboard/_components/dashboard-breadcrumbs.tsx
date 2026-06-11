@@ -40,6 +40,8 @@ const segmentLabels: Record<string, string> = {
   payments: "Thu tiền",
   norms: "Định mức",
   attendance: "Chấm công",
+  payroll: "Bảng lương",
+  payslips: "Phiếu lương",
   staff: "Nhân sự",
   "labor-norms": "Định mức nhân công",
   progress: "Tiến độ",
@@ -98,6 +100,16 @@ const detailBreadcrumbMeta: Record<string, DetailBreadcrumbMeta> = {
     moduleLabel: "Nhân công",
     listHref: "/workforce/attendance",
     typeLabel: "Chấm công",
+  },
+  payroll: {
+    moduleLabel: "Nhân công",
+    listHref: "/workforce/payroll",
+    typeLabel: "Bảng lương",
+  },
+  payslips: {
+    moduleLabel: "Nhân công",
+    listHref: "/workforce/payslips",
+    typeLabel: "Phiếu lương",
   },
   "labor-norms": {
     moduleLabel: "Danh mục",

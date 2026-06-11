@@ -40,7 +40,7 @@ import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
 
-type WorkforceSection = "attendance" | "staff" | "laborNorms" | "progress";
+type WorkforceSection = "attendance" | "payroll" | "payslips" | "staff" | "laborNorms" | "progress";
 
 const weekDayLabels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 const staffComboboxRenderLimit = 40;
@@ -128,6 +128,40 @@ type DraftAttendanceParticipant = {
   staff: StaffRow;
 };
 
+type PayrollRow = {
+  id: string;
+  week: string;
+  category: string;
+  staffName: string;
+  position: string;
+  workdays: number;
+  salaryDay: number;
+  baseSalary: number;
+  allowance: number;
+  overtimeHours: number;
+  overtimeAmount: number;
+  total: number;
+  dates: string;
+};
+
+type PayslipRow = {
+  id: number;
+  date: string;
+  week: string;
+  category: string;
+  staffName: string;
+  position: string;
+  shift: string;
+  workdays: number;
+  salaryDay: number;
+  baseSalary: number;
+  allowance: number;
+  overtimeHours: number;
+  overtimeAmount: number;
+  total: number;
+  status: string;
+};
+
 function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: StaffRow[]) {
   const staffMap = new Map<string, StaffRow>();
 
@@ -150,6 +184,84 @@ function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: St
   }
 
   return Array.from(staffMap.values()).sort((first, second) => first.name.localeCompare(second.name, "vi"));
+}
+
+function buildPayrollRows(rows: AttendanceRow[]) {
+  const payrollMap = new Map<string, PayrollRow & { dateSet: Set<string> }>();
+
+  for (const row of rows) {
+    const key = [row.week, row.category, row.staffName].join("::");
+    const current = payrollMap.get(key) ?? {
+      id: key,
+      week: row.week,
+      category: row.category,
+      staffName: row.staffName,
+      position: row.position,
+      workdays: 0,
+      salaryDay: 0,
+      baseSalary: 0,
+      allowance: 0,
+      overtimeHours: 0,
+      overtimeAmount: 0,
+      total: 0,
+      dates: "",
+      dateSet: new Set<string>(),
+    };
+
+    current.position = current.position || row.position;
+    current.workdays += Number(row.coefficient || 0);
+    current.salaryDay = Math.max(current.salaryDay, Number(row.halfDaySalary || 0));
+    current.allowance += Number(row.allowance || 0);
+    current.overtimeHours += Number(row.overtimeHours || 0);
+    current.overtimeAmount += Number(row.overtimeAmount || 0);
+    current.baseSalary += Math.max(
+      0,
+      Number(row.total || 0) - Number(row.allowance || 0) - Number(row.overtimeAmount || 0),
+    );
+    current.total += Number(row.total || 0);
+    if (row.date) current.dateSet.add(row.date);
+
+    payrollMap.set(key, current);
+  }
+
+  return Array.from(payrollMap.values())
+    .map(({ dateSet, ...row }) => ({
+      ...row,
+      dates: Array.from(dateSet).sort().join(", "),
+    }))
+    .sort((first, second) => {
+      const weekCompare = second.week.localeCompare(first.week, "vi");
+      if (weekCompare !== 0) return weekCompare;
+      const categoryCompare = first.category.localeCompare(second.category, "vi");
+      if (categoryCompare !== 0) return categoryCompare;
+      return first.staffName.localeCompare(second.staffName, "vi");
+    });
+}
+
+function buildPayslipRows(rows: AttendanceRow[]): PayslipRow[] {
+  return rows
+    .map((row) => ({
+      id: row.id,
+      date: row.date,
+      week: row.week,
+      category: row.category,
+      staffName: row.staffName,
+      position: row.position,
+      shift: row.shift,
+      workdays: Number(row.coefficient || 0),
+      salaryDay: Number(row.halfDaySalary || 0),
+      baseSalary: Math.max(0, Number(row.total || 0) - Number(row.allowance || 0) - Number(row.overtimeAmount || 0)),
+      allowance: Number(row.allowance || 0),
+      overtimeHours: Number(row.overtimeHours || 0),
+      overtimeAmount: Number(row.overtimeAmount || 0),
+      total: Number(row.total || 0),
+      status: row.status,
+    }))
+    .sort((first, second) => {
+      const dateCompare = second.date.localeCompare(first.date, "vi");
+      if (dateCompare !== 0) return dateCompare;
+      return first.staffName.localeCompare(second.staffName, "vi");
+    });
 }
 
 function dateTimeFromInput(value: unknown) {
@@ -937,6 +1049,20 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
   const laborNormCategoryOptions = uniqueOptions(scoped.laborNorms.map((row) => row.category));
   const progressCategoryOptions = uniqueOptions(scoped.progress.map((row) => row.category));
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.workforceManage);
+  const payrollRows = React.useMemo(() => buildPayrollRows(scoped.attendance), [scoped.attendance]);
+  const payslipRows = React.useMemo(() => buildPayslipRows(scoped.attendance), [scoped.attendance]);
+  const attendanceWeekOptions = React.useMemo(
+    () => uniqueOptions(scoped.attendance.map((row) => row.week)),
+    [scoped.attendance],
+  );
+  const attendanceCategoryOptions = React.useMemo(
+    () => uniqueOptions(scoped.attendance.map((row) => row.category)),
+    [scoped.attendance],
+  );
+  const attendanceStaffOptions = React.useMemo(
+    () => uniqueOptions(scoped.attendance.map((row) => row.staffName)),
+    [scoped.attendance],
+  );
 
   async function runLaborNormAction(action: string, payload: Record<string, unknown>) {
     const result = await runAction(action, { ...payload, __returnData: false });
@@ -983,6 +1109,8 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
         />
       </>
     ),
+    payroll: null,
+    payslips: null,
     staff: (
       <>
         <ExcelImportDialog
@@ -1148,6 +1276,202 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             />
           </div>
         </div>
+      ),
+    },
+    payroll: {
+      title: "Bảng lương",
+      description: "Tổng hợp lương nhân công theo tuần, hạng mục và nhân sự từ dữ liệu chấm công.",
+      content: (
+        <SectionBlock title="Bảng lương nhân công">
+          <DataTable
+            loading={isSwitchingProject}
+            columns={[
+              { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
+              { key: "category", label: "Hạng mục", accessor: (row) => row.category, render: (row) => row.category },
+              {
+                key: "staffName",
+                label: "Nhân sự",
+                accessor: (row) => `${row.staffName} ${row.position}`,
+                searchable: true,
+                render: (row) => (
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{row.staffName}</div>
+                    <div className="truncate text-muted-foreground text-xs">{row.position || "Nhân công"}</div>
+                  </div>
+                ),
+              },
+              {
+                key: "workdays",
+                label: "Công",
+                accessor: (row) => row.workdays,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => <div className="text-right">{formatCount(row.workdays)}</div>,
+              },
+              {
+                key: "salaryDay",
+                label: "Lương/ngày",
+                accessor: (row) => row.salaryDay,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => <div className="text-right">{formatMoney(row.salaryDay)}</div>,
+              },
+              {
+                key: "baseSalary",
+                label: "Lương công",
+                accessor: (row) => row.baseSalary,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => <div className="text-right">{formatMoney(row.baseSalary)}</div>,
+              },
+              {
+                key: "allowance",
+                label: "Phụ cấp",
+                accessor: (row) => row.allowance,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => <div className="text-right">{formatMoney(row.allowance)}</div>,
+              },
+              {
+                key: "overtime",
+                label: "Tăng ca",
+                accessor: (row) => row.overtimeAmount,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => (
+                  <div className="text-right">
+                    <div>{formatMoney(row.overtimeAmount)}</div>
+                    <div className="text-muted-foreground text-xs">{formatCount(row.overtimeHours)} giờ</div>
+                  </div>
+                ),
+                exportValue: (row) => row.overtimeAmount,
+              },
+              {
+                key: "total",
+                label: "Thực lãnh",
+                accessor: (row) => row.total,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => <div className="text-right font-semibold">{formatMoney(row.total)}</div>,
+              },
+              {
+                key: "dates",
+                label: "Ngày công",
+                accessor: (row) => row.dates,
+                render: (row) => row.dates || "-",
+              },
+            ]}
+            rows={payrollRows}
+            getRowId={(row) => row.id}
+            selectable
+            exportFileName="bang-luong-nhan-cong"
+            searchPlaceholder="Tìm nhân sự, hạng mục..."
+            filters={[
+              { key: "week", label: "Tuần", options: attendanceWeekOptions },
+              { key: "category", label: "Hạng mục", options: attendanceCategoryOptions },
+              { key: "staffName", label: "Nhân sự", options: attendanceStaffOptions },
+            ]}
+            initialSorting={[{ id: "week", desc: true }]}
+          />
+        </SectionBlock>
+      ),
+    },
+    payslips: {
+      title: "Phiếu lương",
+      description: "Chi tiết từng dòng chấm công để đối chiếu và xuất phiếu lương nhân công.",
+      content: (
+        <SectionBlock title="Phiếu lương nhân công">
+          <DataTable
+            loading={isSwitchingProject}
+            columns={[
+              { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+              { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
+              { key: "category", label: "Hạng mục", accessor: (row) => row.category, render: (row) => row.category },
+              {
+                key: "staffName",
+                label: "Nhân sự",
+                accessor: (row) => `${row.staffName} ${row.position}`,
+                searchable: true,
+                render: (row) => (
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{row.staffName}</div>
+                    <div className="truncate text-muted-foreground text-xs">{row.position || "Nhân công"}</div>
+                  </div>
+                ),
+              },
+              {
+                key: "shift",
+                label: "Ca",
+                accessor: (row) => row.shift,
+                render: (row) => <Badge variant="outline">{row.shift || row.status || "-"}</Badge>,
+              },
+              {
+                key: "workdays",
+                label: "Công",
+                accessor: (row) => row.workdays,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => <div className="text-right">{formatCount(row.workdays)}</div>,
+              },
+              {
+                key: "salaryDay",
+                label: "Lương/ngày",
+                accessor: (row) => row.salaryDay,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => <div className="text-right">{formatMoney(row.salaryDay)}</div>,
+              },
+              {
+                key: "baseSalary",
+                label: "Lương công",
+                accessor: (row) => row.baseSalary,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => <div className="text-right">{formatMoney(row.baseSalary)}</div>,
+              },
+              {
+                key: "allowance",
+                label: "Phụ cấp",
+                accessor: (row) => row.allowance,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => <div className="text-right">{formatMoney(row.allowance)}</div>,
+              },
+              {
+                key: "overtimeAmount",
+                label: "Tăng ca",
+                accessor: (row) => row.overtimeAmount,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => (
+                  <div className="text-right">
+                    <div>{formatMoney(row.overtimeAmount)}</div>
+                    <div className="text-muted-foreground text-xs">{formatCount(row.overtimeHours)} giờ</div>
+                  </div>
+                ),
+              },
+              {
+                key: "total",
+                label: "Thành tiền",
+                accessor: (row) => row.total,
+                className: "text-right",
+                headerClassName: "text-right",
+                render: (row) => <div className="text-right font-semibold">{formatMoney(row.total)}</div>,
+              },
+            ]}
+            rows={payslipRows}
+            getRowId={(row) => row.id}
+            selectable
+            exportFileName="phieu-luong-nhan-cong"
+            searchPlaceholder="Tìm nhân sự, hạng mục..."
+            filters={[
+              { key: "week", label: "Tuần", options: attendanceWeekOptions },
+              { key: "category", label: "Hạng mục", options: attendanceCategoryOptions },
+              { key: "staffName", label: "Nhân sự", options: attendanceStaffOptions },
+            ]}
+            initialSorting={[{ id: "date", desc: true }]}
+          />
+        </SectionBlock>
       ),
     },
     staff: {
