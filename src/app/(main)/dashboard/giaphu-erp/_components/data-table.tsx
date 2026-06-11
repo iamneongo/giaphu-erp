@@ -473,6 +473,7 @@ export function DataTable<T>({
   detailType,
   rowDetailHref,
   footerRow,
+  toolbarActions,
   serverSide,
 }: {
   columns: DataTableColumn<T>[];
@@ -491,6 +492,12 @@ export function DataTable<T>({
   detailType?: string;
   rowDetailHref?: (row: T) => string | undefined;
   footerRow?: (rows: T[], columnCount: number) => React.ReactNode;
+  toolbarActions?: (context: {
+    filteredRows: T[];
+    selectedRows: T[];
+    selectedCount: number;
+    resetSelection: () => void;
+  }) => React.ReactNode;
   serverSide?: DataTableServerSideOptions;
 }) {
   const router = useRouter();
@@ -692,7 +699,8 @@ export function DataTable<T>({
   const pageCount = table.getPageCount();
   const visibleRows = table.getRowModel().rows;
   const totalRowCount = serverSide?.rowCount ?? filteredRows.length;
-  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+  const selectedRows = table.getFilteredSelectedRowModel().rows.map((row) => row.original);
+  const selectedCount = selectedRows.length;
   const skeletonColumnCount = (selectionColumn ? 1 : 0) + columns.length;
   const skeletonRows = React.useMemo(
     () => Array.from({ length: pagination.pageSize }, (_, index) => `skeleton-row-${index + 1}`),
@@ -807,6 +815,13 @@ export function DataTable<T>({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {toolbarActions?.({
+            filteredRows,
+            selectedRows,
+            selectedCount,
+            resetSelection: () => setRowSelection({}),
+          })}
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 rounded-md">

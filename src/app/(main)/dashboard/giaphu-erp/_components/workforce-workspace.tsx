@@ -151,6 +151,118 @@ function formatPayrollMoney(value: number) {
   return formatCount(value, 0);
 }
 
+function escapePrintText(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function printPayslipRows(rows: PayrollRow[], title = "Phiếu lương nhân công tuần") {
+  if (!rows.length) return;
+
+  const totalWorkdays = rows.reduce((sum, row) => sum + row.workdays, 0);
+  const totalAllowance = rows.reduce((sum, row) => sum + row.allowance, 0);
+  const totalOvertime = rows.reduce((sum, row) => sum + row.overtimeAmount, 0);
+  const total = rows.reduce((sum, row) => sum + row.total, 0);
+  const categoryLabel =
+    rows.length && rows.every((row) => row.category === rows[0]?.category) ? ` - ${rows[0]?.category || ""}` : "";
+  const weekLabel = rows.length && rows.every((row) => row.week === rows[0]?.week) ? rows[0]?.week : "";
+  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
+
+  if (!printWindow) return;
+
+  const bodyRows = rows
+    .map(
+      (row, index) => `
+        <tr>
+          <td class="center">${index + 1}</td>
+          <td>
+            <div class="name">${escapePrintText(row.staffName)}</div>
+            <div class="muted">${escapePrintText(row.position || "Nhân công")}</div>
+          </td>
+          <td class="center">${escapePrintText(row.category)}</td>
+          <td class="center">${formatCount(row.workdays)} công</td>
+          <td class="right">${formatPayrollMoney(row.allowance)}</td>
+          <td class="right">${formatPayrollMoney(row.overtimeAmount)}</td>
+          <td class="right strong">${formatPayrollMoney(row.total)}</td>
+        </tr>`,
+    )
+    .join("");
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapePrintText(title)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { margin: 24px; color: #111; font-family: Arial, sans-serif; font-size: 13px; }
+          h1 { margin: 0 0 4px; text-align: center; font-size: 20px; text-transform: uppercase; }
+          .subtitle { margin-bottom: 16px; text-align: center; font-size: 12px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #222; padding: 8px 10px; vertical-align: middle; }
+          th { font-weight: 700; text-align: center; }
+          tfoot td { font-weight: 700; }
+          .center { text-align: center; }
+          .right { text-align: right; }
+          .strong, .name { font-weight: 700; }
+          .muted { margin-top: 4px; color: #444; font-size: 12px; }
+          .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 36px; text-align: center; }
+          .signature-title { font-weight: 700; }
+          .signature-space { height: 72px; }
+          @media print {
+            body { margin: 12mm; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>${escapePrintText(title)}</h1>
+        <div class="subtitle">${weekLabel ? `Tuần ${escapePrintText(weekLabel)}` : ""}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Họ tên</th>
+              <th>Hạng mục</th>
+              <th>Ngày công</th>
+              <th>Phụ cấp</th>
+              <th>Tăng ca</th>
+              <th>Thành tiền</th>
+            </tr>
+          </thead>
+          <tbody>${bodyRows}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3">TỔNG CỘNG TUẦN${escapePrintText(categoryLabel)}</td>
+              <td class="center">${formatCount(totalWorkdays)} công</td>
+              <td class="right">${formatPayrollMoney(totalAllowance)}</td>
+              <td class="right">${formatPayrollMoney(totalOvertime)}</td>
+              <td class="right">${formatPayrollMoney(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        <div class="signatures">
+          <div><div class="signature-title">Người lập</div><div class="signature-space"></div><div>.........................</div></div>
+          <div><div class="signature-title">Chỉ huy trưởng</div><div class="signature-space"></div><div>.........................</div></div>
+          <div><div class="signature-title">Người nhận</div><div class="signature-space"></div><div>.........................</div></div>
+        </div>
+        <script>
+          window.addEventListener("load", () => {
+            window.focus();
+            window.print();
+          });
+        </script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
 function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: StaffRow[]) {
   const staffMap = new Map<string, StaffRow>();
 
@@ -1258,7 +1370,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.stt,
                 className: "w-16 text-center",
                 headerClassName: "text-center",
-                headerCellClassName: "bg-emerald-50 text-center font-semibold text-teal-900",
+                headerCellClassName: "text-center",
                 render: (row) => <div className="text-center">{row.stt}</div>,
               },
               {
@@ -1266,8 +1378,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 label: "Họ tên",
                 accessor: (row) => `${row.staffName} ${row.position}`,
                 searchable: true,
-                headerCellClassName: "bg-emerald-50 font-semibold text-teal-900",
-                render: (row) => <div className="min-w-52 truncate font-semibold text-teal-900">{row.staffName}</div>,
+                render: (row) => <div className="min-w-52 truncate font-semibold">{row.staffName}</div>,
               },
               {
                 key: "salaryDay",
@@ -1275,14 +1386,13 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.salaryDay,
                 className: "text-right",
                 headerClassName: "text-right",
-                headerCellClassName: "bg-emerald-50 text-right font-semibold text-teal-900",
+                headerCellClassName: "text-right",
                 render: (row) => <div className="text-right">{formatPayrollMoney(row.salaryDay)}</div>,
               },
               {
                 key: "category",
                 label: "Hạng mục",
                 accessor: (row) => row.category,
-                headerCellClassName: "bg-emerald-50 font-semibold text-teal-900",
                 render: (row) => row.category,
               },
               {
@@ -1291,7 +1401,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.shiftCount,
                 className: "text-right",
                 headerClassName: "text-right",
-                headerCellClassName: "bg-emerald-50 text-right font-semibold text-teal-900",
+                headerCellClassName: "text-right",
                 render: (row) => <div className="text-right">{formatCount(row.shiftCount)}</div>,
               },
               {
@@ -1300,7 +1410,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.workdays,
                 className: "text-right",
                 headerClassName: "text-right",
-                headerCellClassName: "bg-emerald-50 text-right font-semibold text-teal-900",
+                headerCellClassName: "text-right",
                 render: (row) => <div className="text-right">{formatCount(row.workdays)}</div>,
               },
               {
@@ -1309,7 +1419,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.allowance,
                 className: "text-right",
                 headerClassName: "text-right",
-                headerCellClassName: "bg-emerald-50 text-right font-semibold text-teal-900",
+                headerCellClassName: "text-right",
                 render: (row) => <div className="text-right">{formatPayrollMoney(row.allowance)}</div>,
               },
               {
@@ -1318,7 +1428,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.overtimeAmount,
                 className: "text-right",
                 headerClassName: "text-right",
-                headerCellClassName: "bg-emerald-50 text-right font-semibold text-teal-900",
+                headerCellClassName: "text-right",
                 render: (row) => <div className="text-right">{formatPayrollMoney(row.overtimeAmount)}</div>,
                 exportValue: (row) => row.overtimeAmount,
               },
@@ -1328,10 +1438,8 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.total,
                 className: "text-right",
                 headerClassName: "text-right",
-                headerCellClassName: "bg-emerald-50 text-right font-semibold text-teal-900",
-                render: (row) => (
-                  <div className="text-right font-bold text-teal-950">{formatPayrollMoney(row.total)}</div>
-                ),
+                headerCellClassName: "text-right",
+                render: (row) => <div className="text-right font-bold">{formatPayrollMoney(row.total)}</div>,
               },
             ]}
             rows={payrollRows}
@@ -1348,11 +1456,11 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
               const total = rows.reduce((sum, row) => sum + row.total, 0);
 
               return (
-                <TableRow className="bg-emerald-50 hover:bg-emerald-50">
-                  <TableCell colSpan={Math.max(columnCount - 1, 1)} className="text-right font-bold text-teal-900">
+                <TableRow>
+                  <TableCell colSpan={Math.max(columnCount - 1, 1)} className="text-right font-bold">
                     TỔNG CHI PHÍ NHÂN CÔNG:
                   </TableCell>
-                  <TableCell className="text-right font-bold text-teal-950">{formatPayrollMoney(total)}</TableCell>
+                  <TableCell className="text-right font-bold">{formatPayrollMoney(total)}</TableCell>
                 </TableRow>
               );
             }}
@@ -1374,7 +1482,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.stt,
                 className: "w-16 text-center",
                 headerClassName: "text-center",
-                headerCellClassName: "bg-teal-700 text-center font-bold text-white",
+                headerCellClassName: "text-center",
                 render: (row) => <div className="text-center">{row.stt}</div>,
               },
               {
@@ -1382,10 +1490,9 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 label: "Họ tên",
                 accessor: (row) => `${row.staffName} ${row.position}`,
                 searchable: true,
-                headerCellClassName: "bg-teal-700 font-bold text-white",
                 render: (row) => (
                   <div className="min-w-64">
-                    <div className="font-bold text-teal-900">{row.staffName}</div>
+                    <div className="font-bold">{row.staffName}</div>
                     <div className="text-muted-foreground text-xs">{row.position || "Nhân công"}</div>
                   </div>
                 ),
@@ -1396,8 +1503,8 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.category,
                 className: "text-center",
                 headerClassName: "text-center",
-                headerCellClassName: "bg-teal-700 text-center font-bold text-white",
-                render: (row) => <div className="text-center text-teal-800">{row.category}</div>,
+                headerCellClassName: "text-center",
+                render: (row) => <div className="text-center">{row.category}</div>,
               },
               {
                 key: "workdays",
@@ -1405,10 +1512,10 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.workdays,
                 className: "text-center",
                 headerClassName: "text-center",
-                headerCellClassName: "bg-teal-700 text-center font-bold text-white",
+                headerCellClassName: "text-center",
                 render: (row) => (
                   <div className="text-center">
-                    <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                    <Badge variant="outline" className="rounded-full">
                       {formatCount(row.workdays)} công
                     </Badge>
                   </div>
@@ -1420,10 +1527,8 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.allowance,
                 className: "text-right",
                 headerClassName: "text-right",
-                headerCellClassName: "bg-teal-700 text-right font-bold text-white",
-                render: (row) => (
-                  <div className="text-right font-semibold text-teal-900">{formatPayrollMoney(row.allowance)}</div>
-                ),
+                headerCellClassName: "text-right",
+                render: (row) => <div className="text-right font-semibold">{formatPayrollMoney(row.allowance)}</div>,
               },
               {
                 key: "overtime",
@@ -1431,9 +1536,9 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.overtimeAmount,
                 className: "text-right",
                 headerClassName: "text-right",
-                headerCellClassName: "bg-teal-700 text-right font-bold text-white",
+                headerCellClassName: "text-right",
                 render: (row) => (
-                  <div className="text-right font-semibold text-teal-900">{formatPayrollMoney(row.overtimeAmount)}</div>
+                  <div className="text-right font-semibold">{formatPayrollMoney(row.overtimeAmount)}</div>
                 ),
               },
               {
@@ -1442,14 +1547,13 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => row.total,
                 className: "text-right",
                 headerClassName: "text-right",
-                headerCellClassName: "bg-teal-700 text-right font-bold text-white",
-                render: (row) => (
-                  <div className="text-right font-bold text-teal-950">{formatPayrollMoney(row.total)}</div>
-                ),
+                headerCellClassName: "text-right",
+                render: (row) => <div className="text-right font-bold">{formatPayrollMoney(row.total)}</div>,
               },
             ]}
             rows={payrollRows}
             getRowId={(row) => row.id}
+            selectable
             exportFileName="phieu-luong-nhan-cong"
             searchPlaceholder="Tìm nhân sự, hạng mục..."
             filters={[
@@ -1458,6 +1562,30 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
               { key: "staffName", label: "Nhân sự", options: attendanceStaffOptions },
             ]}
             initialSorting={[{ id: "stt", desc: false }]}
+            toolbarActions={({ filteredRows, selectedRows, selectedCount }) => (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-md"
+                  disabled={!selectedCount}
+                  onClick={() => printPayslipRows(selectedRows, "Phiếu lương nhân công tuần")}
+                >
+                  In phiếu đã chọn
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-md"
+                  disabled={!filteredRows.length}
+                  onClick={() => printPayslipRows(filteredRows, "Phiếu lương nhân công tuần")}
+                >
+                  In tất cả
+                </Button>
+              </>
+            )}
             footerRow={(rows, columnCount) => {
               const totalWorkdays = rows.reduce((sum, row) => sum + row.workdays, 0);
               const totalAllowance = rows.reduce((sum, row) => sum + row.allowance, 0);
@@ -1469,20 +1597,14 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                   : "TỔNG CỘNG TUẦN";
 
               return (
-                <TableRow className="bg-emerald-50 hover:bg-emerald-50">
-                  <TableCell colSpan={Math.max(columnCount - 4, 1)} className="font-bold text-teal-900">
+                <TableRow>
+                  <TableCell colSpan={Math.max(columnCount - 4, 1)} className="font-bold">
                     {label}
                   </TableCell>
-                  <TableCell className="text-center font-bold text-emerald-700">
-                    {formatCount(totalWorkdays)} công
-                  </TableCell>
-                  <TableCell className="text-right font-bold text-teal-900">
-                    {formatPayrollMoney(totalAllowance)}
-                  </TableCell>
-                  <TableCell className="text-right font-bold text-teal-900">
-                    {formatPayrollMoney(totalOvertime)}
-                  </TableCell>
-                  <TableCell className="text-right font-bold text-teal-950">{formatPayrollMoney(total)}</TableCell>
+                  <TableCell className="text-center font-bold">{formatCount(totalWorkdays)} công</TableCell>
+                  <TableCell className="text-right font-bold">{formatPayrollMoney(totalAllowance)}</TableCell>
+                  <TableCell className="text-right font-bold">{formatPayrollMoney(totalOvertime)}</TableCell>
+                  <TableCell className="text-right font-bold">{formatPayrollMoney(total)}</TableCell>
                 </TableRow>
               );
             }}
