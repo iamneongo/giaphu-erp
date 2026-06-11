@@ -35,6 +35,13 @@ function validateOperationAmount(value: string) {
   return undefined;
 }
 
+function exportDocumentUrl(fileUrl: string) {
+  if (!fileUrl) return "";
+  if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
+  if (typeof window === "undefined") return fileUrl;
+  return new URL(fileUrl, window.location.origin).toString();
+}
+
 export function SubcontractorsWorkspace({ section = "advances" }: { section?: SubcontractorsSection }) {
   const { data, activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
   const paginatedSubcontractors = usePaginatedErpRows<SubcontractorRow>({
@@ -584,6 +591,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                 key: "fileUrl",
                 label: "Hồ sơ",
                 accessor: (row) => (row.fileUrl ? "Có hồ sơ" : "Không"),
+                exportValue: (row) => exportDocumentUrl(row.fileUrl),
                 searchable: false,
                 sortable: false,
                 render: (row) =>
