@@ -31,6 +31,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
+          fontFamily: "var(--font-sans), system-ui, sans-serif",
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
@@ -39,7 +40,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast: "cn-toast font-sans",
+          title: "font-sans",
+          description: "font-sans",
+          actionButton: "font-sans",
+          cancelButton: "font-sans",
         },
       }}
       {...props}
