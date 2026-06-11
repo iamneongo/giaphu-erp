@@ -3460,27 +3460,38 @@ export async function saveMaterial(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const date = dateOnly(payload.date) || dateOnly(new Date());
-  const quantity = decimal(payload.quantity);
-  const price = money(payload.price);
+  const projectCode = text(payload.projectCode).trim();
+  const category = text(payload.category).trim();
+  const materialName = text(payload.materialName).trim();
+  const quantity = requireNonNegativeNumericInput(payload.quantity, "Số lượng");
+  const unit = text(payload.unit).trim();
+  const price = requireNonNegativeNumericInput(payload.price, "Đơn giá");
+  const materialType = text(payload.materialType).trim() || "VT Chính";
   const id = number(payload.id);
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+  if (!materialName) throw new Error("Thiếu vật tư.");
+  if (!unit) throw new Error("Thiếu đơn vị.");
+
   if (id > 0) {
     await sql`
       update gp_materials
       set work_date = ${date},
           week = ${text(payload.week) || weekFromDate(date)},
           shift = ${text(payload.shift)},
-          project_code = ${text(payload.projectCode)},
-          category = ${text(payload.category)},
+          project_code = ${projectCode},
+          category = ${category},
           material_code = ${text(payload.materialCode)},
-          material_name = ${text(payload.materialName)},
+          material_name = ${materialName},
           quantity = ${quantity},
-          unit = ${text(payload.unit)},
+          unit = ${unit},
           price = ${price},
           debt = ${text(payload.debt)},
           status = ${text(payload.status)},
           payment_status = ${text(payload.paymentStatus) || "Chưa TT"},
           payment_info = ${text(payload.paymentInfo)},
-          material_type = ${text(payload.materialType) || "VT Chính"},
+          material_type = ${materialType},
           supplier = ${text(payload.supplier)},
           updated_at = now()
       where organization_id = ${organizationId} and id = ${id}
@@ -3494,10 +3505,10 @@ export async function saveMaterial(payload: Record<string, unknown>) {
       debt, status, payment_status, payment_info, material_type, supplier
     )
     values (
-      ${date}, ${text(payload.week) || weekFromDate(date)}, ${text(payload.shift)}, ${organizationId}, ${text(payload.projectCode)}, ${text(payload.category)},
-      ${text(payload.materialCode)}, ${text(payload.materialName)}, ${quantity}, ${text(payload.unit)}, ${price},
+      ${date}, ${text(payload.week) || weekFromDate(date)}, ${text(payload.shift)}, ${organizationId}, ${projectCode}, ${category},
+      ${text(payload.materialCode)}, ${materialName}, ${quantity}, ${unit}, ${price},
       ${text(payload.debt)}, ${text(payload.status)}, ${text(payload.paymentStatus) || "Chưa TT"}, ${text(payload.paymentInfo)},
-      ${text(payload.materialType) || "VT Chính"}, ${text(payload.supplier)}
+      ${materialType}, ${text(payload.supplier)}
     )
   `;
 }
@@ -3927,10 +3938,16 @@ export async function saveSubcontractor(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const date = dateOnly(payload.date) || dateOnly(new Date());
-  const projectCode = text(payload.projectCode);
-  const contractorName = text(payload.contractorName);
-  const advance = money(payload.advance);
+  const projectCode = text(payload.projectCode).trim();
+  const category = text(payload.category).trim();
+  const contractorName = text(payload.contractorName).trim();
+  const advance = requireNonNegativeNumericInput(payload.advance, "Tạm ứng");
   const id = number(payload.id);
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+  if (!contractorName) throw new Error("Thiếu thầu phụ.");
+
   if (id > 0) {
     const [previousRow] =
       (await sql`select file_id from gp_subcontractors where organization_id = ${organizationId} and id = ${id}`) as Row[];
@@ -3940,7 +3957,7 @@ export async function saveSubcontractor(payload: Record<string, unknown>) {
           week = ${text(payload.week) || weekFromDate(date)},
           organization_id = ${organizationId},
           project_code = ${projectCode},
-          category = ${text(payload.category)},
+          category = ${category},
           contractor_name = ${contractorName},
           note = ${text(payload.note)},
           advance = ${advance},
@@ -3957,7 +3974,7 @@ export async function saveSubcontractor(payload: Record<string, unknown>) {
 
   await sql`
     insert into gp_subcontractors (work_date, week, organization_id, project_code, category, contractor_name, note, advance, file_url, file_id, cumulative, status)
-    values (${date}, ${text(payload.week) || weekFromDate(date)}, ${organizationId}, ${projectCode}, ${text(payload.category)}, ${contractorName}, ${text(payload.note)}, ${advance}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, 0, ${text(payload.status)})
+    values (${date}, ${text(payload.week) || weekFromDate(date)}, ${organizationId}, ${projectCode}, ${category}, ${contractorName}, ${text(payload.note)}, ${advance}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, 0, ${text(payload.status)})
   `;
   await recomputeSubcontractorCumulative(projectCode, contractorName, organizationId);
 }
@@ -3999,8 +4016,13 @@ export async function saveSubcontractorContract(payload: Record<string, unknown>
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = number(payload.id);
-  const projectCode = text(payload.projectCode);
-  const contractorName = text(payload.contractorName);
+  const projectCode = text(payload.projectCode).trim();
+  const contractorName = text(payload.contractorName).trim();
+  const approvedCost = requireNonNegativeNumericInput(payload.approvedCost, "Tổng chi phí dự kiến");
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!contractorName) throw new Error("Thiếu thầu phụ.");
+
   if (id > 0) {
     const [previousRow] =
       (await sql`select file_id from gp_subcontractor_contracts where organization_id = ${organizationId} and id = ${id}`) as Row[];
@@ -4009,7 +4031,7 @@ export async function saveSubcontractorContract(payload: Record<string, unknown>
       set organization_id = ${organizationId},
           project_code = ${projectCode},
           contractor_name = ${contractorName},
-          approved_cost = ${money(payload.approvedCost)},
+          approved_cost = ${approvedCost},
           note = ${text(payload.note)},
           file_url = ${text(payload.fileUrl)},
           file_id = ${text(payload.fileId)},
@@ -4032,7 +4054,7 @@ export async function saveSubcontractorContract(payload: Record<string, unknown>
 
   await sql`
     insert into gp_subcontractor_contracts (organization_id, project_code, contractor_name, approved_cost, note, file_url, file_id, status, updated_at)
-    values (${organizationId}, ${projectCode}, ${contractorName}, ${money(payload.approvedCost)}, ${text(payload.note)}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, ${text(payload.status) || "Chờ duyệt"}, now())
+    values (${organizationId}, ${projectCode}, ${contractorName}, ${approvedCost}, ${text(payload.note)}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, ${text(payload.status) || "Chờ duyệt"}, now())
     on conflict (organization_id, project_code, lower(contractor_name)) do update set
       approved_cost = excluded.approved_cost,
       note = excluded.note,

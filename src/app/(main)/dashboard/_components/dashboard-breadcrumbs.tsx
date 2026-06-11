@@ -90,7 +90,7 @@ const detailBreadcrumbMeta: Record<string, DetailBreadcrumbMeta> = {
     typeLabel: "Vật tư",
   },
   staff: {
-    moduleLabel: "Nhân công",
+    moduleLabel: "Danh mục",
     listHref: "/workforce/staff",
     typeLabel: "Nhân sự",
   },
@@ -100,12 +100,12 @@ const detailBreadcrumbMeta: Record<string, DetailBreadcrumbMeta> = {
     typeLabel: "Chấm công",
   },
   "labor-norms": {
-    moduleLabel: "Nhân công",
+    moduleLabel: "Danh mục",
     listHref: "/workforce/labor-norms",
     typeLabel: "Định mức nhân công",
   },
   progress: {
-    moduleLabel: "Nhân công",
+    moduleLabel: "Danh mục",
     listHref: "/workforce/progress",
     typeLabel: "Tiến độ",
   },
@@ -228,6 +228,11 @@ function buildProjectBreadcrumbs(pathname: string, projects: ProjectRow[]) {
   }
 
   if (firstSegment === "workforce") {
+    if (secondSegment && ["staff", "labor-norms", "progress"].includes(secondSegment)) {
+      addModuleBreadcrumb(items, routeId, "Danh mục", `/workforce/${secondSegment}`, labelFor(secondSegment));
+      return items;
+    }
+
     addModuleBreadcrumb(items, routeId, "Nhân công", "/workforce/attendance", labelFor(secondSegment || "attendance"));
     return items;
   }

@@ -25,12 +25,12 @@ import { TableRowActions } from "./table-row-actions";
 
 type SubcontractorsSection = "advances" | "contracts" | "operations";
 
-function validateOperationAmount(value: string) {
+function validateNonNegativeAmount(value: string, label = "Số tiền") {
   const raw = value.trim();
 
-  if (!raw) return "Thiếu số tiền.";
-  if (raw.startsWith("-")) return "Số tiền không được âm.";
-  if (!/^\d+(?:[.,]\d+)?$/.test(raw)) return "Số tiền phải là số hợp lệ.";
+  if (!raw) return `Thiếu ${label.toLowerCase()}.`;
+  if (raw.startsWith("-")) return `${label} không được âm.`;
+  if (!/^\d+(?:[.,]\d+)?$/.test(raw)) return `${label} phải là số hợp lệ.`;
 
   return undefined;
 }
@@ -213,7 +213,14 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             { key: "week", label: "Tuần", aliases: ["Tuan"], defaultValue: currentIsoWeek() },
             { key: "category", label: "Hạng mục", aliases: ["Hang muc"], required: true },
             { key: "contractorName", label: "Thầu phụ", aliases: ["Thau phu", "Nhà thầu"], required: true },
-            { key: "advance", label: "Tạm ứng", aliases: ["Tam ung", "Số tiền"], type: "number", required: true },
+            {
+              key: "advance",
+              label: "Tạm ứng",
+              aliases: ["Tam ung", "Số tiền"],
+              type: "number",
+              required: true,
+              validate: (value) => validateNonNegativeAmount(String(value ?? ""), "Tạm ứng"),
+            },
             { key: "note", label: "Diễn giải", aliases: ["Ghi chú", "Ghi chu"] },
           ]}
         />
@@ -227,9 +234,15 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
             { name: "date", label: "Ngày", type: "date", value: todayIso() },
             { name: "week", label: "Tuần", value: currentIsoWeek() },
-            { name: "category", label: "Hạng mục", type: "select", options: categoryOptions },
-            { name: "contractorName", label: "Thầu phụ", type: "select", options: contractorOptions },
-            { name: "advance", label: "Tạm ứng", type: "number" },
+            { name: "category", label: "Hạng mục", type: "select", options: categoryOptions, required: true },
+            { name: "contractorName", label: "Thầu phụ", type: "select", options: contractorOptions, required: true },
+            {
+              name: "advance",
+              label: "Tạm ứng",
+              type: "number",
+              required: true,
+              validate: (value) => validateNonNegativeAmount(value, "Tạm ứng"),
+            },
             { name: "note", label: "Diễn giải", type: "textarea" },
             {
               name: "attachment",
@@ -256,6 +269,8 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
               label: "Tổng chi phí dự kiến",
               aliases: ["Chi phí", "Chi phi", "Dự kiến"],
               type: "number",
+              required: true,
+              validate: (value) => validateNonNegativeAmount(String(value ?? ""), "Tổng chi phí dự kiến"),
             },
             { key: "status", label: "Trạng thái", aliases: ["Trang thai"], defaultValue: "Chờ duyệt" },
             { key: "note", label: "Ghi chú", aliases: ["Ghi chu"] },
@@ -269,8 +284,14 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
           onAction={runSubcontractorContractAction}
           fields={[
             { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-            { name: "contractorName", label: "Thầu phụ", type: "select", options: contractorOptions },
-            { name: "approvedCost", label: "Tổng chi phí dự kiến", type: "number" },
+            { name: "contractorName", label: "Thầu phụ", type: "select", options: contractorOptions, required: true },
+            {
+              name: "approvedCost",
+              label: "Tổng chi phí dự kiến",
+              type: "number",
+              required: true,
+              validate: (value) => validateNonNegativeAmount(value, "Tổng chi phí dự kiến"),
+            },
             { name: "status", label: "Trạng thái", value: "Chờ duyệt" },
             { name: "note", label: "Ghi chú", type: "textarea" },
           ]}
@@ -309,7 +330,13 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             { name: "date", label: "Ngày", type: "date", value: todayIso() },
             { name: "week", label: "Tuần", value: currentIsoWeek() },
             { name: "description", label: "Diễn giải", required: true },
-            { name: "amount", label: "Số tiền", type: "number", required: true, validate: validateOperationAmount },
+            {
+              name: "amount",
+              label: "Số tiền",
+              type: "number",
+              required: true,
+              validate: (value) => validateNonNegativeAmount(value),
+            },
             {
               name: "attachment",
               label: "Hồ sơ / hình ảnh",
@@ -404,6 +431,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                   label: "Hạng mục",
                                   type: "select",
                                   options: categoryOptions,
+                                  required: true,
                                   value: row.category,
                                 },
                                 {
@@ -411,9 +439,17 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                   label: "Thầu phụ",
                                   type: "select",
                                   options: contractorOptions,
+                                  required: true,
                                   value: row.contractorName,
                                 },
-                                { name: "advance", label: "Tạm ứng", type: "number", value: row.advance },
+                                {
+                                  name: "advance",
+                                  label: "Tạm ứng",
+                                  type: "number",
+                                  required: true,
+                                  value: row.advance,
+                                  validate: (value) => validateNonNegativeAmount(value, "Tạm ứng"),
+                                },
                                 { name: "note", label: "Diễn giải", type: "textarea", value: row.note },
                                 {
                                   name: "attachment",
@@ -510,13 +546,16 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                   label: "Thầu phụ",
                                   type: "select",
                                   options: contractorOptions,
+                                  required: true,
                                   value: row.contractorName,
                                 },
                                 {
                                   name: "approvedCost",
                                   label: "Tổng chi phí dự kiến",
                                   type: "number",
+                                  required: true,
                                   value: row.approvedCost,
+                                  validate: (value) => validateNonNegativeAmount(value, "Tổng chi phí dự kiến"),
                                 },
                                 { name: "status", label: "Trạng thái", value: row.status },
                                 { name: "note", label: "Ghi chú", type: "textarea", value: row.note },
@@ -635,7 +674,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                   type: "number",
                                   required: true,
                                   value: row.amount,
-                                  validate: validateOperationAmount,
+                                  validate: (value) => validateNonNegativeAmount(value),
                                 },
                                 {
                                   name: "attachment",

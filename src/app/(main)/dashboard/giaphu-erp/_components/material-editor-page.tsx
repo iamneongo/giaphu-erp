@@ -42,6 +42,16 @@ function textKey(value: string) {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+function validateNonNegativeNumber(value: string, label: string) {
+  const raw = value.trim();
+
+  if (!raw) return `Thiếu ${label.toLowerCase()}.`;
+  if (raw.startsWith("-")) return `${label} không được âm.`;
+  if (!/^\d+(?:[.,]\d+)?$/.test(raw)) return `${label} phải là số hợp lệ.`;
+
+  return undefined;
+}
+
 function getSupplierOptionsForMaterial({
   materialName,
   materialCatalogItems,
@@ -151,7 +161,14 @@ function buildMaterialFields({
         return undefined;
       },
     },
-    { name: "quantity", label: "Số lượng", type: "number", value: row?.quantity ?? 1, required: true },
+    {
+      name: "quantity",
+      label: "Số lượng",
+      type: "number",
+      value: row?.quantity ?? 1,
+      required: true,
+      validate: (value) => validateNonNegativeNumber(value, "Số lượng"),
+    },
     {
       name: "unit",
       label: "Đơn vị",
@@ -160,7 +177,14 @@ function buildMaterialFields({
       options: unitOptions,
       required: true,
     },
-    { name: "price", label: "Đơn giá", type: "number", value: row?.price ?? 0 },
+    {
+      name: "price",
+      label: "Đơn giá",
+      type: "number",
+      value: row?.price ?? 0,
+      required: true,
+      validate: (value) => validateNonNegativeNumber(value, "Đơn giá"),
+    },
     {
       name: "debt",
       label: "Công nợ",
@@ -188,14 +212,17 @@ function buildMaterialFields({
 export function MaterialEditorPage({ materialType, mode, materialId, listHref }: MaterialEditorPageProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { activeProjectCode, data, runAction, scoped } = useGiaPhuErp();
+  const { activeProjectCode, data, refresh, runAction, scoped } = useGiaPhuErp();
   const [deleting, startDeleteTransition] = React.useTransition();
+  const [recoveringMissingRow, setRecoveringMissingRow] = React.useState(false);
+  const recoveryKeyRef = React.useRef("");
   const resolvedListHref = listHref ?? materialListPath(pathname);
   const numericMaterialId = Number(materialId ?? 0);
   const editingRow =
     mode === "edit"
       ? data.materials.find((row) => row.id === numericMaterialId && row.materialType === materialType)
       : undefined;
+  const missingEditRow = mode === "edit" && numericMaterialId > 0 && !editingRow;
   const categoryOptions = React.useMemo(() => catalogOptions(data.catalogs.hangMuc), [data.catalogs.hangMuc]);
   const materialOptions = React.useMemo(
     () => catalogOptions(materialType === "VT Chính" ? data.catalogs.vatTu : data.catalogs.vatTuPhu),
@@ -246,6 +273,28 @@ export function MaterialEditorPage({ materialType, mode, materialId, listHref }:
     [activeProjectCode, categoryOptions, editingRow, getSupplierOptions, materialOptions, materialType, unitOptions],
   );
 
+  React.useEffect(() => {
+    if (!missingEditRow) {
+      recoveryKeyRef.current = "";
+      return;
+    }
+
+    const recoveryKey = `${materialType}:${numericMaterialId}`;
+    if (recoveryKeyRef.current === recoveryKey) return;
+
+    let cancelled = false;
+    recoveryKeyRef.current = recoveryKey;
+    setRecoveringMissingRow(true);
+
+    refresh().finally(() => {
+      if (!cancelled) setRecoveringMissingRow(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [materialType, missingEditRow, numericMaterialId, refresh]);
+
   async function saveMaterial(action: string, payload: FormPayload) {
     const result = await runAction(action, { ...payload, __returnData: false });
     if (result === false) return false;
@@ -268,7 +317,19 @@ export function MaterialEditorPage({ materialType, mode, materialId, listHref }:
     });
   }
 
-  if (mode === "edit" && !editingRow) {
+  if (missingEditRow) {
+    if (recoveringMissingRow) {
+      return (
+        <div className="flex flex-col gap-4 md:gap-6">
+          <ModuleHeader
+            title="Đang tải dòng vật tư"
+            description="Hệ thống đang đồng bộ lại dữ liệu mới nhất trước khi mở form sửa."
+            icon={PackagePlus}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col gap-4 md:gap-6">
         <ModuleHeader

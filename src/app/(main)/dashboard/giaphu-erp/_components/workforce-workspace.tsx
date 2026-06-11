@@ -111,6 +111,10 @@ function getWeekDates(weekValue: string) {
   });
 }
 
+function defaultAttendanceAnchorDate() {
+  return getWeekDates(currentIsoWeek())[0] ?? todayIso();
+}
+
 function formatShortDate(value: string) {
   const [, month, day] = value.split("-");
   return `${day}/${month}`;
@@ -377,9 +381,10 @@ function AttendanceBoard({
     payload: Record<string, unknown>,
   ) => Promise<GiaPhuActionResult | false | boolean | undefined>;
 }) {
-  const [selectedWeek, setSelectedWeek] = React.useState(currentIsoWeek());
-  const [weekInput, setWeekInput] = React.useState(currentIsoWeek());
-  const [weekError, setWeekError] = React.useState("");
+  const defaultAnchorDate = React.useMemo(() => defaultAttendanceAnchorDate(), []);
+  const [anchorDate, setAnchorDate] = React.useState(defaultAnchorDate);
+  const [selectedWeek, setSelectedWeek] = React.useState(() => isoWeekFromDate(defaultAnchorDate) || currentIsoWeek());
+  const [anchorDateError, setAnchorDateError] = React.useState("");
   const [selectedCategory, setSelectedCategory] = React.useState(categoryOptions[0]?.value || "");
   const [selectedStaffName, setSelectedStaffName] = React.useState("");
   const [draftParticipants, setDraftParticipants] = React.useState<DraftAttendanceParticipant[]>([]);
@@ -389,16 +394,17 @@ function AttendanceBoard({
   const [savingStaffName, setSavingStaffName] = React.useState("");
   const [deletingStaffName, setDeletingStaffName] = React.useState("");
 
-  const applyWeekInput = React.useCallback((value: string) => {
-    const normalized = normalizeAttendanceWeekInput(value);
-    if (!normalized.value) {
-      setWeekError(normalized.error ?? "Tuần chấm công không hợp lệ.");
+  const applyAnchorDate = React.useCallback((value: string) => {
+    const nextDate = value.slice(0, 10);
+    const nextWeek = isoWeekFromDate(nextDate);
+    if (!nextWeek) {
+      setAnchorDateError("Ngày neo chấm công không hợp lệ.");
       return;
     }
 
-    setSelectedWeek(normalized.value);
-    setWeekInput(normalized.value);
-    setWeekError("");
+    setAnchorDate(nextDate);
+    setSelectedWeek(nextWeek);
+    setAnchorDateError("");
   }, []);
 
   React.useEffect(() => {
@@ -859,33 +865,39 @@ function AttendanceBoard({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-        <div className="grid gap-3 sm:grid-cols-[200px_224px]">
+        <div className="grid gap-3 sm:grid-cols-[220px_140px_224px]">
           <div className="space-y-1.5">
-            <div className="font-medium text-muted-foreground text-xs">Tuần</div>
+            <div className="font-medium text-muted-foreground text-xs">Ngày neo trong tuần (thường T2)</div>
             <Input
-              value={weekInput}
-              placeholder="VD: 24.2026"
-              aria-invalid={Boolean(weekError)}
-              onBlur={() => applyWeekInput(weekInput)}
+              type="date"
+              value={anchorDate}
+              aria-invalid={Boolean(anchorDateError)}
+              onBlur={() => applyAnchorDate(anchorDate)}
               onChange={(event) => {
                 const nextValue = event.target.value;
-                setWeekInput(nextValue);
-                const normalized = normalizeAttendanceWeekInput(nextValue);
-                if (normalized.value) {
-                  setSelectedWeek(normalized.value);
-                  setWeekError("");
+                const nextWeek = isoWeekFromDate(nextValue);
+
+                setAnchorDate(nextValue);
+                if (nextWeek) {
+                  setSelectedWeek(nextWeek);
+                  setAnchorDateError("");
                 } else {
-                  setWeekError("");
+                  setAnchorDateError("");
                 }
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  applyWeekInput(weekInput);
+                  applyAnchorDate(anchorDate);
                 }
               }}
             />
-            {weekError ? <p className="text-destructive text-xs">{weekError}</p> : null}
+            {anchorDateError ? <p className="text-destructive text-xs">{anchorDateError}</p> : null}
+          </div>
+          <div className="space-y-1.5">
+            <div className="font-medium text-muted-foreground text-xs">Tuần ISO</div>
+            <Input value={selectedWeek} readOnly className="bg-muted/50" />
+            <p className="text-muted-foreground text-xs">Tự động theo ngày neo.</p>
           </div>
           <div className="space-y-1.5">
             <div className="font-medium text-muted-foreground text-xs">Hạng mục</div>
