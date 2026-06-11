@@ -224,6 +224,16 @@ function requireNumericInput(value: unknown, label: string) {
   return parseLocalizedNumber(raw);
 }
 
+function requireNonNegativeNumericInput(value: unknown, label: string) {
+  const parsed = requireNumericInput(value, label);
+
+  if (parsed < 0) {
+    throw new Error(`${label} không được âm.`);
+  }
+
+  return parsed;
+}
+
 function dateInputTime(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
 
@@ -970,6 +980,37 @@ async function deleteAttachmentDocumentIfUnused(documentId: number, organization
           and target.file_id = document.id::text
       )
   `;
+}
+
+function documentFileUrl(documentId: number) {
+  return `/api/giaphu-erp/documents/${documentId}/file`;
+}
+
+async function syncAttachmentDocumentReference(documentId: number, organizationId: string) {
+  if (!documentId) return;
+  const sql = getSql();
+  const fileUrl = documentFileUrl(documentId);
+
+  await Promise.all([
+    sql`
+      update gp_subcontractors
+      set file_url = ${fileUrl}
+      where organization_id = ${organizationId}
+        and file_id = ${String(documentId)}
+    `,
+    sql`
+      update gp_subcontractor_contracts
+      set file_url = ${fileUrl}
+      where organization_id = ${organizationId}
+        and file_id = ${String(documentId)}
+    `,
+    sql`
+      update gp_operations
+      set file_url = ${fileUrl}
+      where organization_id = ${organizationId}
+        and file_id = ${String(documentId)}
+    `,
+  ]);
 }
 
 async function ensureGiaPhuPerformanceIndexes() {
@@ -3891,6 +3932,8 @@ export async function saveSubcontractor(payload: Record<string, unknown>) {
   const advance = money(payload.advance);
   const id = number(payload.id);
   if (id > 0) {
+    const [previousRow] =
+      (await sql`select file_id from gp_subcontractors where organization_id = ${organizationId} and id = ${id}`) as Row[];
     await sql`
       update gp_subcontractors
       set work_date = ${date},
@@ -3908,6 +3951,7 @@ export async function saveSubcontractor(payload: Record<string, unknown>) {
       where organization_id = ${organizationId} and id = ${id}
     `;
     await recomputeSubcontractorCumulative(projectCode, contractorName, organizationId);
+    await deleteAttachmentDocumentIfUnused(number(previousRow?.file_id), organizationId);
     return;
   }
 
@@ -3955,12 +3999,16 @@ export async function saveSubcontractorContract(payload: Record<string, unknown>
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = number(payload.id);
+  const projectCode = text(payload.projectCode);
+  const contractorName = text(payload.contractorName);
   if (id > 0) {
+    const [previousRow] =
+      (await sql`select file_id from gp_subcontractor_contracts where organization_id = ${organizationId} and id = ${id}`) as Row[];
     await sql`
       update gp_subcontractor_contracts
       set organization_id = ${organizationId},
-          project_code = ${text(payload.projectCode)},
-          contractor_name = ${text(payload.contractorName)},
+          project_code = ${projectCode},
+          contractor_name = ${contractorName},
           approved_cost = ${money(payload.approvedCost)},
           note = ${text(payload.note)},
           file_url = ${text(payload.fileUrl)},
@@ -3969,12 +4017,22 @@ export async function saveSubcontractorContract(payload: Record<string, unknown>
           updated_at = now()
       where organization_id = ${organizationId} and id = ${id}
     `;
+    await deleteAttachmentDocumentIfUnused(number(previousRow?.file_id), organizationId);
     return;
   }
 
+  const [previousRow] = (await sql`
+      select file_id
+      from gp_subcontractor_contracts
+      where organization_id = ${organizationId}
+        and project_code = ${projectCode}
+        and lower(contractor_name) = lower(${contractorName})
+      limit 1
+    `) as Row[];
+
   await sql`
     insert into gp_subcontractor_contracts (organization_id, project_code, contractor_name, approved_cost, note, file_url, file_id, status, updated_at)
-    values (${organizationId}, ${text(payload.projectCode)}, ${text(payload.contractorName)}, ${money(payload.approvedCost)}, ${text(payload.note)}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, ${text(payload.status) || "Chờ duyệt"}, now())
+    values (${organizationId}, ${projectCode}, ${contractorName}, ${money(payload.approvedCost)}, ${text(payload.note)}, ${text(payload.fileUrl)}, ${text(payload.fileId)}, ${text(payload.status) || "Chờ duyệt"}, now())
     on conflict (organization_id, project_code, lower(contractor_name)) do update set
       approved_cost = excluded.approved_cost,
       note = excluded.note,
@@ -3983,6 +4041,7 @@ export async function saveSubcontractorContract(payload: Record<string, unknown>
       status = excluded.status,
       updated_at = now()
   `;
+  await deleteAttachmentDocumentIfUnused(number(previousRow?.file_id), organizationId);
 }
 
 export async function deleteSubcontractorContract(payload: Record<string, unknown>) {
@@ -4010,24 +4069,34 @@ export async function saveOperation(payload: Record<string, unknown>) {
   const organizationId = requireOrganizationId(payload.organizationId);
   const date = dateOnly(payload.date) || dateOnly(new Date());
   const id = number(payload.id);
+  const projectCode = text(payload.projectCode).trim();
+  const description = text(payload.description).trim();
+  const amount = requireNonNegativeNumericInput(payload.amount, "Số tiền");
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!description) throw new Error("Thiếu diễn giải.");
+
   if (id > 0) {
+    const [previousRow] =
+      (await sql`select file_id from gp_operations where organization_id = ${organizationId} and id = ${id}`) as Row[];
     await sql`
       update gp_operations
       set work_date = ${date},
           week = ${text(payload.week) || weekFromDate(date)},
-          project_code = ${text(payload.projectCode)},
-          description = ${text(payload.description)},
-          amount = ${money(payload.amount)},
+          project_code = ${projectCode},
+          description = ${description},
+          amount = ${amount},
           file_url = ${text(payload.fileUrl)},
           file_id = ${text(payload.fileId)}
       where organization_id = ${organizationId} and id = ${id}
     `;
+    await deleteAttachmentDocumentIfUnused(number(previousRow?.file_id), organizationId);
     return;
   }
 
   await sql`
     insert into gp_operations (work_date, week, organization_id, project_code, description, amount, file_url, file_id)
-    values (${date}, ${text(payload.week) || weekFromDate(date)}, ${organizationId}, ${text(payload.projectCode)}, ${text(payload.description)}, ${money(payload.amount)}, ${text(payload.fileUrl)}, ${text(payload.fileId)})
+    values (${date}, ${text(payload.week) || weekFromDate(date)}, ${organizationId}, ${projectCode}, ${description}, ${amount}, ${text(payload.fileUrl)}, ${text(payload.fileId)})
   `;
 }
 
@@ -4179,13 +4248,14 @@ export async function saveDocument(payload: Record<string, unknown>) {
             file_name = ${fileName},
             mime_type = ${mimeType},
             file_id = ${fileId},
-            file_url = '',
+            file_url = ${documentFileUrl(id)},
             file_data = ${fileData},
             file_size = ${fileSize},
             note = ${note},
             preview_text = ${previewText}
         where organization_id = ${organizationId} and id = ${id}
       `;
+      await syncAttachmentDocumentReference(id, organizationId);
       return id;
     }
 
@@ -4195,10 +4265,12 @@ export async function saveDocument(payload: Record<string, unknown>) {
           project_code = ${projectCode},
           doc_type = ${docType},
           file_name = ${fileName},
+          file_url = ${documentFileUrl(id)},
           note = ${note},
           preview_text = ${previewText}
       where organization_id = ${organizationId} and id = ${id}
     `;
+    await syncAttachmentDocumentReference(id, organizationId);
     return id;
   }
 
@@ -4211,7 +4283,7 @@ export async function saveDocument(payload: Record<string, unknown>) {
 
   await sql`
     update gp_documents
-    set file_url = ${`/api/giaphu-erp/documents/${nextId}/file`},
+    set file_url = ${documentFileUrl(nextId)},
         file_data = ${fileData},
         file_size = ${fileSize}
     where organization_id = ${organizationId} and id = ${nextId}
@@ -4225,6 +4297,7 @@ export async function deleteDocument(payload: Record<string, unknown>) {
   const organizationId = requireOrganizationId(payload.organizationId);
   const documentId = number(payload.id);
   if (!documentId) return;
+  const fileUrl = documentFileUrl(documentId);
 
   await Promise.all([
     sql`
@@ -4233,7 +4306,7 @@ export async function deleteDocument(payload: Record<string, unknown>) {
           file_id = '',
           updated_at = now()
       where organization_id = ${organizationId}
-        and (file_id = ${String(documentId)} or file_url = ${`/api/giaphu-erp/documents/${documentId}/file`})
+        and (file_id = ${String(documentId)} or file_url = ${fileUrl})
     `,
     sql`
       update gp_subcontractor_contracts
@@ -4241,14 +4314,14 @@ export async function deleteDocument(payload: Record<string, unknown>) {
           file_id = '',
           updated_at = now()
       where organization_id = ${organizationId}
-        and (file_id = ${String(documentId)} or file_url = ${`/api/giaphu-erp/documents/${documentId}/file`})
+        and (file_id = ${String(documentId)} or file_url = ${fileUrl})
     `,
     sql`
       update gp_operations
       set file_url = '',
           file_id = ''
       where organization_id = ${organizationId}
-        and (file_id = ${String(documentId)} or file_url = ${`/api/giaphu-erp/documents/${documentId}/file`})
+        and (file_id = ${String(documentId)} or file_url = ${fileUrl})
     `,
   ]);
 

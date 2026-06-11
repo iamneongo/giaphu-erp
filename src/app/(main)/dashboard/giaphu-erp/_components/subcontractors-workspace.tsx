@@ -15,7 +15,7 @@ import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, todayIso } from "../_lib/date-utils";
 import { catalogOptions, uniqueOptions } from "../_lib/form-options";
 import { formatMoney } from "../_lib/formatters";
-import { uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
+import { runGiaPhuAction, uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable } from "./data-table";
 import { ExcelImportDialog } from "./excel-import-dialog";
@@ -24,6 +24,16 @@ import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
 
 type SubcontractorsSection = "advances" | "contracts" | "operations";
+
+function validateOperationAmount(value: string) {
+  const raw = value.trim();
+
+  if (!raw) return "Thiếu số tiền.";
+  if (raw.startsWith("-")) return "Số tiền không được âm.";
+  if (!/^\d+(?:[.,]\d+)?$/.test(raw)) return "Số tiền phải là số hợp lệ.";
+
+  return undefined;
+}
 
 export function SubcontractorsWorkspace({ section = "advances" }: { section?: SubcontractorsSection }) {
   const { data, activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
@@ -92,6 +102,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
   ) {
     const attachment = payload.attachment instanceof File && payload.attachment.size > 0 ? payload.attachment : null;
     const nextPayload = { ...payload };
+    let uploadedDocumentId = 0;
     delete nextPayload.attachment;
 
     nextPayload.__returnData = false;
@@ -116,12 +127,16 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
       const documentId = Number(uploaded.documentId ?? 0);
 
       if (documentId > 0) {
+        uploadedDocumentId = documentId;
         nextPayload.fileId = String(documentId);
         nextPayload.fileUrl = `/api/giaphu-erp/documents/${documentId}/file`;
       }
     }
 
     const result = await runAction(action, nextPayload);
+    if (!result && uploadedDocumentId > 0) {
+      await runGiaPhuAction("deleteDocument", { id: uploadedDocumentId, __returnData: false }).catch(() => undefined);
+    }
     paginatedSubcontractors.refresh();
     return result;
   }
@@ -133,6 +148,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
   ) {
     const attachment = payload.attachment instanceof File && payload.attachment.size > 0 ? payload.attachment : null;
     const nextPayload = { ...payload };
+    let uploadedDocumentId = 0;
     delete nextPayload.attachment;
 
     nextPayload.__returnData = false;
@@ -156,12 +172,16 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
       const documentId = Number(uploaded.documentId ?? 0);
 
       if (documentId > 0) {
+        uploadedDocumentId = documentId;
         nextPayload.fileId = String(documentId);
         nextPayload.fileUrl = `/api/giaphu-erp/documents/${documentId}/file`;
       }
     }
 
     const result = await runAction(action, nextPayload);
+    if (!result && uploadedDocumentId > 0) {
+      await runGiaPhuAction("deleteDocument", { id: uploadedDocumentId, __returnData: false }).catch(() => undefined);
+    }
     paginatedOperations.refresh();
     return result;
   }
@@ -282,7 +302,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             { name: "date", label: "Ngày", type: "date", value: todayIso() },
             { name: "week", label: "Tuần", value: currentIsoWeek() },
             { name: "description", label: "Diễn giải", required: true },
-            { name: "amount", label: "Số tiền", type: "number" },
+            { name: "amount", label: "Số tiền", type: "number", required: true, validate: validateOperationAmount },
             {
               name: "attachment",
               label: "Hồ sơ / hình ảnh",
@@ -601,7 +621,14 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                 { name: "date", label: "Ngày", type: "date", value: row.date || todayIso() },
                                 { name: "week", label: "Tuần", value: row.week || currentIsoWeek() },
                                 { name: "description", label: "Diễn giải", required: true, value: row.description },
-                                { name: "amount", label: "Số tiền", type: "number", value: row.amount },
+                                {
+                                  name: "amount",
+                                  label: "Số tiền",
+                                  type: "number",
+                                  required: true,
+                                  value: row.amount,
+                                  validate: validateOperationAmount,
+                                },
                                 {
                                   name: "attachment",
                                   label: row.fileUrl ? "Hồ sơ / hình ảnh mới" : "Hồ sơ / hình ảnh",
