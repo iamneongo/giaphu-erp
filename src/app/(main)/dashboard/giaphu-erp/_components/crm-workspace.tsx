@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Banknote, BriefcaseBusiness, FileText, Plus, Trash2 } from "lucide-react";
+import { Banknote, BriefcaseBusiness, FileText, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,61 +88,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
     projects: {
       title: "CRM công trình",
       description: "Danh sách công trình và công trình đang làm việc.",
-      actions: (
-        <>
-          <ExcelImportDialog
-            title="Import công trình từ Excel"
-            action="saveProject"
-            onAction={runAction}
-            onImported={paginatedProjects.refresh}
-            fields={[
-              { key: "code", label: "Mã công trình", aliases: ["Mã CT", "Ma CT", "Code"], required: true },
-              { key: "name", label: "Tên công trình", aliases: ["Tên CT", "Ten CT"], required: true },
-              { key: "owner", label: "Chủ đầu tư", aliases: ["Chu dau tu", "Khách hàng"] },
-              { key: "contact", label: "Liên hệ", aliases: ["Lien he", "SĐT", "Phone"] },
-              { key: "referrer", label: "Người giới thiệu", aliases: ["Nguoi gioi thieu", "Nguồn"] },
-              { key: "startDate", label: "Ngày bắt đầu", aliases: ["Ngay bat dau"], type: "date" },
-              { key: "status", label: "Trạng thái", aliases: ["Trang thai"], defaultValue: "Đang thi công" },
-              { key: "failureReason", label: "Lý do thất bại", aliases: ["Ly do that bai", "Ghi chú"] },
-              { key: "pin", label: "Mã PIN", aliases: ["PIN", "Ma PIN", "Project PIN"] },
-            ]}
-          />
-          <ActionDialog
-            title="Thêm công trình"
-            button="Thêm công trình"
-            icon={Plus}
-            action="saveProject"
-            onAction={runAction}
-            fields={[
-              { name: "code", label: "Mã công trình", required: true },
-              { name: "name", label: "Tên công trình", required: true },
-              { name: "owner", label: "Chủ đầu tư" },
-              { name: "contact", label: "Liên hệ" },
-              { name: "referrer", label: "Người giới thiệu" },
-              {
-                name: "pin",
-                label: "Mã PIN công trình",
-                type: "password",
-                inputMode: "numeric",
-                required: true,
-                helperText: "Dùng khi chuyển đổi công trình.",
-              },
-              {
-                name: "startDate",
-                label: "Ngày bắt đầu",
-                type: "date",
-                value: todayIso(),
-              },
-              { name: "status", label: "Trạng thái", value: "Đang thi công" },
-              {
-                name: "failureReason",
-                label: "Lý do thất bại",
-                type: "textarea",
-              },
-            ]}
-          />
-        </>
-      ),
+      actions: null,
       content: (
         <SectionBlock title="Danh sách công trình">
           <DataTable

@@ -43,7 +43,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { readActiveProjectCode, readActiveProjectRouteId } from "@/lib/giaphu-erp/project-context";
 import { getProjectRouteInfo, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 import { cn } from "@/lib/utils";
@@ -472,6 +472,7 @@ export function DataTable<T>({
   enableRowDetails = true,
   detailType,
   rowDetailHref,
+  footerRow,
   serverSide,
 }: {
   columns: DataTableColumn<T>[];
@@ -489,6 +490,7 @@ export function DataTable<T>({
   enableRowDetails?: boolean;
   detailType?: string;
   rowDetailHref?: (row: T) => string | undefined;
+  footerRow?: (rows: T[], columnCount: number) => React.ReactNode;
   serverSide?: DataTableServerSideOptions;
 }) {
   const router = useRouter();
@@ -899,6 +901,9 @@ export function DataTable<T>({
               </TableRow>
             )}
           </TableBody>
+          {!isLoading && footerRow && filteredRows.length ? (
+            <TableFooter>{footerRow(filteredRows, table.getVisibleLeafColumns().length)}</TableFooter>
+          ) : null}
         </table>
       </ScrollArea>
 
