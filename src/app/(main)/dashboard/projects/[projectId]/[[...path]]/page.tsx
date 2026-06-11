@@ -75,7 +75,7 @@ export default async function ProjectPage({
       return <OverviewDashboard />;
     case "reports":
       await enforceErpRoutePermission(ERP_PERMISSIONS.reportsRead);
-      return <ReportsWorkspace />;
+      return <ReportsWorkspace routeProjectId={decodedProjectId} />;
     case "crm":
       return redirect(projectScopedPath(decodedProjectId, "/crm/projects"));
     case "crm/projects":

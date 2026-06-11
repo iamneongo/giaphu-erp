@@ -45,8 +45,16 @@ const ReuiPie = Pie as unknown as React.ComponentType<
   }
 >;
 
-export function ReportsWorkspace() {
-  const { activeProject, activeProjectCode, isSwitchingProject } = useGiaPhuErp();
+export function ReportsWorkspace({ routeProjectId }: { routeProjectId?: string }) {
+  const { activeProject, activeProjectCode, data: dashboardData, isSwitchingProject } = useGiaPhuErp();
+  const routeProject = routeProjectId
+    ? dashboardData.projects.find(
+        (project) =>
+          project.id === routeProjectId || project.code === routeProjectId || project.name === routeProjectId,
+      )
+    : undefined;
+  const reportProject = routeProject ?? activeProject;
+  const reportProjectCode = reportProject?.code ?? activeProjectCode;
   const chartId = React.useId().replace(/\W/g, "");
   const {
     data: reportData,
@@ -54,7 +62,7 @@ export function ReportsWorkspace() {
     loading,
     materialsServerSide,
     operationsServerSide,
-  } = useReportsData(activeProjectCode);
+  } = useReportsData(reportProjectCode);
   const insights = reportData.insights;
 
   const totalFocusedCost =
@@ -106,7 +114,7 @@ export function ReportsWorkspace() {
 
   function exportReport() {
     const lines = [
-      ["Báo cáo", activeProject?.name ?? "Công trình"],
+      ["Báo cáo", reportProject?.name ?? "Công trình"],
       ["Tổng 3 nhóm", totalFocusedCost],
       ["Chi phí nhân công", insights.headline.laborCost],
       ["Chi phí vật tư chính", insights.headline.materialMainCost],
@@ -123,7 +131,7 @@ export function ReportsWorkspace() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `bao-cao-nhan-cong-vat-tu-van-hanh-${activeProjectCode || "cong-trinh"}.csv`;
+    link.download = `bao-cao-nhan-cong-vat-tu-van-hanh-${reportProjectCode || "cong-trinh"}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -138,7 +146,7 @@ export function ReportsWorkspace() {
         <div className="space-y-2">
           <h1 className="font-semibold text-3xl tracking-tight">Báo cáo chi phí công trình</h1>
           <p className="max-w-3xl text-muted-foreground text-sm leading-6">
-            Nhân công, vật tư chính và vận hành của {activeProject?.name ?? "công trình"}.
+            Nhân công, vật tư chính và vận hành của {reportProject?.name ?? "công trình"}.
           </p>
         </div>
         <Button size="sm" onClick={exportReport}>
