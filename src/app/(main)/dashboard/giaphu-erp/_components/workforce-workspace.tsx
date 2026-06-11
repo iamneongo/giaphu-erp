@@ -34,6 +34,7 @@ import { formatCount, formatMoney } from "../_lib/formatters";
 import type { GiaPhuActionResult } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable, type DataTableColumn } from "./data-table";
+import { DatePickerField } from "./date-picker-field";
 import { ExcelImportDialog } from "./excel-import-dialog";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
@@ -149,26 +150,6 @@ function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: St
   }
 
   return Array.from(staffMap.values()).sort((first, second) => first.name.localeCompare(second.name, "vi"));
-}
-
-function normalizeAttendanceWeekInput(value: string) {
-  const raw = value.trim();
-  if (!raw) return { error: "Nhập tuần chấm công." };
-
-  const dateWeek = isoWeekFromDate(raw);
-  if (dateWeek) return { value: dateWeek };
-
-  const normalized = raw.replace(/[/-]/g, ".");
-  const match = normalized.match(/^(\d{1,2})\.(\d{4})$/);
-  if (!match) return { error: "Nhập tuần dạng 24.2026 hoặc ngày dạng 2026-06-08." };
-
-  const week = Number(match[1]);
-  const year = Number(match[2]);
-  if (week < 1 || week > 53 || year < 1900 || year > 2200) {
-    return { error: "Tuần chấm công không hợp lệ." };
-  }
-
-  return { value: `${String(week).padStart(2, "0")}.${year}` };
 }
 
 function dateTimeFromInput(value: unknown) {
@@ -384,7 +365,6 @@ function AttendanceBoard({
   const defaultAnchorDate = React.useMemo(() => defaultAttendanceAnchorDate(), []);
   const [anchorDate, setAnchorDate] = React.useState(defaultAnchorDate);
   const [selectedWeek, setSelectedWeek] = React.useState(() => isoWeekFromDate(defaultAnchorDate) || currentIsoWeek());
-  const [anchorDateError, setAnchorDateError] = React.useState("");
   const [selectedCategory, setSelectedCategory] = React.useState(categoryOptions[0]?.value || "");
   const [selectedStaffName, setSelectedStaffName] = React.useState("");
   const [draftParticipants, setDraftParticipants] = React.useState<DraftAttendanceParticipant[]>([]);
@@ -397,14 +377,10 @@ function AttendanceBoard({
   const applyAnchorDate = React.useCallback((value: string) => {
     const nextDate = value.slice(0, 10);
     const nextWeek = isoWeekFromDate(nextDate);
-    if (!nextWeek) {
-      setAnchorDateError("Ngày neo chấm công không hợp lệ.");
-      return;
-    }
+    if (!nextWeek) return;
 
     setAnchorDate(nextDate);
     setSelectedWeek(nextWeek);
-    setAnchorDateError("");
   }, []);
 
   React.useEffect(() => {
@@ -865,39 +841,10 @@ function AttendanceBoard({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-        <div className="grid gap-3 sm:grid-cols-[220px_140px_224px]">
+        <div className="grid gap-3 sm:grid-cols-[140px_224px_220px]">
           <div className="space-y-1.5">
-            <div className="font-medium text-muted-foreground text-xs">Ngày neo trong tuần (thường T2)</div>
-            <Input
-              type="date"
-              value={anchorDate}
-              aria-invalid={Boolean(anchorDateError)}
-              onBlur={() => applyAnchorDate(anchorDate)}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                const nextWeek = isoWeekFromDate(nextValue);
-
-                setAnchorDate(nextValue);
-                if (nextWeek) {
-                  setSelectedWeek(nextWeek);
-                  setAnchorDateError("");
-                } else {
-                  setAnchorDateError("");
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  applyAnchorDate(anchorDate);
-                }
-              }}
-            />
-            {anchorDateError ? <p className="text-destructive text-xs">{anchorDateError}</p> : null}
-          </div>
-          <div className="space-y-1.5">
-            <div className="font-medium text-muted-foreground text-xs">Tuần ISO</div>
+            <div className="font-medium text-muted-foreground text-xs">Tuần</div>
             <Input value={selectedWeek} readOnly className="bg-muted/50" />
-            <p className="text-muted-foreground text-xs">Tự động theo ngày neo.</p>
           </div>
           <div className="space-y-1.5">
             <div className="font-medium text-muted-foreground text-xs">Hạng mục</div>
@@ -913,6 +860,16 @@ function AttendanceBoard({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1.5">
+            <div className="font-medium text-muted-foreground text-xs">Ngày neo trong tuần (thường T2)</div>
+            <DatePickerField
+              name="attendanceAnchorDate"
+              value={anchorDate}
+              placeholder="Chọn ngày neo"
+              className="h-9"
+              onValueChange={applyAnchorDate}
+            />
           </div>
         </div>
 
