@@ -29,6 +29,8 @@ type TeamManagerResponse = {
   roles?: ClerkOrganizationRole[];
   memberships?: ClerkOrganizationMembership[];
   invitations?: ClerkOrganizationInvitation[];
+  membership?: ClerkOrganizationMembership;
+  invitation?: ClerkOrganizationInvitation;
 };
 
 const hiddenRoleKeys = new Set(["org:member"]);
@@ -140,8 +142,12 @@ export function TeamManager() {
     });
   }, [debouncedSearch, memberships, roleNameMap]);
 
-  const loadData = React.useCallback(async () => {
-    setLoading(true);
+  const loadData = React.useCallback(async (options?: { showLoader?: boolean }) => {
+    const showLoader = options?.showLoader ?? false;
+
+    if (showLoader) {
+      setLoading(true);
+    }
 
     try {
       const response = await fetch("/api/clerk-rbac", { cache: "no-store" });
@@ -172,16 +178,22 @@ export function TeamManager() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
   }, []);
 
   React.useEffect(() => {
-    void loadData();
+    void loadData({ showLoader: true });
   }, [loadData]);
 
   const runAction = React.useCallback(
-    async (body: Record<string, unknown>, successMessage: string) => {
+    async (
+      body: Record<string, unknown>,
+      successMessage: string,
+      applyResult?: (payload: TeamManagerResponse) => void,
+    ) => {
       setSubmitting(true);
 
       try {
@@ -197,8 +209,9 @@ export function TeamManager() {
           throw new Error(payload.message || "Thao tác thất bại.");
         }
 
+        applyResult?.(payload);
         toast.success(successMessage);
-        await loadData();
+        void loadData();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
       } finally {
@@ -225,6 +238,19 @@ export function TeamManager() {
         role: inviteRole,
       },
       "Đã gửi lời mời thành viên.",
+      (payload) => {
+        if (!payload.invitation) return;
+
+        setInvitations((current) => {
+          if (current.some((invitation) => invitation.id === payload.invitation?.id)) {
+            return current;
+          }
+
+          return [payload.invitation, ...current].filter((invitation): invitation is ClerkOrganizationInvitation =>
+            Boolean(invitation),
+          );
+        });
+      },
     );
 
     setInviteEmail("");
@@ -238,6 +264,17 @@ export function TeamManager() {
         role,
       },
       "Đã cập nhật vai trò thành viên.",
+      (payload) => {
+        setMemberships((current) =>
+          current.map((membership) => {
+            if (membership.publicUserData.userId !== userId) {
+              return membership;
+            }
+
+            return payload.membership ?? { ...membership, role, updatedAt: Date.now() };
+          }),
+        );
+      },
     );
   }
 
@@ -252,6 +289,9 @@ export function TeamManager() {
         userId,
       },
       "Đã xóa thành viên khỏi tổ chức.",
+      () => {
+        setMemberships((current) => current.filter((membership) => membership.publicUserData.userId !== userId));
+      },
     );
   }
 
@@ -266,6 +306,9 @@ export function TeamManager() {
         invitationId,
       },
       "Đã thu hồi lời mời.",
+      () => {
+        setInvitations((current) => current.filter((invitation) => invitation.id !== invitationId));
+      },
     );
   }
 

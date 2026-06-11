@@ -8,6 +8,7 @@ import type {
   ProjectRow,
   ReportTableState,
 } from "@/lib/giaphu-erp/types";
+import { normalizeVietnameseMojibake } from "@/lib/text/mojibake";
 
 export type GiaPhuActionPayload = Record<string, unknown>;
 
@@ -28,6 +29,13 @@ export interface GiaPhuActionResult {
   pageSize?: number;
   insights?: GiaPhuOverviewInsights | GiaPhuReportsInsights;
   filterOptions?: Record<string, Array<{ label: string; value: string }>>;
+  materialDebtSummary?: GiaPhuMaterialDebtSummary;
+}
+
+export interface GiaPhuMaterialDebtSummary {
+  total: number;
+  rows: number;
+  suppliers: number;
 }
 
 export interface GiaPhuPagedRowsResult<T> {
@@ -39,12 +47,13 @@ export interface GiaPhuPagedRowsResult<T> {
 
 async function parseResponse(response: Response): Promise<GiaPhuActionResult> {
   const result = (await response.json()) as GiaPhuActionResult;
+  const message = normalizeVietnameseMojibake(result.message);
 
   if (!response.ok || result.status !== "success") {
-    throw new Error(result.message || "Thao tác GiaPhu ERP thất bại.");
+    throw new Error(message || "Thao tác GiaPhu ERP thất bại.");
   }
 
-  return result;
+  return { ...result, message };
 }
 
 async function parseReportsResponse(response: Response): Promise<{
@@ -57,12 +66,13 @@ async function parseReportsResponse(response: Response): Promise<{
     message?: string;
     data?: GiaPhuReportsData;
   };
+  const message = normalizeVietnameseMojibake(result.message);
 
   if (!response.ok || result.status !== "success") {
-    throw new Error(result.message || "Không tải được dữ liệu báo cáo.");
+    throw new Error(message || "Không tải được dữ liệu báo cáo.");
   }
 
-  return result;
+  return { ...result, message };
 }
 
 export async function fetchGiaPhuData() {
@@ -179,6 +189,26 @@ export async function fetchGiaPhuInsights<T extends GiaPhuOverviewInsights | Gia
   if (!result.insights) throw new Error("API không trả về dữ liệu báo cáo.");
 
   return result.insights as T;
+}
+
+export async function fetchGiaPhuMaterialDebtSummary({
+  projectCode,
+  signal,
+}: {
+  projectCode: string;
+  signal?: AbortSignal;
+}) {
+  const params = new URLSearchParams({
+    view: "material-debt-summary",
+    projectCode,
+  });
+
+  const result = await parseResponse(
+    await fetch(`/api/giaphu-erp?${params.toString()}`, { cache: "no-store", signal }),
+  );
+  if (!result.materialDebtSummary) throw new Error("API không trả về thống kê công nợ vật tư.");
+
+  return result.materialDebtSummary;
 }
 
 export async function fetchGiaPhuReportsData({

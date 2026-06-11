@@ -152,6 +152,7 @@ export interface CatalogItem {
   supplier: string;
   contact: string;
   note: string;
+  sortOrder: number;
 }
 
 export interface StaffRow {

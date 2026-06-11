@@ -29,6 +29,7 @@ import {
   deleteSubcontractorContract,
   getGiaPhuDashboardData,
   getGiaPhuFilterOptions,
+  getGiaPhuMaterialDebtSummary,
   getGiaPhuOverviewInsights,
   getGiaPhuPagedRows,
   getGiaPhuProjectList,
@@ -363,6 +364,18 @@ export async function GET(request: Request) {
       }
 
       return NextResponse.json({ status: "error", message: "Loại báo cáo không hợp lệ." }, { status: 400 });
+    }
+
+    if (searchParams.get("view") === "material-debt-summary") {
+      if (!canUsePermission(session, permissionKeys, ERP_PERMISSIONS.materialsRead)) {
+        return forbidden("Bạn không có quyền xem công nợ vật tư.");
+      }
+
+      const materialDebtSummary = await getGiaPhuMaterialDebtSummary({
+        activeProjectCode: searchParams.get("projectCode") || readActiveProjectCode(request),
+        organizationId,
+      });
+      return NextResponse.json({ status: "success", materialDebtSummary });
     }
 
     const data = await getGiaPhuDashboardData({

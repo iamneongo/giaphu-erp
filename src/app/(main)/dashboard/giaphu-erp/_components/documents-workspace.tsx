@@ -578,7 +578,7 @@ export function DocumentsWorkspace() {
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.documentsManage);
 
   async function runDocumentAction(action: string, payload: Record<string, unknown>) {
-    const saved = await runAction(action, { ...payload, __returnData: false });
+    const saved = await runAction(action, action === "deleteDocument" ? payload : { ...payload, __returnData: false });
     if (!saved) return false;
 
     paginatedDocuments.refresh();

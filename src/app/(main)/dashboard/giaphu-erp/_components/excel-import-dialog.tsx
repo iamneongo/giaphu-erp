@@ -228,7 +228,14 @@ function parseRows(rawRows: unknown[][], fields: ExcelImportField[], columnMappi
 
       return { sourceRow: headerIndex + index + 2, payload, errors };
     })
-    .filter((row) => !isEmptyPayload(row.payload));
+    .filter((row) => !isEmptyPayload(row.payload))
+    .map<ParsedImportRow>((row) => ({
+      ...row,
+      payload: {
+        ...row.payload,
+        importOrder: row.sourceRow,
+      } as Record<string, unknown>,
+    }));
 
   return { rows, missingHeaderKeys, missingHeaders };
 }

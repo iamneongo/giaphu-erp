@@ -24,6 +24,7 @@ import type {
   PaymentRow,
   ProjectRow,
 } from "@/lib/giaphu-erp/types";
+import { normalizeVietnameseMojibake } from "@/lib/text/mojibake";
 
 import {
   fetchGiaPhuData,
@@ -152,6 +153,10 @@ export function GiaPhuErpProvider({
   const redirectedToCreateRef = React.useRef(false);
 
   React.useEffect(() => {
+    setData(initialData);
+  }, [initialData]);
+
+  React.useEffect(() => {
     activeProjectCodeRef.current = activeProjectCode;
   }, [activeProjectCode]);
 
@@ -164,7 +169,7 @@ export function GiaPhuErpProvider({
       const nextData = await fetchGiaPhuData();
       setData(nextData);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      toast.error(normalizeVietnameseMojibake(error instanceof Error ? error.message : String(error)));
     } finally {
       setIsSwitchingProject(false);
     }
@@ -310,7 +315,7 @@ export function GiaPhuErpProvider({
         toast.success("Đã lưu dữ liệu.");
         return result;
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error));
+        toast.error(normalizeVietnameseMojibake(error instanceof Error ? error.message : String(error)));
         return false;
       }
     },
@@ -321,7 +326,7 @@ export function GiaPhuErpProvider({
     try {
       return await queryGiaPhuDocuments(payload);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      toast.error(normalizeVietnameseMojibake(error instanceof Error ? error.message : String(error)));
       return [];
     }
   }, []);

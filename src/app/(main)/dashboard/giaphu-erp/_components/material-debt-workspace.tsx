@@ -15,6 +15,7 @@ import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { uniqueOptions } from "../_lib/form-options";
 import { formatCount, formatMoney } from "../_lib/formatters";
+import { fetchGiaPhuMaterialDebtSummary, type GiaPhuMaterialDebtSummary } from "../_lib/giaphu-erp-api";
 import { DataTable, type DataTableColumn } from "./data-table";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
@@ -26,6 +27,52 @@ function materialTotal(row: MaterialRow) {
 
 function isUnpaid(row: MaterialRow) {
   return row.paymentStatus !== "Đã TT" || row.debt === "Có";
+}
+
+function getDebtSummaryFromRows(rows: MaterialRow[]): GiaPhuMaterialDebtSummary {
+  const debtRows = rows.filter(isUnpaid);
+
+  return {
+    total: debtRows.reduce((total, row) => total + materialTotal(row), 0),
+    rows: debtRows.length,
+    suppliers: new Set(debtRows.map((row) => row.supplier).filter(Boolean)).size,
+  };
+}
+
+function useMaterialDebtSummary(activeProjectCode: string, initialRows: MaterialRow[]) {
+  const initialSummary = React.useMemo(() => getDebtSummaryFromRows(initialRows), [initialRows]);
+  const [summary, setSummary] = React.useState<GiaPhuMaterialDebtSummary>(initialSummary);
+  const [refreshToken, setRefreshToken] = React.useState(0);
+
+  React.useEffect(() => {
+    setSummary(initialSummary);
+  }, [initialSummary]);
+
+  React.useEffect(() => {
+    if (!activeProjectCode) {
+      setSummary({ total: 0, rows: 0, suppliers: 0 });
+      return;
+    }
+
+    const controller = new AbortController();
+    const requestRefreshToken = refreshToken;
+
+    fetchGiaPhuMaterialDebtSummary({ projectCode: activeProjectCode, signal: controller.signal })
+      .then((nextSummary) => {
+        if (!controller.signal.aborted && requestRefreshToken === refreshToken) setSummary(nextSummary);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted && requestRefreshToken === refreshToken) setSummary(initialSummary);
+      });
+
+    return () => controller.abort();
+  }, [activeProjectCode, initialSummary, refreshToken]);
+
+  const refresh = React.useCallback(() => {
+    setRefreshToken((current) => current + 1);
+  }, []);
+
+  return { summary, refresh };
 }
 
 function DebtMetricCard({
@@ -177,16 +224,18 @@ function buildColumns({
 export function MaterialDebtWorkspace() {
   const { activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.materialsManage);
-  const debtFixedFilters = React.useMemo(() => ({ paymentStatus: "Chưa TT" }), []);
+  const debtFixedFilters = React.useMemo(() => ({ debtOpen: "true" }), []);
   const paginatedDebt = usePaginatedErpRows<MaterialRow>({
     dataset: "materials",
     projectCode: activeProjectCode,
     initialRows: scoped.materials.filter(isUnpaid),
     fixedFilters: debtFixedFilters,
   });
-  const debtRowsForStats = scoped.materials.filter(isUnpaid);
-  const debtTotal = debtRowsForStats.reduce((total, row) => total + materialTotal(row), 0);
-  const supplierCount = new Set(debtRowsForStats.map((row) => row.supplier).filter(Boolean)).size;
+  const debtSummary = useMaterialDebtSummary(activeProjectCode, scoped.materials);
+  const refreshDebtData = React.useCallback(() => {
+    paginatedDebt.refresh();
+    debtSummary.refresh();
+  }, [debtSummary, paginatedDebt]);
   const weekOptions = uniqueOptions(scoped.materials.map((row) => row.week));
   const categoryOptions = uniqueOptions(scoped.materials.map((row) => row.category));
   const supplierOptions = uniqueOptions(scoped.materials.map((row) => row.supplier));
@@ -199,21 +248,21 @@ export function MaterialDebtWorkspace() {
       <div className="grid gap-3 md:grid-cols-3">
         <DebtMetricCard
           title="Tổng công nợ"
-          value={formatMoney(debtTotal)}
+          value={formatMoney(debtSummary.summary.total)}
           hint="Tổng vật tư đang Chưa TT"
           footer="Tổng giá trị vật tư chưa thanh toán."
           icon={CircleDollarSign}
         />
         <DebtMetricCard
           title="Dòng chưa thanh toán"
-          value={formatCount(debtRowsForStats.length)}
+          value={formatCount(debtSummary.summary.rows)}
           hint="Dữ liệu công trình hiện tại"
           footer="Số dòng vật tư chưa thanh toán."
           icon={Receipt}
         />
         <DebtMetricCard
           title="Nhà cung cấp"
-          value={formatCount(supplierCount)}
+          value={formatCount(debtSummary.summary.suppliers)}
           hint="Số NCC còn công nợ mở"
           footer="Nhà cung cấp còn dòng vật tư chưa thanh toán."
           icon={CheckCircle2}
@@ -226,7 +275,7 @@ export function MaterialDebtWorkspace() {
         <DataTable
           key={`material-debt-${activeProjectCode}`}
           loading={isSwitchingProject}
-          columns={buildColumns({ canManage, runAction, refresh: paginatedDebt.refresh })}
+          columns={buildColumns({ canManage, runAction, refresh: refreshDebtData })}
           rows={paginatedDebt.rows}
           getRowId={(row) => row.id}
           serverSide={paginatedDebt.serverSide}

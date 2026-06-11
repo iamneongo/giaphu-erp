@@ -51,6 +51,11 @@ export type GiaPhuPagedRowsOptions = {
 
 export type GiaPhuFilterOption = { label: string; value: string };
 export type GiaPhuFilterOptionsResult = Record<string, GiaPhuFilterOption[]>;
+export type GiaPhuMaterialDebtSummary = {
+  total: number;
+  rows: number;
+  suppliers: number;
+};
 
 export type GiaPhuPagedRowsResult =
   | { dataset: "projects"; rows: ProjectRow[]; total: number; pageIndex: number; pageSize: number }
@@ -322,6 +327,7 @@ function catalogFromRow(row: Row): CatalogItem {
     supplier: text(row.supplier),
     contact: text(row.contact),
     note: text(row.note),
+    sortOrder: number(row.sort_order),
   };
 }
 
@@ -606,12 +612,15 @@ async function createGiaPhuSchemaInternal() {
     supplier text not null default '',
     contact text not null default '',
     note text not null default '',
+    sort_order integer not null default 0,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
   )`;
 
   await sql`drop index if exists gp_catalog_items_kind_name_idx`;
-  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name))`;
+  await sql`drop index if exists gp_catalog_items_org_kind_name_idx`;
+  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name)) where kind not in ('vatTu', 'vatTuPhu')`;
+  await sql`create unique index if not exists gp_catalog_items_org_kind_name_supplier_idx on gp_catalog_items (organization_id, kind, lower(name), lower(supplier)) where kind in ('vatTu', 'vatTuPhu')`;
 
   await sql`create table if not exists gp_staff (
     id text primary key,
@@ -841,6 +850,7 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_projects add column if not exists pin_hash text not null default ''`;
   await sql`alter table gp_catalog_items add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_catalog_items add column if not exists supplier text not null default ''`;
+  await sql`alter table gp_catalog_items add column if not exists sort_order integer not null default 0`;
   await sql`alter table gp_staff add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_contracts add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_payments add column if not exists organization_id text not null default ''`;
@@ -854,13 +864,112 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_labor_norms add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_progress add column if not exists organization_id text not null default ''`;
   await sql`drop index if exists gp_catalog_items_kind_name_idx`;
-  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name))`;
+  await sql`drop index if exists gp_catalog_items_org_kind_name_idx`;
+  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name)) where kind not in ('vatTu', 'vatTuPhu')`;
+  await sql`create unique index if not exists gp_catalog_items_org_kind_name_supplier_idx on gp_catalog_items (organization_id, kind, lower(name), lower(supplier)) where kind in ('vatTu', 'vatTuPhu')`;
   await sql`drop index if exists gp_subcontractor_contracts_project_name_idx`;
   await sql`create unique index if not exists gp_subcontractor_contracts_org_project_name_idx on gp_subcontractor_contracts (organization_id, project_code, lower(contractor_name))`;
   await sql`alter table gp_labor_norms drop constraint if exists gp_labor_norms_project_code_category_key`;
   await sql`alter table gp_progress drop constraint if exists gp_progress_project_code_category_key`;
   await sql`create unique index if not exists gp_labor_norms_org_project_category_idx on gp_labor_norms (organization_id, project_code, category)`;
   await sql`create unique index if not exists gp_progress_org_project_category_idx on gp_progress (organization_id, project_code, category)`;
+}
+
+async function cleanupOrphanDocumentReferences() {
+  await ensureDocumentFileColumns();
+  const sql = getSql();
+
+  await sql`
+    update gp_subcontractors target
+    set file_url = '',
+        file_id = '',
+        updated_at = now()
+    where file_id <> ''
+      and not exists (
+        select 1
+        from gp_documents document
+        where document.organization_id = target.organization_id
+          and document.id::text = target.file_id
+          and document.file_data <> ''
+      )
+  `;
+
+  await sql`
+    update gp_subcontractor_contracts target
+    set file_url = '',
+        file_id = '',
+        updated_at = now()
+    where file_id <> ''
+      and not exists (
+        select 1
+        from gp_documents document
+        where document.organization_id = target.organization_id
+          and document.id::text = target.file_id
+          and document.file_data <> ''
+      )
+  `;
+
+  await sql`
+    update gp_operations target
+    set file_url = '',
+        file_id = ''
+    where file_id <> ''
+      and not exists (
+        select 1
+        from gp_documents document
+        where document.organization_id = target.organization_id
+          and document.id::text = target.file_id
+          and document.file_data <> ''
+      )
+  `;
+
+  await sql`
+    delete from gp_documents document
+    where document.doc_type in ('Tạm ứng thầu phụ', 'Chi phí vận hành')
+      and document.preview_text like document.doc_type || ' ·%'
+      and not exists (
+        select 1 from gp_subcontractors target
+        where target.organization_id = document.organization_id
+          and target.file_id = document.id::text
+      )
+      and not exists (
+        select 1 from gp_subcontractor_contracts target
+        where target.organization_id = document.organization_id
+          and target.file_id = document.id::text
+      )
+      and not exists (
+        select 1 from gp_operations target
+        where target.organization_id = document.organization_id
+          and target.file_id = document.id::text
+      )
+  `;
+}
+
+async function deleteAttachmentDocumentIfUnused(documentId: number, organizationId: string) {
+  if (!documentId) return;
+  const sql = getSql();
+
+  await sql`
+    delete from gp_documents document
+    where document.organization_id = ${organizationId}
+      and document.id = ${documentId}
+      and document.doc_type in ('Tạm ứng thầu phụ', 'Chi phí vận hành', 'Hợp đồng thầu phụ')
+      and not exists (
+        select 1 from gp_subcontractors target
+        where target.organization_id = document.organization_id
+          and target.file_id = document.id::text
+      )
+      and not exists (
+        select 1 from gp_subcontractor_contracts target
+        where target.organization_id = document.organization_id
+          and target.file_id = document.id::text
+      )
+      and not exists (
+        select 1 from gp_operations target
+        where target.organization_id = document.organization_id
+          and target.file_id = document.id::text
+      )
+  `;
 }
 
 async function ensureGiaPhuPerformanceIndexes() {
@@ -870,10 +979,12 @@ async function ensureGiaPhuPerformanceIndexes() {
   const sql = getSql();
   state.__giaPhuPerformanceIndexesPromise ??= (async () => {
     await ensureOrganizationColumns();
+    await cleanupOrphanDocumentReferences();
     await sql`create unique index if not exists gp_projects_id_unique_idx on gp_projects (id)`;
     await sql`create index if not exists gp_projects_org_id_idx on gp_projects (organization_id, id)`;
     await sql`create index if not exists gp_projects_org_date_idx on gp_projects (organization_id, updated_at desc, code asc)`;
-    await sql`create index if not exists gp_catalog_items_org_kind_idx on gp_catalog_items (organization_id, kind, name)`;
+    await sql`drop index if exists gp_catalog_items_org_kind_idx`;
+    await sql`create index if not exists gp_catalog_items_org_kind_idx on gp_catalog_items (organization_id, kind, sort_order, code, name)`;
     await sql`create index if not exists gp_catalog_items_org_kind_supplier_idx on gp_catalog_items (organization_id, kind, supplier)`;
     await sql`create index if not exists gp_staff_org_idx on gp_staff (organization_id, id asc, name asc)`;
     await sql`create index if not exists gp_materials_project_date_idx on gp_materials (project_code, work_date desc, id desc)`;
@@ -931,7 +1042,12 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
 
   const [projects, catalogRows, staffRows] = await Promise.all([
     getGiaPhuProjectList({ organizationId }),
-    sql`select * from gp_catalog_items where organization_id = ${organizationId} order by kind asc, name asc`,
+    sql`
+      select *
+      from gp_catalog_items
+      where organization_id = ${organizationId}
+      order by kind asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
+    `,
     sql`select * from gp_staff where organization_id = ${organizationId} order by id asc, name asc`,
   ]);
   const requestedProject = text(options.activeProjectCode).trim();
@@ -1066,7 +1182,7 @@ function pagedRowsOrderBy(sql: any, dataset: GiaPhuPagedDataset, sorting?: ErpTa
             case when ${sortId} = 'unit' then unit end desc nulls last,
             case when ${sortId} = 'contact' then contact end desc nulls last,
             case when ${sortId} = 'note' then note end desc nulls last,
-            kind asc, name asc
+            kind asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
         `;
       case "staff":
         return sql`
@@ -1238,7 +1354,7 @@ function pagedRowsOrderBy(sql: any, dataset: GiaPhuPagedDataset, sorting?: ErpTa
           case when ${sortId} = 'unit' then unit end asc nulls last,
           case when ${sortId} = 'contact' then contact end asc nulls last,
           case when ${sortId} = 'note' then note end asc nulls last,
-          kind asc, name asc
+          kind asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
       `;
     case "staff":
       return sql`
@@ -1713,6 +1829,35 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
       costTrend: percentChange(currentCost, previousCost),
       cashTrend: percentChange(latest.cashIn, previous.cashIn),
     },
+  };
+}
+
+export async function getGiaPhuMaterialDebtSummary(
+  options: DashboardDataOptions = {},
+): Promise<GiaPhuMaterialDebtSummary> {
+  const sql = getSql();
+  const organizationId = organizationIdFrom(options.organizationId);
+  const activeProjectCode = await resolveActiveProjectCode(options.activeProjectCode, organizationId);
+
+  if (!activeProjectCode) {
+    return { total: 0, rows: 0, suppliers: 0 };
+  }
+
+  const [summary] = (await sql`
+    select
+      coalesce(sum(quantity * price), 0)::float8 as total,
+      count(*)::int as rows,
+      count(distinct nullif(supplier, ''))::int as suppliers
+    from gp_materials
+    where organization_id = ${organizationId}
+      and project_code = ${activeProjectCode}
+      and (payment_status <> 'Đã TT' or debt = 'Có')
+  `) as Row[];
+
+  return {
+    total: number(summary?.total),
+    rows: number(summary?.rows),
+    suppliers: number(summary?.suppliers),
   };
 }
 
@@ -2417,12 +2562,14 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     const paymentStatusFilter = filterValue("paymentStatus");
     const categoryFilter = filterValue("category");
     const supplierFilter = filterValue("supplier");
+    const debtOpenFilter = filterValue("debtOpen");
     const whereFilters = sql`
       ${weekFilter ? sql`and week = ${weekFilter}` : sql``}
       ${materialTypeFilter ? sql`and material_type = ${materialTypeFilter}` : sql``}
       ${paymentStatusFilter ? sql`and payment_status = ${paymentStatusFilter}` : sql``}
       ${categoryFilter ? sql`and category = ${categoryFilter}` : sql``}
       ${supplierFilter ? sql`and supplier = ${supplierFilter}` : sql``}
+      ${debtOpenFilter ? sql`and (payment_status <> 'Đã TT' or debt = 'Có')` : sql``}
     `;
     const [countRows, rows] = await Promise.all([
       sql`select count(*)::int as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
@@ -2547,7 +2694,34 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     const [countRows, rows] = await Promise.all([
       sql`select count(*)::int as total from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
       sql`
-        select *
+        select
+          id,
+          work_date,
+          week,
+          organization_id,
+          project_code,
+          category,
+          contractor_name,
+          note,
+          advance,
+          cumulative,
+          status,
+          created_at,
+          updated_at,
+          case when exists (
+            select 1
+            from gp_documents document
+            where document.organization_id = gp_subcontractors.organization_id
+              and document.id::text = gp_subcontractors.file_id
+              and document.file_data <> ''
+          ) then file_url else '' end as file_url,
+          case when exists (
+            select 1
+            from gp_documents document
+            where document.organization_id = gp_subcontractors.organization_id
+              and document.id::text = gp_subcontractors.file_id
+              and document.file_data <> ''
+          ) then file_id else '' end as file_id
         from gp_subcontractors
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "subcontractors", options.sorting)}
@@ -2574,7 +2748,32 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     const [countRows, rows] = await Promise.all([
       sql`select count(*)::int as total from gp_subcontractor_contracts where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
       sql`
-        select *
+        select
+          id,
+          organization_id,
+          project_code,
+          contractor_name,
+          approved_cost,
+          note,
+          status,
+          approved_by,
+          approved_at,
+          created_at,
+          updated_at,
+          case when exists (
+            select 1
+            from gp_documents document
+            where document.organization_id = gp_subcontractor_contracts.organization_id
+              and document.id::text = gp_subcontractor_contracts.file_id
+              and document.file_data <> ''
+          ) then file_url else '' end as file_url,
+          case when exists (
+            select 1
+            from gp_documents document
+            where document.organization_id = gp_subcontractor_contracts.organization_id
+              and document.id::text = gp_subcontractor_contracts.file_id
+              and document.file_data <> ''
+          ) then file_id else '' end as file_id
         from gp_subcontractor_contracts
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "subcontractorContracts", options.sorting)}
@@ -2598,7 +2797,29 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
   const [countRows, rows] = await Promise.all([
     sql`select count(*)::int as total from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
     sql`
-      select *
+      select
+        id,
+        work_date,
+        week,
+        organization_id,
+        project_code,
+        description,
+        amount,
+        created_at,
+        case when exists (
+          select 1
+          from gp_documents document
+          where document.organization_id = gp_operations.organization_id
+            and document.id::text = gp_operations.file_id
+            and document.file_data <> ''
+        ) then file_url else '' end as file_url,
+        case when exists (
+          select 1
+          from gp_documents document
+          where document.organization_id = gp_operations.organization_id
+            and document.id::text = gp_operations.file_id
+            and document.file_data <> ''
+        ) then file_id else '' end as file_id
       from gp_operations
       where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
       ${pagedRowsOrderBy(sql, "operations", options.sorting)}
@@ -2691,12 +2912,13 @@ export async function getGiaPhuFilterOptions(options: {
   }
 
   if (options.dataset === "materials") {
+    const whereDebtOpen = fixedFilterValue("debtOpen") ? sql`and (payment_status <> 'Đã TT' or debt = 'Có')` : sql``;
     const [weekRows, materialTypeRows, paymentStatusRows, categoryRows, supplierRows] = await Promise.all([
-      sql`select distinct week as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' order by week desc limit 300`,
-      sql`select distinct material_type as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type <> '' order by material_type asc limit 300`,
-      sql`select distinct payment_status as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> '' order by payment_status asc limit 300`,
-      sql`select distinct category as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`,
-      sql`select distinct supplier as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and supplier <> '' order by supplier asc limit 300`,
+      sql`select distinct week as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' ${whereDebtOpen} order by week desc limit 300`,
+      sql`select distinct material_type as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type <> '' ${whereDebtOpen} order by material_type asc limit 300`,
+      sql`select distinct payment_status as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> '' ${whereDebtOpen} order by payment_status asc limit 300`,
+      sql`select distinct category as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' ${whereDebtOpen} order by category asc limit 300`,
+      sql`select distinct supplier as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and supplier <> '' ${whereDebtOpen} order by supplier asc limit 300`,
     ]);
 
     return {
@@ -2925,25 +3147,41 @@ async function assertUniqueCatalogItem({
   kind,
   code,
   name,
+  supplier,
   originalId,
   organizationId,
 }: {
   kind: CatalogItem["kind"];
   code: string;
   name: string;
+  supplier: string;
   originalId: string;
   organizationId: string;
 }) {
   const sql = getSql();
-  const duplicateRows = (await sql`
-    select id, code, name
-    from gp_catalog_items
-    where organization_id = ${organizationId}
-      and kind = ${kind}
-      and id <> ${originalId}
-      and (lower(code) = lower(${code}) or lower(name) = lower(${name}))
-    limit 1
-  `) as Row[];
+  const isMaterialCatalog = kind === "vatTu" || kind === "vatTuPhu";
+  const duplicateRows = isMaterialCatalog
+    ? ((await sql`
+        select id, code, name, supplier
+        from gp_catalog_items
+        where organization_id = ${organizationId}
+          and kind = ${kind}
+          and id <> ${originalId}
+          and (
+            lower(code) = lower(${code})
+            or (lower(btrim(name)) = lower(btrim(${name})) and lower(btrim(supplier)) = lower(btrim(${supplier})))
+          )
+        limit 1
+      `) as Row[])
+    : ((await sql`
+        select id, code, name, supplier
+        from gp_catalog_items
+        where organization_id = ${organizationId}
+          and kind = ${kind}
+          and id <> ${originalId}
+          and (lower(code) = lower(${code}) or lower(btrim(name)) = lower(btrim(${name})))
+        limit 1
+      `) as Row[]);
   const duplicate = duplicateRows[0];
 
   if (!duplicate) return;
@@ -2951,6 +3189,12 @@ async function assertUniqueCatalogItem({
   const labels = catalogFieldLabels[kind];
   if (text(duplicate.code).toLowerCase() === code.toLowerCase()) {
     throw new Error(`${labels.code} "${code}" đã tồn tại. Vui lòng nhập mã khác.`);
+  }
+
+  const duplicateSupplier = text(duplicate.supplier).trim();
+
+  if (isMaterialCatalog && duplicateSupplier) {
+    throw new Error(`${labels.name} "${name}" đã tồn tại với NCC "${duplicateSupplier}". Vui lòng nhập dòng khác.`);
   }
 
   throw new Error(`${labels.name} "${name}" đã tồn tại. Vui lòng nhập tên khác.`);
@@ -3034,6 +3278,7 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   const supplier = kind === "vatTu" || kind === "vatTuPhu" ? text(payload.supplier).trim() : "";
   const contact = text(payload.contact).trim();
   const note = text(payload.note).trim();
+  const sortOrder = number(payload.importOrder || payload.sortOrder);
 
   if ((kind === "vatTu" || kind === "vatTuPhu") && !supplier) {
     throw new Error("Thiếu nhà cung cấp.");
@@ -3045,9 +3290,18 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   }
 
   const nextId = `${organizationId}:${kind}:${code}`;
+  const isExcelImport = sortOrder > 0;
   const originalId = text(payload.originalId || payload.id);
+  const uniqueCheckOriginalId = originalId || (isExcelImport ? nextId : "");
 
-  await assertUniqueCatalogItem({ kind, code, name, originalId, organizationId });
+  await assertUniqueCatalogItem({
+    kind,
+    code,
+    name,
+    supplier,
+    originalId: uniqueCheckOriginalId,
+    organizationId,
+  });
 
   if (originalId) {
     await sql`
@@ -3060,15 +3314,34 @@ export async function manageCatalog(payload: Record<string, unknown>) {
           supplier = ${supplier},
           contact = ${contact},
           note = ${note},
+          sort_order = case when ${sortOrder} > 0 then ${sortOrder} else sort_order end,
           updated_at = now()
       where organization_id = ${organizationId} and id = ${originalId}
     `;
     return;
   }
 
+  if (isExcelImport) {
+    await sql`
+      insert into gp_catalog_items (id, organization_id, kind, code, name, unit, supplier, contact, note, sort_order, updated_at)
+      values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, ${sortOrder}, now())
+      on conflict (id) do update
+      set kind = excluded.kind,
+          code = excluded.code,
+          name = excluded.name,
+          unit = excluded.unit,
+          supplier = excluded.supplier,
+          contact = excluded.contact,
+          note = excluded.note,
+          sort_order = excluded.sort_order,
+          updated_at = now()
+    `;
+    return;
+  }
+
   await sql`
-    insert into gp_catalog_items (id, organization_id, kind, code, name, unit, supplier, contact, note, updated_at)
-    values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, now())
+    insert into gp_catalog_items (id, organization_id, kind, code, name, unit, supplier, contact, note, sort_order, updated_at)
+    values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, ${sortOrder}, now())
   `;
 }
 
@@ -3316,6 +3589,7 @@ export async function markMaterialPaid(payload: Record<string, unknown>) {
   await sql`
     update gp_materials
     set payment_status = 'Đã TT',
+        debt = 'Không',
         payment_info = ${text(payload.paymentInfo) || `Đã TT · ${dateOnly(new Date())}`},
         updated_at = now()
     where organization_id = ${organizationId} and id = any(${ids})
@@ -3654,10 +3928,11 @@ export async function deleteSubcontractor(payload: Record<string, unknown>) {
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = number(payload.id);
   const [row] =
-    (await sql`select project_code, contractor_name from gp_subcontractors where organization_id = ${organizationId} and id = ${id}`) as Row[];
+    (await sql`select project_code, contractor_name, file_id from gp_subcontractors where organization_id = ${organizationId} and id = ${id}`) as Row[];
   if (!row) return;
   await sql`delete from gp_subcontractors where organization_id = ${organizationId} and id = ${id}`;
   await recomputeSubcontractorCumulative(text(row.project_code), text(row.contractor_name), organizationId);
+  await deleteAttachmentDocumentIfUnused(number(row.file_id), organizationId);
 }
 
 export async function saveSubcontractorContract(payload: Record<string, unknown>) {
@@ -3697,7 +3972,11 @@ export async function saveSubcontractorContract(payload: Record<string, unknown>
 export async function deleteSubcontractorContract(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
-  await sql`delete from gp_subcontractor_contracts where organization_id = ${organizationId} and id = ${number(payload.id)}`;
+  const id = number(payload.id);
+  const [row] =
+    (await sql`select file_id from gp_subcontractor_contracts where organization_id = ${organizationId} and id = ${id}`) as Row[];
+  await sql`delete from gp_subcontractor_contracts where organization_id = ${organizationId} and id = ${id}`;
+  await deleteAttachmentDocumentIfUnused(number(row?.file_id), organizationId);
 }
 
 export async function approveSubcontractorContract(payload: Record<string, unknown>) {
@@ -3739,7 +4018,11 @@ export async function saveOperation(payload: Record<string, unknown>) {
 export async function deleteOperation(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
-  await sql`delete from gp_operations where organization_id = ${organizationId} and id = ${number(payload.id)}`;
+  const id = number(payload.id);
+  const [row] =
+    (await sql`select file_id from gp_operations where organization_id = ${organizationId} and id = ${id}`) as Row[];
+  await sql`delete from gp_operations where organization_id = ${organizationId} and id = ${id}`;
+  await deleteAttachmentDocumentIfUnused(number(row?.file_id), organizationId);
 }
 
 export async function saveLaborNorm(payload: Record<string, unknown>) {
@@ -3924,7 +4207,36 @@ export async function saveDocument(payload: Record<string, unknown>) {
 export async function deleteDocument(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
-  await sql`delete from gp_documents where organization_id = ${organizationId} and id = ${number(payload.id)}`;
+  const documentId = number(payload.id);
+  if (!documentId) return;
+
+  await Promise.all([
+    sql`
+      update gp_subcontractors
+      set file_url = '',
+          file_id = '',
+          updated_at = now()
+      where organization_id = ${organizationId}
+        and (file_id = ${String(documentId)} or file_url = ${`/api/giaphu-erp/documents/${documentId}/file`})
+    `,
+    sql`
+      update gp_subcontractor_contracts
+      set file_url = '',
+          file_id = '',
+          updated_at = now()
+      where organization_id = ${organizationId}
+        and (file_id = ${String(documentId)} or file_url = ${`/api/giaphu-erp/documents/${documentId}/file`})
+    `,
+    sql`
+      update gp_operations
+      set file_url = '',
+          file_id = ''
+      where organization_id = ${organizationId}
+        and (file_id = ${String(documentId)} or file_url = ${`/api/giaphu-erp/documents/${documentId}/file`})
+    `,
+  ]);
+
+  await sql`delete from gp_documents where organization_id = ${organizationId} and id = ${documentId}`;
 }
 
 export async function queryDocuments(payload: Record<string, unknown>) {

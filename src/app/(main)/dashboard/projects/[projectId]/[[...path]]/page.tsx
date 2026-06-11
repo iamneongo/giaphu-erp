@@ -1,6 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 
-import { ERP_PERMISSIONS, enforceErpRoutePermission } from "@/lib/clerk/erp-rbac";
+import { auth } from "@clerk/nextjs/server";
+
+import {
+  ERP_PERMISSIONS,
+  enforceErpRoutePermission,
+  getEffectiveErpPermissions,
+  getFirstAccessibleDashboardHref,
+} from "@/lib/clerk/erp-rbac";
 import { decodeProjectRouteSegment, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 
 import { CatalogsWorkspace } from "../../../giaphu-erp/_components/catalogs-workspace";
@@ -56,7 +63,10 @@ export default async function ProjectPage({
   const routeKey = path.join("/");
 
   if (!routeKey) {
-    redirect(projectScopedPath(decodedProjectId, "/overview"));
+    const session = await auth();
+    const permissionKeys = await getEffectiveErpPermissions(session);
+
+    redirect(getFirstAccessibleDashboardHref(session, { projectRouteId: decodedProjectId, permissionKeys }));
   }
 
   switch (routeKey) {

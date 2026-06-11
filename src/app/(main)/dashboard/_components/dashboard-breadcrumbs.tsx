@@ -12,13 +12,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import {
-  ACTIVE_PROJECT_CHANGE_EVENT,
-  type ActiveProjectChangeDetail,
-  PROJECTS_REFRESH_EVENT,
-  readActiveProjectCode,
-  readActiveProjectRouteId,
-} from "@/lib/giaphu-erp/project-context";
+import { PROJECTS_REFRESH_EVENT } from "@/lib/giaphu-erp/project-context";
 import { decodeProjectRouteSegment, getProjectRouteInfo, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 import type { ProjectRow } from "@/lib/giaphu-erp/types";
 
@@ -189,7 +183,7 @@ function buildProjectBreadcrumbs(pathname: string, projects: ProjectRow[]) {
   const [firstSegment, secondSegment, thirdSegment] = childSegments;
   const items: BreadcrumbEntry[] = [
     { label: "Công trình", href: projectScopedPath(routeId, "/crm/projects") },
-    { label: projectLabelFor(projects, projectRoute.projectId), href: projectScopedPath(routeId, "/overview") },
+    { label: projectLabelFor(projects, projectRoute.projectId), href: projectScopedPath(routeId, "") },
   ];
 
   if (!firstSegment || firstSegment === "overview") {
@@ -219,7 +213,12 @@ function buildProjectBreadcrumbs(pathname: string, projects: ProjectRow[]) {
   }
 
   if (firstSegment === "crm") {
-    addModuleBreadcrumb(items, routeId, "CRM công trình", "/crm/projects", labelFor(secondSegment || "projects"));
+    items.push({ label: "CRM công trình", href: projectScopedPath(routeId, "/crm/projects") });
+
+    if (secondSegment && secondSegment !== "projects") {
+      items.push({ label: labelFor(secondSegment), href: projectScopedPath(routeId, `/crm/${secondSegment}`) });
+    }
+
     return items;
   }
 
@@ -275,13 +274,8 @@ async function fetchProjects() {
 
 export function DashboardBreadcrumbs({ initialProjects = [] }: { initialProjects?: ProjectRow[] }) {
   const pathname = usePathname();
-  const [activeProjectRouteId, setActiveProjectRouteId] = React.useState("");
   const [projects, setProjects] = React.useState<ProjectRow[]>(initialProjects);
   const segments = pathname.split("/").filter(Boolean);
-  const projectRoute = getProjectRouteInfo(pathname);
-  const currentProjectRouteId = projectRoute
-    ? projectRouteIdFor(projects, projectRoute.projectId)
-    : activeProjectRouteId;
   const projectBreadcrumbs = buildProjectBreadcrumbs(pathname, projects);
   const fallbackBreadcrumbs: BreadcrumbEntry[] = segments
     .map((segment, index) => {
@@ -307,27 +301,6 @@ export function DashboardBreadcrumbs({ initialProjects = [] }: { initialProjects
     if (initialProjects.length) {
       setProjects(initialProjects);
     }
-  }, [initialProjects]);
-
-  React.useEffect(() => {
-    const storedCode = readActiveProjectCode();
-    const storedRouteId = readActiveProjectRouteId();
-    const project = initialProjects.find((item) => item.code === storedCode);
-    setActiveProjectRouteId(storedRouteId || project?.id || storedCode);
-
-    function handleProjectChange(event: Event) {
-      const detail = (event as CustomEvent<ActiveProjectChangeDetail>).detail;
-      const nextCode = detail?.code;
-      if (nextCode) {
-        setActiveProjectRouteId(detail.routeId || nextCode);
-      }
-    }
-
-    window.addEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
-
-    return () => {
-      window.removeEventListener(ACTIVE_PROJECT_CHANGE_EVENT, handleProjectChange);
-    };
   }, [initialProjects]);
 
   React.useEffect(() => {
@@ -357,11 +330,7 @@ export function DashboardBreadcrumbs({ initialProjects = [] }: { initialProjects
     <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbLink
-            href={currentProjectRouteId ? projectScopedPath(currentProjectRouteId, "/overview") : "/dashboard"}
-          >
-            Bảng điều khiển
-          </BreadcrumbLink>
+          <BreadcrumbLink href="/dashboard">Bảng điều khiển</BreadcrumbLink>
         </BreadcrumbItem>
         {visibleSegments.map((item, index) => {
           const isLast = index === visibleSegments.length - 1;

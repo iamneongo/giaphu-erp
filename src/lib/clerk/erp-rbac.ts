@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@clerk/nextjs/server";
 
+import { projectScopedPath } from "../giaphu-erp/project-routes";
 import type { GiaPhuDashboardData } from "../giaphu-erp/types";
 import { getOrganizationRoleSet, listOrganizationMemberships, listOrganizationRoles } from "./clerk-bapi";
 import {
@@ -32,6 +33,18 @@ export const ERP_DATA_ACCESS_PERMISSIONS = [
   ERP_PERMISSIONS.catalogsManage,
 ] as const satisfies readonly ErpPermissionKey[];
 
+const ERP_PROJECT_LANDING_ROUTES = [
+  { permission: ERP_PERMISSIONS.overviewRead, path: "/overview" },
+  { permission: ERP_PERMISSIONS.reportsRead, path: "/reports" },
+  { permission: ERP_PERMISSIONS.crmRead, path: "/crm/projects" },
+  { permission: ERP_PERMISSIONS.materialsManage, path: "/materials/vat-tu-chinh" },
+  { permission: ERP_PERMISSIONS.materialsRead, path: "/materials/debt" },
+  { permission: ERP_PERMISSIONS.workforceRead, path: "/workforce/attendance" },
+  { permission: ERP_PERMISSIONS.subcontractorsRead, path: "/subcontractors/advances" },
+  { permission: ERP_PERMISSIONS.documentsRead, path: "/documents" },
+  { permission: ERP_PERMISSIONS.catalogsRead, path: "/catalogs/hang-muc" },
+] as const satisfies readonly { permission: ErpPermissionKey; path: string }[];
+
 function buildContext(session: ClerkAuthSession, permissionKeys?: Iterable<string>) {
   return {
     orgRole: session.orgRole,
@@ -39,6 +52,40 @@ function buildContext(session: ClerkAuthSession, permissionKeys?: Iterable<strin
     hasPermission: (permission: string) => session.has({ permission }),
     permissionKeys,
   };
+}
+
+export function getFirstAccessibleProjectPath(session: ClerkAuthSession, permissionKeys?: Iterable<string>) {
+  for (const route of ERP_PROJECT_LANDING_ROUTES) {
+    if (canAccessErpPermission(session, route.permission, permissionKeys)) {
+      return route.path;
+    }
+  }
+
+  return null;
+}
+
+export function getFirstAccessibleDashboardHref(
+  session: ClerkAuthSession,
+  options?: { projectRouteId?: string | null; permissionKeys?: Iterable<string> },
+) {
+  const permissionKeys = options?.permissionKeys;
+  const projectPath = getFirstAccessibleProjectPath(session, permissionKeys);
+
+  if (projectPath) {
+    return options?.projectRouteId
+      ? projectScopedPath(options.projectRouteId, projectPath)
+      : `/dashboard/giaphu-erp${projectPath}`;
+  }
+
+  if (canAccessErpPermission(session, ERP_PERMISSIONS.organizationsManage, permissionKeys)) {
+    return "/dashboard/workspaces";
+  }
+
+  if (canAccessErpPermission(session, ERP_PERMISSIONS.rolesManage, permissionKeys)) {
+    return "/dashboard/workspaces/roles";
+  }
+
+  return "/unauthorized";
 }
 
 export function canAccessErpPermission(

@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@clerk/nextjs/server";
 
+import { getEffectiveErpPermissions, getFirstAccessibleDashboardHref } from "@/lib/clerk/erp-rbac";
 import { createGiaPhuSchema, getGiaPhuProjectList } from "@/lib/giaphu-erp/db";
 import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
-import { decodeProjectRouteSegment, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
+import { decodeProjectRouteSegment } from "@/lib/giaphu-erp/project-routes";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function Page() {
       (project) =>
         project.id === activeProjectCode || project.code === activeProjectCode || project.name === activeProjectCode,
     ) ?? projects[0];
+  const permissionKeys = await getEffectiveErpPermissions(session);
 
-  redirect(projectScopedPath(activeProject.id, "/overview"));
+  redirect(getFirstAccessibleDashboardHref(session, { projectRouteId: activeProject.id, permissionKeys }));
 }
