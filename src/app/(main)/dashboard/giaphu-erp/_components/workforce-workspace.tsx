@@ -1231,6 +1231,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                               action: "manageStaff",
                               onAction: runAction,
                               fields: [
+                                { name: "originalId", label: "Mã gốc", type: "hidden", value: row.id },
                                 { name: "id", label: "Mã NS", value: row.id, readOnly: true },
                                 { name: "name", label: "Họ tên", required: true, value: row.name },
                                 { name: "team", label: "Đội", value: row.team },

@@ -3367,17 +3367,33 @@ export async function manageStaff(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = text(payload.id).trim() || `NV${Date.now().toString().slice(-6)}`;
+  const originalId = text(payload.originalId).trim();
   const name = text(payload.name).trim();
   const resigned = bool(payload.resigned);
   const offDate = dateOnly(payload.offDate);
 
   if (!name) throw new Error("Thiếu tên nhân sự.");
   if (resigned && !offDate) throw new Error("Vui lòng chọn thời gian nghỉ khi đánh dấu nhân sự đã nghỉ việc.");
+  if (originalId && id !== originalId) throw new Error("Không thể thay đổi mã nhân sự khi cập nhật hồ sơ.");
 
-  const existingRows = (await sql`select organization_id from gp_staff where id = ${id} limit 1`) as Row[];
+  const existingRows = (await sql`
+    select id, organization_id
+    from gp_staff
+    where lower(id) = lower(${id})
+    limit 1
+  `) as Row[];
+  const existingId = text(existingRows[0]?.id);
   const existingOrgId = text(existingRows[0]?.organization_id);
   if (existingRows.length && existingOrgId !== organizationId) {
     throw new Error("Mã nhân sự đã tồn tại ở tổ chức khác hoặc chưa được gán tổ chức. Vui lòng dùng mã khác.");
+  }
+
+  if (originalId) {
+    if (!existingRows.length || existingId.toLowerCase() !== originalId.toLowerCase()) {
+      throw new Error("Không tìm thấy nhân sự cần cập nhật.");
+    }
+  } else if (existingRows.length) {
+    throw new Error(`Mã nhân sự "${id}" đã tồn tại. Vui lòng nhập mã khác.`);
   }
 
   await sql`
