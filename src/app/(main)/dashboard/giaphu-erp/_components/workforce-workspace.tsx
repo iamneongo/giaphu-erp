@@ -1378,7 +1378,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 label: "Họ tên",
                 accessor: (row) => `${row.staffName} ${row.position}`,
                 searchable: true,
-                render: (row) => <div className="min-w-52 truncate font-semibold">{row.staffName}</div>,
+                render: (row) => <div className="min-w-52 truncate">{row.staffName}</div>,
               },
               {
                 key: "salaryDay",
@@ -1439,7 +1439,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 className: "text-right",
                 headerClassName: "text-right",
                 headerCellClassName: "text-right",
-                render: (row) => <div className="text-right font-bold">{formatPayrollMoney(row.total)}</div>,
+                render: (row) => <div className="text-right">{formatPayrollMoney(row.total)}</div>,
               },
             ]}
             rows={payrollRows}
@@ -1490,12 +1490,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 label: "Họ tên",
                 accessor: (row) => `${row.staffName} ${row.position}`,
                 searchable: true,
-                render: (row) => (
-                  <div className="min-w-64">
-                    <div className="font-bold">{row.staffName}</div>
-                    <div className="text-muted-foreground text-xs">{row.position || "Nhân công"}</div>
-                  </div>
-                ),
+                render: (row) => <div className="min-w-64 truncate">{row.staffName}</div>,
               },
               {
                 key: "category",
@@ -1513,13 +1508,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 className: "text-center",
                 headerClassName: "text-center",
                 headerCellClassName: "text-center",
-                render: (row) => (
-                  <div className="text-center">
-                    <Badge variant="outline" className="rounded-full">
-                      {formatCount(row.workdays)} công
-                    </Badge>
-                  </div>
-                ),
+                render: (row) => <div className="text-center">{formatCount(row.workdays)} công</div>,
               },
               {
                 key: "allowance",
@@ -1528,7 +1517,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 className: "text-right",
                 headerClassName: "text-right",
                 headerCellClassName: "text-right",
-                render: (row) => <div className="text-right font-semibold">{formatPayrollMoney(row.allowance)}</div>,
+                render: (row) => <div className="text-right">{formatPayrollMoney(row.allowance)}</div>,
               },
               {
                 key: "overtime",
@@ -1537,9 +1526,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 className: "text-right",
                 headerClassName: "text-right",
                 headerCellClassName: "text-right",
-                render: (row) => (
-                  <div className="text-right font-semibold">{formatPayrollMoney(row.overtimeAmount)}</div>
-                ),
+                render: (row) => <div className="text-right">{formatPayrollMoney(row.overtimeAmount)}</div>,
               },
               {
                 key: "total",
@@ -1548,7 +1535,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 className: "text-right",
                 headerClassName: "text-right",
                 headerCellClassName: "text-right",
-                render: (row) => <div className="text-right font-bold">{formatPayrollMoney(row.total)}</div>,
+                render: (row) => <div className="text-right">{formatPayrollMoney(row.total)}</div>,
               },
             ]}
             rows={payrollRows}
