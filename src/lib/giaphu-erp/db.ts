@@ -3116,13 +3116,44 @@ export async function deleteProject(payload: Record<string, unknown>) {
 export async function saveContract(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
+  const projectCode = text(payload.projectCode).trim();
+  const contractNo = text(payload.contractNo).trim();
+  const value = requireNonNegativeNumericInput(payload.value, "Giá trị");
   const id = number(payload.id);
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!contractNo) throw new Error("Thiếu số hợp đồng.");
+
+  const duplicatedContracts =
+    id > 0
+      ? ((await sql`
+          select id
+          from gp_contracts
+          where organization_id = ${organizationId}
+            and project_code = ${projectCode}
+            and lower(trim(contract_no)) = lower(${contractNo})
+            and id <> ${id}
+          limit 1
+        `) as Row[])
+      : ((await sql`
+          select id
+          from gp_contracts
+          where organization_id = ${organizationId}
+            and project_code = ${projectCode}
+            and lower(trim(contract_no)) = lower(${contractNo})
+          limit 1
+        `) as Row[]);
+
+  if (duplicatedContracts.length > 0) {
+    throw new Error(`Số hợp đồng "${contractNo}" đã tồn tại. Vui lòng nhập số khác.`);
+  }
+
   if (id > 0) {
     await sql`
       update gp_contracts
-      set project_code = ${text(payload.projectCode)},
-          contract_no = ${text(payload.contractNo)},
-          value = ${money(payload.value)},
+      set project_code = ${projectCode},
+          contract_no = ${contractNo},
+          value = ${value},
           signed_date = ${dateOnly(payload.signedDate) || null},
           note = ${text(payload.note)}
       where organization_id = ${organizationId} and id = ${id}
@@ -3132,7 +3163,7 @@ export async function saveContract(payload: Record<string, unknown>) {
 
   await sql`
     insert into gp_contracts (organization_id, project_code, contract_no, value, signed_date, note)
-    values (${organizationId}, ${text(payload.projectCode)}, ${text(payload.contractNo)}, ${money(payload.value)}, ${dateOnly(payload.signedDate) || null}, ${text(payload.note)})
+    values (${organizationId}, ${projectCode}, ${contractNo}, ${value}, ${dateOnly(payload.signedDate) || null}, ${text(payload.note)})
   `;
 }
 
@@ -3146,12 +3177,13 @@ export async function savePayment(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = number(payload.id);
+  const amount = requireNonNegativeNumericInput(payload.amount, "Số tiền");
   if (id > 0) {
     await sql`
       update gp_payments
       set project_code = ${text(payload.projectCode)},
           payment_date = ${dateOnly(payload.date) || null},
-          amount = ${money(payload.amount)},
+          amount = ${amount},
           note = ${text(payload.note)}
       where organization_id = ${organizationId} and id = ${id}
     `;
@@ -3160,7 +3192,7 @@ export async function savePayment(payload: Record<string, unknown>) {
 
   await sql`
     insert into gp_payments (organization_id, project_code, payment_date, amount, note)
-    values (${organizationId}, ${text(payload.projectCode)}, ${dateOnly(payload.date) || null}, ${money(payload.amount)}, ${text(payload.note)})
+    values (${organizationId}, ${text(payload.projectCode)}, ${dateOnly(payload.date) || null}, ${amount}, ${text(payload.note)})
   `;
 }
 

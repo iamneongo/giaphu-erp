@@ -25,6 +25,16 @@ import { TableRowActions } from "./table-row-actions";
 
 type CrmSection = "projects" | "contracts" | "payments";
 
+function validateNonNegativeAmount(value: string, label = "Số tiền") {
+  const raw = value.trim();
+
+  if (!raw) return `Thiếu ${label.toLowerCase()}.`;
+  if (raw.startsWith("-")) return `${label} không được âm.`;
+  if (!/^\d+(?:[.,]\d+)?$/.test(raw)) return `${label} phải là số hợp lệ.`;
+
+  return undefined;
+}
+
 export function CrmWorkspace({ section = "projects" }: { section?: CrmSection }) {
   const { data, activeProjectCode, isSwitchingProject, setActiveProjectCode, runAction, scoped } = useGiaPhuErp();
   const paginatedProjects = usePaginatedErpRows<ProjectRow>({
@@ -65,6 +75,22 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
     const result = await runAction(action, { ...payload, __returnData: false });
     if (result) paginatedPayments.refresh();
     return result;
+  }
+
+  function validateContractNo(value: string, payload: Record<string, unknown>) {
+    const contractNo = value.trim();
+    const editingId = String(payload.id ?? "");
+
+    if (!contractNo) return "Thiếu số hợp đồng.";
+
+    const duplicated = scoped.contracts.some(
+      (contract) =>
+        contract.contractNo.trim().toLowerCase() === contractNo.toLowerCase() && String(contract.id) !== editingId,
+    );
+
+    if (duplicated) return `Số hợp đồng "${contractNo}" đã tồn tại. Vui lòng nhập số khác.`;
+
+    return undefined;
   }
 
   function switchProject(project: ProjectRow) {
@@ -256,8 +282,21 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
             onImported={paginatedContracts.refresh}
             fields={[
               { key: "projectCode", label: "Công trình", hidden: true, defaultValue: activeProjectCode },
-              { key: "contractNo", label: "Số hợp đồng", aliases: ["So HD", "Số HĐ"], required: true },
-              { key: "value", label: "Giá trị", aliases: ["Gia tri", "Giá trị HĐ"], type: "number" },
+              {
+                key: "contractNo",
+                label: "Số hợp đồng",
+                aliases: ["So HD", "Số HĐ"],
+                required: true,
+                validate: (value, payload) => validateContractNo(String(value ?? ""), payload),
+              },
+              {
+                key: "value",
+                label: "Giá trị",
+                aliases: ["Gia tri", "Giá trị HĐ"],
+                type: "number",
+                required: true,
+                validate: (value) => validateNonNegativeAmount(String(value ?? ""), "Giá trị"),
+              },
               { key: "signedDate", label: "Ngày ký", aliases: ["Ngay ky"], type: "date", defaultValue: todayIso() },
               { key: "note", label: "Ghi chú", aliases: ["Ghi chu", "Diễn giải"] },
             ]}
@@ -270,8 +309,19 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
             onAction={runContractAction}
             fields={[
               { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-              { name: "contractNo", label: "Số hợp đồng", required: true },
-              { name: "value", label: "Giá trị", type: "number" },
+              {
+                name: "contractNo",
+                label: "Số hợp đồng",
+                required: true,
+                validate: (value, payload) => validateContractNo(value, payload),
+              },
+              {
+                name: "value",
+                label: "Giá trị",
+                type: "number",
+                required: true,
+                validate: (value) => validateNonNegativeAmount(value, "Giá trị"),
+              },
               { name: "signedDate", label: "Ngày ký", type: "date", value: todayIso() },
               { name: "note", label: "Ghi chú", type: "textarea" },
             ]}
@@ -321,8 +371,21 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                               fields: [
                                 { name: "id", label: "ID", type: "hidden", value: row.id },
                                 { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
-                                { name: "contractNo", label: "Số hợp đồng", required: true, value: row.contractNo },
-                                { name: "value", label: "Giá trị", type: "number", value: row.value },
+                                {
+                                  name: "contractNo",
+                                  label: "Số hợp đồng",
+                                  required: true,
+                                  value: row.contractNo,
+                                  validate: (value, payload) => validateContractNo(value, payload),
+                                },
+                                {
+                                  name: "value",
+                                  label: "Giá trị",
+                                  type: "number",
+                                  value: row.value,
+                                  required: true,
+                                  validate: (value) => validateNonNegativeAmount(value, "Giá trị"),
+                                },
                                 {
                                   name: "signedDate",
                                   label: "Ngày ký",
@@ -401,6 +464,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                 aliases: ["So tien", "Đã thu", "Da thu"],
                 type: "number",
                 required: true,
+                validate: (value) => validateNonNegativeAmount(String(value ?? "")),
               },
               { key: "note", label: "Ghi chú", aliases: ["Ghi chu", "Diễn giải"] },
             ]}
@@ -414,7 +478,13 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
             fields={[
               { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
               { name: "date", label: "Ngày thu", type: "date", value: todayIso() },
-              { name: "amount", label: "Số tiền", type: "number" },
+              {
+                name: "amount",
+                label: "Số tiền",
+                type: "number",
+                required: true,
+                validate: (value) => validateNonNegativeAmount(value),
+              },
               { name: "note", label: "Ghi chú", type: "textarea" },
             ]}
           />
@@ -453,7 +523,14 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                                 { name: "id", label: "ID", type: "hidden", value: row.id },
                                 { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
                                 { name: "date", label: "Ngày thu", type: "date", value: row.date || todayIso() },
-                                { name: "amount", label: "Số tiền", type: "number", value: row.amount },
+                                {
+                                  name: "amount",
+                                  label: "Số tiền",
+                                  type: "number",
+                                  value: row.amount,
+                                  required: true,
+                                  validate: (value) => validateNonNegativeAmount(value),
+                                },
                                 { name: "note", label: "Ghi chú", type: "textarea", value: row.note },
                               ],
                             }}

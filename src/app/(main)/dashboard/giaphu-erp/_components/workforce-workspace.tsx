@@ -608,6 +608,13 @@ function countAttendanceWorkdays(cells: AttendanceCellDraft[]) {
   return cells.reduce((total, cell) => total + (cell.morning ? 0.5 : 0) + (cell.afternoon ? 0.5 : 0), 0);
 }
 
+function formatAttendanceCellDraft(cell: AttendanceCellDraft) {
+  if (cell.morning && cell.afternoon) return "Sáng + Chiều";
+  if (cell.morning) return "Sáng";
+  if (cell.afternoon) return "Chiều";
+  return "";
+}
+
 function getAttendanceExtraDraft(rows: AttendanceRow[]): AttendanceExtraDraft {
   return rows.reduce(
     (total, row) => ({
@@ -788,17 +795,20 @@ function AttendanceBoard({
       if (!canManage) return;
 
       const staffKey = attendanceStaffKey(staffName);
-      const baseDraft = draftExtras[staffKey] ?? getAttendanceExtraDraft(rowByStaff.get(staffKey) ?? []);
-      setDraftExtras((current) => ({
-        ...current,
-        [staffKey]: {
-          ...baseDraft,
-          [key]: Number.isFinite(value) ? Math.max(0, value) : 0,
-        },
-      }));
+      setDraftExtras((current) => {
+        const baseDraft = current[staffKey] ?? getAttendanceExtraDraft(rowByStaff.get(staffKey) ?? []);
+
+        return {
+          ...current,
+          [staffKey]: {
+            ...baseDraft,
+            [key]: Number.isFinite(value) ? Math.max(0, value) : 0,
+          },
+        };
+      });
       setDirtyStaffNames((current) => new Set(current).add(staffName));
     },
-    [canManage, draftExtras, rowByStaff],
+    [canManage, rowByStaff],
   );
 
   const saveStaffAttendance = React.useCallback(
@@ -986,6 +996,8 @@ function AttendanceBoard({
         label: `${weekDayLabels[index]} ${formatShortDate(date)}`,
         className: "min-w-32",
         headerClassName: "text-center",
+        accessor: (row) => formatAttendanceCellDraft(getCurrentCellDraft(row.name, date)),
+        exportValue: (row) => formatAttendanceCellDraft(getCurrentCellDraft(row.name, date)),
         render: (row) => {
           const draft = getCurrentCellDraft(row.name, date);
 
@@ -1020,7 +1032,7 @@ function AttendanceBoard({
               disabled={!canManage}
               min={0}
               type="number"
-              value={extras.allowance}
+              defaultValue={extras.allowance}
               onChange={(event) => updateStaffExtra(row.name, "allowance", Number(event.target.value))}
               className="h-8 text-right"
             />
@@ -1041,7 +1053,7 @@ function AttendanceBoard({
               min={0}
               step={0.5}
               type="number"
-              value={extras.overtimeHours}
+              defaultValue={extras.overtimeHours}
               onChange={(event) => updateStaffExtra(row.name, "overtimeHours", Number(event.target.value))}
               className="h-8 text-right"
             />
@@ -1173,6 +1185,7 @@ function AttendanceBoard({
       </div>
 
       <DataTable
+        key={`attendance-${selectedWeek}-${selectedCategory}`}
         columns={columns}
         rows={boardRows}
         getRowId={(row) => row.id || row.name}
