@@ -170,7 +170,7 @@ function printPayslipRows(rows: PayrollRow[], title = "Phiếu lương nhân cô
   const categoryLabel =
     rows.length && rows.every((row) => row.category === rows[0]?.category) ? ` - ${rows[0]?.category || ""}` : "";
   const weekLabel = rows.length && rows.every((row) => row.week === rows[0]?.week) ? rows[0]?.week : "";
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
+  const printWindow = window.open("", "_blank", "width=1200,height=800");
 
   if (!printWindow) return;
 
@@ -192,6 +192,7 @@ function printPayslipRows(rows: PayrollRow[], title = "Phiếu lương nhân cô
     )
     .join("");
 
+  printWindow.document.open();
   printWindow.document.write(`
     <!doctype html>
     <html>
@@ -251,16 +252,14 @@ function printPayslipRows(rows: PayrollRow[], title = "Phiếu lương nhân cô
           <div><div class="signature-title">Chỉ huy trưởng</div><div class="signature-space"></div><div>.........................</div></div>
           <div><div class="signature-title">Người nhận</div><div class="signature-space"></div><div>.........................</div></div>
         </div>
-        <script>
-          window.addEventListener("load", () => {
-            window.focus();
-            window.print();
-          });
-        </script>
       </body>
     </html>
   `);
   printWindow.document.close();
+  window.setTimeout(() => {
+    printWindow.focus();
+    printWindow.print();
+  }, 250);
 }
 
 function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: StaffRow[]) {
