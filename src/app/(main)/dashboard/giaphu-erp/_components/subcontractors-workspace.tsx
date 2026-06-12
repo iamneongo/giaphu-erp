@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Banknote, Download, FileText, Hammer, ShieldCheck, Trash2 } from "lucide-react";
+import { Archive, Banknote, Download, FileText, Hammer, ShieldCheck, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -387,6 +387,12 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
               },
               { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" },
               {
+                key: "status",
+                label: "Trạng thái",
+                accessor: (row) => row.status,
+                render: (row) => (row.status ? <Badge variant="outline">{row.status}</Badge> : "-"),
+              },
+              {
                 key: "fileUrl",
                 label: "Hồ sơ",
                 accessor: (row) => (row.fileUrl ? "Có hồ sơ" : "Không"),
@@ -461,11 +467,10 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                             }}
                             actions={[
                               {
-                                label: "Xóa",
-                                icon: Trash2,
-                                destructive: true,
+                                label: "Lưu trữ",
+                                icon: Archive,
                                 onSelect: async () => {
-                                  if (window.confirm(`Xóa tạm ứng của "${row.contractorName}"?`)) {
+                                  if (window.confirm(`Lưu trữ tạm ứng của "${row.contractorName}"?`)) {
                                     const result = await runAction("deleteSubcontractor", {
                                       id: row.id,
                                       __returnData: false,
@@ -491,7 +496,8 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             bulkDeleteAction={
               canManage
                 ? {
-                    confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} dòng tạm ứng đã chọn?`,
+                    label: "Lưu trữ đã chọn",
+                    confirmMessage: (rows) => `Lưu trữ ${rows.length.toLocaleString("vi-VN")} dòng tạm ứng đã chọn?`,
                     onDelete: async (rows) => {
                       for (const row of rows) {
                         await runAction("deleteSubcontractor", { id: row.id, __returnData: false });
@@ -587,11 +593,10 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                 },
                               },
                               {
-                                label: "Xóa",
-                                icon: Trash2,
-                                destructive: true,
+                                label: "Lưu trữ",
+                                icon: Archive,
                                 onSelect: () => {
-                                  if (window.confirm(`Xóa hợp đồng của "${row.contractorName}"?`)) {
+                                  if (window.confirm(`Lưu trữ hợp đồng của "${row.contractorName}"?`)) {
                                     return runSubcontractorContractAction("deleteSubcontractorContract", {
                                       id: row.id,
                                     });
@@ -614,7 +619,9 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             bulkDeleteAction={
               canManage
                 ? {
-                    confirmMessage: (rows) => `Xóa ${rows.length.toLocaleString("vi-VN")} hợp đồng thầu phụ đã chọn?`,
+                    label: "Lưu trữ đã chọn",
+                    confirmMessage: (rows) =>
+                      `Lưu trữ ${rows.length.toLocaleString("vi-VN")} hợp đồng thầu phụ đã chọn?`,
                     onDelete: async (rows) => {
                       for (const row of rows) {
                         await runSubcontractorContractAction("deleteSubcontractorContract", { id: row.id });

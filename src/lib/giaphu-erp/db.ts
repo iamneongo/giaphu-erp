@@ -4036,12 +4036,13 @@ export async function deleteSubcontractor(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = number(payload.id);
-  const [row] =
-    (await sql`select project_code, contractor_name, file_id from gp_subcontractors where organization_id = ${organizationId} and id = ${id}`) as Row[];
-  if (!row) return;
-  await sql`delete from gp_subcontractors where organization_id = ${organizationId} and id = ${id}`;
-  await recomputeSubcontractorCumulative(text(row.project_code), text(row.contractor_name), organizationId);
-  await deleteAttachmentDocumentIfUnused(number(row.file_id), organizationId);
+  if (!id) throw new Error("Thiếu dòng tạm ứng thầu phụ để lưu trữ.");
+  await sql`
+    update gp_subcontractors
+    set status = 'Đã lưu trữ',
+        updated_at = now()
+    where organization_id = ${organizationId} and id = ${id}
+  `;
 }
 
 export async function saveSubcontractorContract(payload: Record<string, unknown>) {
@@ -4102,10 +4103,13 @@ export async function deleteSubcontractorContract(payload: Record<string, unknow
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = number(payload.id);
-  const [row] =
-    (await sql`select file_id from gp_subcontractor_contracts where organization_id = ${organizationId} and id = ${id}`) as Row[];
-  await sql`delete from gp_subcontractor_contracts where organization_id = ${organizationId} and id = ${id}`;
-  await deleteAttachmentDocumentIfUnused(number(row?.file_id), organizationId);
+  if (!id) throw new Error("Thiếu hợp đồng thầu phụ để lưu trữ.");
+  await sql`
+    update gp_subcontractor_contracts
+    set status = 'Đã lưu trữ',
+        updated_at = now()
+    where organization_id = ${organizationId} and id = ${id}
+  `;
 }
 
 export async function approveSubcontractorContract(payload: Record<string, unknown>) {
