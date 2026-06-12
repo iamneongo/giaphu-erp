@@ -23,7 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
-import type { AttendanceRow, LaborNormRow, ProgressRow, StaffRow } from "@/lib/giaphu-erp/types";
+import type { AttendanceRow, LaborNormRow, ProgressRow, ProjectRow, StaffRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
 import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
@@ -160,35 +160,82 @@ function escapePrintText(value: unknown) {
     .replace(/'/g, "&#039;");
 }
 
-function printPayslipRows(rows: PayrollRow[], title = "Phiếu lương nhân công tuần") {
+function formatPrintDate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return value;
+
+  return `${Number(match[3])}/${Number(match[2])}/${match[1]}`;
+}
+
+function getPayslipDateRange(row: PayrollRow) {
+  const dates = row.dates
+    .split(",")
+    .map((date) => date.trim())
+    .filter(Boolean)
+    .sort();
+
+  if (!dates.length) return "";
+  if (dates[0] === dates[dates.length - 1]) return formatPrintDate(dates[0]);
+
+  return `${formatPrintDate(dates[0])} - ${formatPrintDate(dates[dates.length - 1])}`;
+}
+
+function printPayslipRows(
+  rows: PayrollRow[],
+  title = "Phiếu lương nhân công tuần",
+  project?: Pick<ProjectRow, "code" | "name">,
+) {
   if (!rows.length) return;
 
-  const totalWorkdays = rows.reduce((sum, row) => sum + row.workdays, 0);
-  const totalAllowance = rows.reduce((sum, row) => sum + row.allowance, 0);
-  const totalOvertime = rows.reduce((sum, row) => sum + row.overtimeAmount, 0);
-  const total = rows.reduce((sum, row) => sum + row.total, 0);
-  const categoryLabel =
-    rows.length && rows.every((row) => row.category === rows[0]?.category) ? ` - ${rows[0]?.category || ""}` : "";
-  const weekLabel = rows.length && rows.every((row) => row.week === rows[0]?.week) ? rows[0]?.week : "";
   const printWindow = window.open("", "_blank", "width=1200,height=800");
 
   if (!printWindow) return;
 
-  const bodyRows = rows
+  const projectLabel = project ? `${project.code} - ${project.name}` : "";
+  const payslipCards = rows
     .map(
       (row, index) => `
-        <tr>
-          <td class="center">${index + 1}</td>
-          <td>
-            <div class="name">${escapePrintText(row.staffName)}</div>
-            <div class="muted">${escapePrintText(row.position || "Nhân công")}</div>
-          </td>
-          <td class="center">${escapePrintText(row.category)}</td>
-          <td class="center">${formatCount(row.workdays)} công</td>
-          <td class="right">${formatPayrollMoney(row.allowance)}</td>
-          <td class="right">${formatPayrollMoney(row.overtimeAmount)}</td>
-          <td class="right strong">${formatPayrollMoney(row.total)}</td>
-        </tr>`,
+        <article class="payslip">
+          <header class="payslip-header">
+            <div class="company">CTY TVTK-TMĐV GIA PHÚ</div>
+            <h1>${escapePrintText(title)}</h1>
+            <div class="meta">
+              ${projectLabel ? `CT: ${escapePrintText(projectLabel)} - ` : ""}Tuần ${escapePrintText(row.week)}
+              ${getPayslipDateRange(row) ? ` - ${escapePrintText(getPayslipDateRange(row))}` : ""}
+            </div>
+            <div class="meta">HM: ${escapePrintText(row.category || "-")} - STT: ${row.stt || index + 1}</div>
+          </header>
+          <table class="payslip-table">
+            <tbody>
+              <tr>
+                <th>Họ tên</th>
+                <td colspan="3" class="name">${escapePrintText(row.staffName)}</td>
+              </tr>
+              <tr>
+                <th>Ngày công</th>
+                <td class="value">${formatCount(row.workdays)} công</td>
+                <th>Tăng ca</th>
+                <td class="value">${formatPayrollMoney(row.overtimeAmount)}</td>
+              </tr>
+              <tr>
+                <th>Phụ cấp</th>
+                <td class="value">${formatPayrollMoney(row.allowance)}</td>
+                <th>Thành tiền</th>
+                <td class="value total">${formatPayrollMoney(row.total)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <footer class="payslip-footer">
+            <div>
+              <div class="signature-line"></div>
+              <div>Người lập phiếu</div>
+            </div>
+            <div>
+              <div class="signature-line"></div>
+              <div>Người nhận</div>
+            </div>
+          </footer>
+        </article>`,
     )
     .join("");
 
@@ -201,57 +248,96 @@ function printPayslipRows(rows: PayrollRow[], title = "Phiếu lương nhân cô
         <title>${escapePrintText(title)}</title>
         <style>
           * { box-sizing: border-box; }
-          body { margin: 24px; color: #111; font-family: Arial, sans-serif; font-size: 13px; }
-          h1 { margin: 0 0 4px; text-align: center; font-size: 20px; text-transform: uppercase; }
-          .subtitle { margin-bottom: 16px; text-align: center; font-size: 12px; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { border: 1px solid #222; padding: 8px 10px; vertical-align: middle; }
-          th { font-weight: 700; text-align: center; }
-          tfoot td { font-weight: 700; }
-          .center { text-align: center; }
-          .right { text-align: right; }
-          .strong, .name { font-weight: 700; }
-          .muted { margin-top: 4px; color: #444; font-size: 12px; }
-          .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 36px; text-align: center; }
-          .signature-title { font-weight: 700; }
-          .signature-space { height: 72px; }
+          @page { size: A4 landscape; margin: 8mm; }
+          body {
+            margin: 0;
+            color: #003f4b;
+            background: #fff;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11px;
+          }
+          .payslip-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+          .payslip {
+            min-height: 158px;
+            border: 1px solid #111827;
+            border-radius: 6px;
+            padding: 7px 10px 8px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          .payslip-header {
+            text-align: center;
+            line-height: 1.1;
+          }
+          .company {
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: .02em;
+          }
+          h1 {
+            margin: 1px 0 2px;
+            color: #004f60;
+            font-size: 17px;
+            line-height: 1;
+            text-transform: uppercase;
+          }
+          .meta {
+            color: #1f2937;
+            font-size: 8px;
+          }
+          .payslip-table {
+            width: 100%;
+            margin-top: 10px;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          .payslip-table th,
+          .payslip-table td {
+            border: 1px solid #213547;
+            padding: 5px 7px;
+            vertical-align: middle;
+          }
+          .payslip-table th {
+            width: 22%;
+            background: #eef8f6;
+            color: #004f60;
+            font-weight: 700;
+            text-align: left;
+          }
+          .payslip-table td {
+            color: #003f4b;
+            font-weight: 700;
+          }
+          .payslip-table .value {
+            text-align: right;
+          }
+          .payslip-table .total {
+            color: #007066;
+          }
+          .payslip-footer {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            margin-top: 8px;
+            color: #1f2937;
+            text-align: center;
+            font-size: 8px;
+          }
+          .signature-line {
+            border-top: 1px dotted #111827;
+            height: 6px;
+          }
           @media print {
-            body { margin: 12mm; }
-            button { display: none; }
+            body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
           }
         </style>
       </head>
       <body>
-        <h1>${escapePrintText(title)}</h1>
-        <div class="subtitle">${weekLabel ? `Tuần ${escapePrintText(weekLabel)}` : ""}</div>
-        <table>
-          <thead>
-            <tr>
-              <th>STT</th>
-              <th>Họ tên</th>
-              <th>Hạng mục</th>
-              <th>Ngày công</th>
-              <th>Phụ cấp</th>
-              <th>Tăng ca</th>
-              <th>Thành tiền</th>
-            </tr>
-          </thead>
-          <tbody>${bodyRows}</tbody>
-          <tfoot>
-            <tr>
-              <td colspan="3">TỔNG CỘNG TUẦN${escapePrintText(categoryLabel)}</td>
-              <td class="center">${formatCount(totalWorkdays)} công</td>
-              <td class="right">${formatPayrollMoney(totalAllowance)}</td>
-              <td class="right">${formatPayrollMoney(totalOvertime)}</td>
-              <td class="right">${formatPayrollMoney(total)}</td>
-            </tr>
-          </tfoot>
-        </table>
-        <div class="signatures">
-          <div><div class="signature-title">Người lập</div><div class="signature-space"></div><div>.........................</div></div>
-          <div><div class="signature-title">Chỉ huy trưởng</div><div class="signature-space"></div><div>.........................</div></div>
-          <div><div class="signature-title">Người nhận</div><div class="signature-space"></div><div>.........................</div></div>
-        </div>
+        <main class="payslip-grid">${payslipCards}</main>
       </body>
     </html>
   `);
@@ -1127,6 +1213,10 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
   const laborNormCategoryOptions = uniqueOptions(scoped.laborNorms.map((row) => row.category));
   const progressCategoryOptions = uniqueOptions(scoped.progress.map((row) => row.category));
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.workforceManage);
+  const activeProject = React.useMemo(
+    () => data.projects.find((project) => project.code === activeProjectCode || project.id === activeProjectCode),
+    [activeProjectCode, data.projects],
+  );
   const payrollRows = React.useMemo(() => buildPayrollRows(scoped.attendance), [scoped.attendance]);
   const attendanceWeekOptions = React.useMemo(
     () => uniqueOptions(scoped.attendance.map((row) => row.week)),
@@ -1556,7 +1646,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                   size="sm"
                   className="h-9 rounded-md"
                   disabled={!selectedCount}
-                  onClick={() => printPayslipRows(selectedRows, "Phiếu lương nhân công tuần")}
+                  onClick={() => printPayslipRows(selectedRows, "Phiếu lương nhân công tuần", activeProject)}
                 >
                   In phiếu đã chọn
                 </Button>
@@ -1566,7 +1656,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                   size="sm"
                   className="h-9 rounded-md"
                   disabled={!filteredRows.length}
-                  onClick={() => printPayslipRows(filteredRows, "Phiếu lương nhân công tuần")}
+                  onClick={() => printPayslipRows(filteredRows, "Phiếu lương nhân công tuần", activeProject)}
                 >
                   In tất cả
                 </Button>
