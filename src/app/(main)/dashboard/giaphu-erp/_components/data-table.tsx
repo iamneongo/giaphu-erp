@@ -61,6 +61,7 @@ export interface DataTableColumn<T> {
   sortable?: boolean;
   searchable?: boolean;
   hideable?: boolean;
+  truncate?: boolean;
 }
 
 export interface DataTableFilter<T> {
@@ -125,6 +126,23 @@ function isInteractiveTarget(target: EventTarget | null) {
         '[data-slot="popover-content"]',
       ].join(", "),
     ),
+  );
+}
+
+function DataTableCellContent<T>({ column, row }: { column: DataTableColumn<T>; row: T }) {
+  const content = column.render(row);
+
+  if (column.truncate === false) {
+    return <div className={column.className}>{content}</div>;
+  }
+
+  return (
+    <div
+      className={cn("max-w-80 truncate", column.className)}
+      title={typeof content === "string" ? content : undefined}
+    >
+      {content}
+    </div>
   );
 }
 
@@ -613,7 +631,7 @@ export function DataTable<T>({
             enableSorting: true,
             enableHiding: column.hideable,
             header: headerContent,
-            cell: ({ row }) => <div className={column.className}>{column.render(row.original)}</div>,
+            cell: ({ row }) => <DataTableCellContent column={column} row={row.original} />,
           } satisfies ColumnDef<T>;
         }
 
@@ -622,7 +640,7 @@ export function DataTable<T>({
           enableSorting: false,
           enableHiding: column.hideable,
           header: headerContent,
-          cell: ({ row }) => <div className={column.className}>{column.render(row.original)}</div>,
+          cell: ({ row }) => <DataTableCellContent column={column} row={row.original} />,
         } satisfies ColumnDef<T>;
       }),
     [normalizedColumns, rows],
@@ -926,7 +944,10 @@ export function DataTable<T>({
                     const column = normalizedColumns.find((item) => item.key === cell.column.id);
 
                     return (
-                      <TableCell key={cell.id} className={column?.cellClassName}>
+                      <TableCell
+                        key={cell.id}
+                        className={cn(column?.truncate === false ? undefined : "max-w-80", column?.cellClassName)}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     );
