@@ -500,20 +500,26 @@ function useDebouncedValue<T>(value: T, delay = 300) {
 }
 
 function StaffSearchCombobox({
-  value,
-  onValueChange,
+  values,
+  onValuesChange,
   options,
   disabled,
 }: {
-  value: string;
-  onValueChange: (value: string) => void;
+  values: string[];
+  onValuesChange: (values: string[]) => void;
   options: StaffRow[];
   disabled: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const debouncedSearch = useDebouncedValue(search);
-  const selectedStaff = options.find((option) => option.name === value);
+  const selectedNames = React.useMemo(() => new Set(values), [values]);
+  const selectedLabel =
+    values.length === 0
+      ? "Tìm và chọn nhân công"
+      : values.length === 1
+        ? values[0]
+        : `Đã chọn ${values.length} nhân công`;
   const { visibleOptions, hiddenCount } = React.useMemo(() => {
     const term = normalizeSearchText(debouncedSearch);
     const matchedOptions = term
@@ -529,6 +535,11 @@ function StaffSearchCombobox({
       hiddenCount: Math.max(0, matchedOptions.length - staffComboboxRenderLimit),
     };
   }, [debouncedSearch, options]);
+
+  function toggleValue(name: string) {
+    const nextValues = selectedNames.has(name) ? values.filter((value) => value !== name) : [...values, name];
+    onValuesChange(nextValues);
+  }
 
   return (
     <Popover
@@ -547,9 +558,7 @@ function StaffSearchCombobox({
           disabled={disabled}
           className="h-9 w-full justify-between px-3 font-normal"
         >
-          <span className={cn("truncate", !selectedStaff && "text-muted-foreground")}>
-            {selectedStaff ? selectedStaff.name : "Tìm và chọn nhân công"}
-          </span>
+          <span className={cn("truncate", !values.length && "text-muted-foreground")}>{selectedLabel}</span>
           <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
@@ -564,12 +573,14 @@ function StaffSearchCombobox({
                   key={option.id || option.name}
                   value={option.name}
                   onSelect={() => {
-                    onValueChange(option.name);
-                    setOpen(false);
-                    setSearch("");
+                    toggleValue(option.name);
                   }}
                 >
-                  <Check className={cn("size-4", value === option.name ? "opacity-100" : "opacity-0")} />
+                  <Checkbox
+                    checked={selectedNames.has(option.name)}
+                    tabIndex={-1}
+                    className="pointer-events-none mr-1"
+                  />
                   <div className="min-w-0">
                     <div className="truncate font-medium">{option.name}</div>
                     <div className="truncate text-muted-foreground text-xs">
@@ -649,7 +660,7 @@ function AttendanceBoard({
   const [anchorDate, setAnchorDate] = React.useState(defaultAnchorDate);
   const [selectedWeek, setSelectedWeek] = React.useState(() => isoWeekFromDate(defaultAnchorDate) || currentIsoWeek());
   const [selectedCategory, setSelectedCategory] = React.useState(categoryOptions[0]?.value || "");
-  const [selectedStaffName, setSelectedStaffName] = React.useState("");
+  const [selectedStaffNames, setSelectedStaffNames] = React.useState<string[]>([]);
   const [draftParticipants, setDraftParticipants] = React.useState<DraftAttendanceParticipant[]>([]);
   const [draftCells, setDraftCells] = React.useState<Record<string, AttendanceCellDraft>>({});
   const [draftExtras, setDraftExtras] = React.useState<Record<string, AttendanceExtraDraft>>({});
@@ -683,7 +694,7 @@ function AttendanceBoard({
     setDraftCells({});
     setDraftExtras({});
     setDirtyStaffNames(new Set());
-    setSelectedStaffName("");
+    setSelectedStaffNames([]);
   }, [selectedCategory, selectedWeek]);
 
   const weekDates = React.useMemo(() => getWeekDates(selectedWeek), [selectedWeek]);
@@ -734,6 +745,11 @@ function AttendanceBoard({
       .sort((first, second) => first.name.localeCompare(second.name, "vi"));
   }, [boardRows, staff]);
 
+  React.useEffect(() => {
+    const availableNames = new Set(availableStaff.map((row) => row.name));
+    setSelectedStaffNames((current) => current.filter((name) => availableNames.has(name)));
+  }, [availableStaff]);
+
   const getCurrentCellDraft = React.useCallback(
     (staffName: string, date: string) => {
       const key = attendanceCellKey(staffName, date);
@@ -750,26 +766,27 @@ function AttendanceBoard({
     [draftExtras, rowByStaff],
   );
 
-  function addParticipant() {
-    const staffRow = staff.find((row) => row.name === selectedStaffName);
+  function addParticipants() {
+    const staffRows = selectedStaffNames
+      .map((name) => staff.find((row) => row.name === name))
+      .filter((row): row is StaffRow => Boolean(row));
 
-    if (!staffRow || !selectedCategory) return;
+    if (!staffRows.length || !selectedCategory) return;
 
-    const id = [selectedWeek, selectedCategory, staffRow.name].join("::");
     setDraftParticipants((current) => {
-      if (current.some((participant) => participant.id === id)) return current;
-
-      return [
-        ...current,
-        {
-          id,
+      const currentIds = new Set(current.map((participant) => participant.id));
+      const nextParticipants = staffRows
+        .map((staffRow) => ({
+          id: [selectedWeek, selectedCategory, staffRow.name].join("::"),
           week: selectedWeek,
           category: selectedCategory,
           staff: staffRow,
-        },
-      ];
+        }))
+        .filter((participant) => !currentIds.has(participant.id));
+
+      return nextParticipants.length ? [...current, ...nextParticipants] : current;
     });
-    setSelectedStaffName("");
+    setSelectedStaffNames([]);
   }
 
   const updateCell = React.useCallback(
@@ -1165,8 +1182,8 @@ function AttendanceBoard({
           <div className="w-full space-y-1.5">
             <div className="font-medium text-muted-foreground text-xs">Thêm nhân công</div>
             <StaffSearchCombobox
-              value={selectedStaffName}
-              onValueChange={setSelectedStaffName}
+              values={selectedStaffNames}
+              onValuesChange={setSelectedStaffNames}
               options={availableStaff}
               disabled={!canManage || availableStaff.length === 0 || !selectedCategory}
             />
@@ -1174,12 +1191,12 @@ function AttendanceBoard({
           <Button
             type="button"
             size="sm"
-            disabled={!canManage || !selectedStaffName || !selectedCategory}
-            onClick={addParticipant}
+            disabled={!canManage || !selectedStaffNames.length || !selectedCategory}
+            onClick={addParticipants}
             className="h-9"
           >
             <Users />
-            Thêm
+            {selectedStaffNames.length > 1 ? `Thêm (${selectedStaffNames.length})` : "Thêm"}
           </Button>
         </div>
       </div>
