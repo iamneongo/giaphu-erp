@@ -1661,8 +1661,21 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                               fields: [
                                 { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
                                 { name: "week", label: "Tuần", type: "hidden", value: row.week },
-                                { name: "category", label: "Hạng mục", type: "hidden", value: row.category },
+                                {
+                                  name: "originalCategory",
+                                  label: "Hạng mục gốc",
+                                  type: "hidden",
+                                  value: row.category,
+                                },
                                 { name: "staffName", label: "Nhân sự", type: "hidden", value: row.staffName },
+                                {
+                                  name: "category",
+                                  label: "Hạng mục",
+                                  type: "select",
+                                  value: row.category,
+                                  options: catalogOptionsWithValue(data.catalogs.hangMuc, row.category),
+                                  required: true,
+                                },
                                 {
                                   name: "allowance",
                                   label: "Phụ cấp",

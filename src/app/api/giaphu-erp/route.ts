@@ -569,10 +569,14 @@ export async function POST(request: Request) {
           return forbidden("Chỉ admin mới có quyền sửa bảng lương.");
         }
 
-        const { savedRows, adjustment } = await savePayrollAdjustment(payload);
+        const { savedRows, adjustment, deletedAdjustmentIds } = await savePayrollAdjustment(payload);
         return NextResponse.json({
           status: "success",
-          patch: { attendanceUpsert: savedRows, payrollAdjustmentUpsert: [adjustment] },
+          patch: {
+            attendanceUpsert: savedRows,
+            payrollAdjustmentUpsert: [adjustment],
+            payrollAdjustmentDeleteIds: deletedAdjustmentIds,
+          },
         });
       }
       case "deleteAttendanceRow": {

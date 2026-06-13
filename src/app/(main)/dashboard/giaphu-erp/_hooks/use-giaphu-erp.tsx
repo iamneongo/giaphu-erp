@@ -75,14 +75,21 @@ type GiaPhuDataPatch = {
   attendanceUpsert?: AttendanceRow[];
   attendanceDeleteIds?: number[];
   payrollAdjustmentUpsert?: PayrollAdjustmentRow[];
+  payrollAdjustmentDeleteIds?: string[];
 };
 
 function applyDataPatch(current: GiaPhuDashboardData, patch: GiaPhuDataPatch) {
-  if (!patch.attendanceUpsert?.length && !patch.attendanceDeleteIds?.length && !patch.payrollAdjustmentUpsert?.length) {
+  if (
+    !patch.attendanceUpsert?.length &&
+    !patch.attendanceDeleteIds?.length &&
+    !patch.payrollAdjustmentUpsert?.length &&
+    !patch.payrollAdjustmentDeleteIds?.length
+  ) {
     return current;
   }
 
   const deleteIds = new Set(patch.attendanceDeleteIds ?? []);
+  const payrollAdjustmentDeleteIds = new Set(patch.payrollAdjustmentDeleteIds ?? []);
   const upsertById = new Map((patch.attendanceUpsert ?? []).map((row) => [row.id, row]));
   const laborDiffByProject = new Map<string, number>();
   const addLaborDiff = (projectCode: string, value: number) => {
@@ -113,11 +120,16 @@ function applyDataPatch(current: GiaPhuDashboardData, patch: GiaPhuDataPatch) {
 
   const currentPayrollAdjustmentsById = new Map(current.payrollAdjustments.map((row) => [row.id, row]));
   const payrollAdjustmentUpserts = new Map((patch.payrollAdjustmentUpsert ?? []).map((row) => [row.id, row]));
+  for (const id of payrollAdjustmentDeleteIds) {
+    const deletedRow = currentPayrollAdjustmentsById.get(id);
+    if (deletedRow) addLaborDiff(deletedRow.projectCode, -Number(deletedRow.adjustment || 0));
+  }
   for (const row of payrollAdjustmentUpserts.values()) {
     const previousAdjustment = currentPayrollAdjustmentsById.get(row.id)?.adjustment ?? 0;
     addLaborDiff(row.projectCode, Number(row.adjustment || 0) - Number(previousAdjustment || 0));
   }
   const payrollAdjustments = current.payrollAdjustments
+    .filter((row) => !payrollAdjustmentDeleteIds.has(row.id))
     .map((row) => payrollAdjustmentUpserts.get(row.id) ?? row)
     .concat(
       Array.from(payrollAdjustmentUpserts.values()).filter(

@@ -4092,6 +4092,7 @@ export async function savePayrollAdjustment(payload: Record<string, unknown>) {
   const projectCode = text(payload.projectCode).trim();
   const week = text(payload.week).trim();
   const category = text(payload.category).trim();
+  const originalCategory = text(payload.originalCategory).trim() || category;
   const staffName = text(payload.staffName).trim();
   const allowance = requireNonNegativeNumericInput(payload.allowance, "Phụ cấp");
   const overtimeHours = requireNonNegativeNumericInput(payload.overtimeHours, "OT giờ");
@@ -4102,13 +4103,21 @@ export async function savePayrollAdjustment(payload: Record<string, unknown>) {
   if (!projectCode) throw new Error("Thiếu công trình.");
   if (!week) throw new Error("Thiếu tuần.");
   if (!category) throw new Error("Thiếu hạng mục.");
+  if (!originalCategory) throw new Error("Thiếu hạng mục gốc.");
   if (!staffName) throw new Error("Thiếu nhân sự.");
 
   async function persist(database: ReturnType<typeof getSql>) {
-    const lockKey = attendanceLockKey(organizationId, projectCode, week, category);
-    const [lock] =
-      (await database`select status from gp_attendance_locks where organization_id = ${organizationId} and lock_key = ${lockKey}`) as Row[];
-    if (text(lock?.status) === "CLOSED") throw new Error("Tuần/hạng mục đã kết sổ, không thể sửa bảng lương.");
+    const lockKeys = Array.from(
+      new Set([
+        attendanceLockKey(organizationId, projectCode, week, originalCategory),
+        attendanceLockKey(organizationId, projectCode, week, category),
+      ]),
+    );
+    const locks =
+      (await database`select status from gp_attendance_locks where organization_id = ${organizationId} and lock_key = any(${lockKeys})`) as Row[];
+    if (locks.some((lock) => text(lock.status) === "CLOSED")) {
+      throw new Error("Tuần/hạng mục đã kết sổ, không thể sửa bảng lương.");
+    }
 
     const rows = (await database`
       select *
@@ -4116,7 +4125,7 @@ export async function savePayrollAdjustment(payload: Record<string, unknown>) {
       where organization_id = ${organizationId}
         and project_code = ${projectCode}
         and week = ${week}
-        and category = ${category}
+        and category = ${originalCategory}
         and staff_name = ${staffName}
       order by work_date asc nulls last, id asc
     `) as Row[];
@@ -4133,7 +4142,8 @@ export async function savePayrollAdjustment(payload: Record<string, unknown>) {
       const nextTotal = baseSalary + rowAllowance + rowOvertimeAmount;
       const [savedRow] = (await database`
         update gp_attendance
-        set allowance = ${rowAllowance},
+        set category = ${category},
+            allowance = ${rowAllowance},
             overtime_hours = ${rowOvertimeHours},
             overtime_amount = ${rowOvertimeAmount},
             total = ${nextTotal},
@@ -4145,9 +4155,15 @@ export async function savePayrollAdjustment(payload: Record<string, unknown>) {
       if (savedRow) savedRows.push(attendanceFromRow(savedRow));
     }
 
-    const adjustmentId = [organizationId, projectCode, week, category, staffName]
-      .map((part) => encodeURIComponent(part))
-      .join("::");
+    const adjustmentId = payrollAdjustmentId(organizationId, projectCode, week, category, staffName);
+    const deletedAdjustmentIds: string[] = [];
+    const originalAdjustmentId = payrollAdjustmentId(organizationId, projectCode, week, originalCategory, staffName);
+
+    if (originalAdjustmentId !== adjustmentId) {
+      await database`delete from gp_payroll_adjustments where organization_id = ${organizationId} and id = ${originalAdjustmentId}`;
+      deletedAdjustmentIds.push(originalAdjustmentId);
+    }
+
     const [savedAdjustment] = (await database`
       insert into gp_payroll_adjustments (
         id, organization_id, project_code, week, category, staff_name,
@@ -4167,7 +4183,7 @@ export async function savePayrollAdjustment(payload: Record<string, unknown>) {
       returning *
     `) as Row[];
 
-    return { savedRows, adjustment: payrollAdjustmentFromRow(savedAdjustment) };
+    return { savedRows, adjustment: payrollAdjustmentFromRow(savedAdjustment), deletedAdjustmentIds };
   }
 
   if (typeof sql.begin === "function") {
@@ -4195,6 +4211,16 @@ export async function deleteAttendanceRow(payload: Record<string, unknown>) {
 
 function attendanceLockKey(organizationId: string, projectCode: string, week: string, category: string) {
   return [organizationId, projectCode, week, category || "ALL"].join("::").toLowerCase();
+}
+
+function payrollAdjustmentId(
+  organizationId: string,
+  projectCode: string,
+  week: string,
+  category: string,
+  staffName: string,
+) {
+  return [organizationId, projectCode, week, category, staffName].map((part) => encodeURIComponent(part)).join("::");
 }
 
 export async function closeAttendance(payload: Record<string, unknown>) {
