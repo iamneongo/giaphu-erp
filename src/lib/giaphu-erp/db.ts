@@ -527,6 +527,19 @@ function emptySummary(): CostSummary {
   };
 }
 
+function excludeArchivedCategory(sql: any, organizationId: string, categoryColumn = sql`category`) {
+  return sql`
+    and not exists (
+      select 1
+      from gp_catalog_items archived_category
+      where archived_category.organization_id = ${organizationId}
+        and archived_category.kind = 'hangMuc'
+        and archived_category.archived = true
+        and lower(btrim(archived_category.name)) = lower(btrim(${categoryColumn}))
+    )
+  `;
+}
+
 async function getGiaPhuSummaries(activeProjectCode?: string, organizationId?: string) {
   const projectCode = text(activeProjectCode).trim();
   const orgId = organizationIdFrom(organizationId);
@@ -545,18 +558,21 @@ async function getGiaPhuSummaries(activeProjectCode?: string, organizationId?: s
       select project_code, material_type, coalesce(sum(quantity * price), 0)::float8 as total
       from gp_materials
       where organization_id = ${orgId} and project_code = ${projectCode}
+        ${excludeArchivedCategory(sql, orgId)}
       group by project_code, material_type
     `,
     sql`
       select project_code, coalesce(sum(total), 0)::float8 as total
       from gp_attendance
       where organization_id = ${orgId} and project_code = ${projectCode}
+        ${excludeArchivedCategory(sql, orgId)}
       group by project_code
     `,
     sql`
       select project_code, coalesce(sum(advance), 0)::float8 as total
       from gp_subcontractors
       where organization_id = ${orgId} and project_code = ${projectCode}
+        ${excludeArchivedCategory(sql, orgId)}
       group by project_code
     `,
     sql`
@@ -1101,6 +1117,7 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     projects.find((project) => project.code === requestedProject || project.id === requestedProject)?.code ??
     projects[0]?.code ??
     "";
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
 
   const [
     materialRows,
@@ -1116,13 +1133,13 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     summaries,
   ] = await Promise.all([
     activeProjectCode
-      ? sql`select * from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 80`
+      ? sql`select * from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by work_date desc nulls last, id desc limit 80`
       : sql`select * from gp_materials where false`,
     activeProjectCode
-      ? sql`select * from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 280`
+      ? sql`select * from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by work_date desc nulls last, id desc limit 280`
       : sql`select * from gp_attendance where false`,
     activeProjectCode
-      ? sql`select * from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 80`
+      ? sql`select * from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by work_date desc nulls last, id desc limit 80`
       : sql`select * from gp_subcontractors where false`,
     activeProjectCode
       ? sql`select * from gp_subcontractor_contracts where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by updated_at desc, id desc limit 80`
@@ -1131,10 +1148,10 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
       ? sql`select * from gp_operations where organization_id = ${organizationId} and (project_code = ${activeProjectCode} or project_code = 'CHUNG DOANH NGHIỆP') order by work_date desc nulls last, id desc limit 80`
       : sql`select * from gp_operations where false`,
     activeProjectCode
-      ? sql`select * from gp_labor_norms where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by category asc`
+      ? sql`select * from gp_labor_norms where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by category asc`
       : sql`select * from gp_labor_norms where false`,
     activeProjectCode
-      ? sql`select * from gp_progress where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by category asc`
+      ? sql`select * from gp_progress where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by category asc`
       : sql`select * from gp_progress where false`,
     activeProjectCode
       ? sql`select * from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by payment_date desc, id desc limit 40`
@@ -1143,7 +1160,7 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
       ? sql`select * from gp_contracts where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by signed_date desc, id desc limit 40`
       : sql`select * from gp_contracts where false`,
     activeProjectCode
-      ? sql`select * from gp_attendance_locks where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by updated_at desc`
+      ? sql`select * from gp_attendance_locks where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by updated_at desc`
       : sql`select * from gp_attendance_locks where false`,
     getGiaPhuSummaries(activeProjectCode, organizationId),
   ]);
@@ -1670,6 +1687,7 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
       },
     };
   }
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
 
   const [
     materialBreakdown,
@@ -1695,46 +1713,46 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
     recentSubcontractorRows,
     recentOperationRows,
   ] = await Promise.all([
-    sql`select 'materials' as key, count(*)::int as rows, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
-    sql`select material_type, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by material_type`,
-    sql`select 'labor' as key, count(*)::int as rows, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
-    sql`select 'subcontractors' as key, count(*)::int as rows, coalesce(sum(advance), 0)::float8 as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
+    sql`select 'materials' as key, count(*)::int as rows, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}`,
+    sql`select material_type, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by material_type`,
+    sql`select 'labor' as key, count(*)::int as rows, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}`,
+    sql`select 'subcontractors' as key, count(*)::int as rows, coalesce(sum(advance), 0)::float8 as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}`,
     sql`select 'operations' as key, count(*)::int as rows, coalesce(sum(amount), 0)::float8 as value from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
     sql`select coalesce(sum(value), 0)::float8 as total from gp_contracts where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
     sql`select coalesce(sum(amount), 0)::float8 as total from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
-    sql`select coalesce(sum(quantity * price), 0)::float8 as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> 'Đã TT'`,
+    sql`select coalesce(sum(quantity * price), 0)::float8 as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> 'Đã TT' ${activeCategoryOnly}`,
     sql`
       select
         (
           select count(distinct category)::int from (
-            select category from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode}
-            union all select category from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode}
-            union all select category from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode}
+            select category from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}
+            union all select category from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}
+            union all select category from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}
             union all select description as category from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode}
-            union all select category from gp_progress where organization_id = ${organizationId} and project_code = ${activeProjectCode}
+            union all select category from gp_progress where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}
           ) categories where coalesce(category, '') <> ''
         ) as active_categories,
         (
           select count(distinct week)::int from (
-            select week from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode}
-            union all select week from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode}
-            union all select week from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode}
+            select week from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}
+            union all select week from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}
+            union all select week from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}
             union all select week from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode}
           ) weeks where coalesce(week, '') <> ''
         ) as active_weeks
     `,
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(advance), 0)::float8 as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(advance), 0)::float8 as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select to_char(coalesce(payment_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select coalesce(category, 'Khác') as category, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select coalesce(category, 'Khác') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select coalesce(category, 'Khác') as category, coalesce(sum(advance), 0)::float8 as subcontractors from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(advance), 0)::float8 as subcontractors from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
     sql`select coalesce(description, 'Khác') as category, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select id, material_name, material_code, supplier, category, quantity, price, work_date from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 5`,
+    sql`select id, material_name, material_code, supplier, category, quantity, price, work_date from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by work_date desc nulls last, id desc limit 5`,
     sql`select id, note, amount, payment_date from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by payment_date desc nulls last, id desc limit 5`,
-    sql`select id, contractor_name, category, note, advance, work_date from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 5`,
+    sql`select id, contractor_name, category, note, advance, work_date from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by work_date desc nulls last, id desc limit 5`,
     sql`select id, description, amount, work_date from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by work_date desc nulls last, id desc limit 5`,
   ]);
 
@@ -1900,6 +1918,7 @@ export async function getGiaPhuMaterialDebtSummary(
     where organization_id = ${organizationId}
       and project_code = ${activeProjectCode}
       and (payment_status <> 'Đã TT' or debt = 'Có')
+      ${excludeArchivedCategory(sql, organizationId)}
   `) as Row[];
 
   return {
@@ -1935,6 +1954,7 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
       },
     };
   }
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
 
   const [
     monthlyMaterialRows,
@@ -1947,13 +1967,13 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
     weeklySubcontractorRows,
     weeklyOperationRows,
   ] = await Promise.all([
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' ${activeCategoryOnly} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
     sql`select null::text as month, 0::float8 as value where false`,
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select to_char(coalesce(payment_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
-    sql`select week, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' ${activeCategoryOnly} group by 1`,
+    sql`select week, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
     sql`select null::text as week, 0::float8 as subcontractors where false`,
     sql`select week, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
   ]);
@@ -2144,6 +2164,7 @@ export async function getGiaPhuReportsData(
   const laborOffset = laborState.pageIndex * laborState.pageSize;
   const materialOffset = materialState.pageIndex * materialState.pageSize;
   const operationOffset = operationState.pageIndex * operationState.pageSize;
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
   const laborPattern = `%${laborState.search}%`;
   const materialPattern = `%${materialState.search}%`;
   const operationPattern = `%${operationState.search}%`;
@@ -2164,6 +2185,7 @@ export async function getGiaPhuReportsData(
     ${laborCategoryFilter ? sql`and category = ${laborCategoryFilter}` : sql``}
     ${laborStaffFilter ? sql`and staff_name = ${laborStaffFilter}` : sql``}
     ${laborPositionFilter ? sql`and position = ${laborPositionFilter}` : sql``}
+    ${activeCategoryOnly}
   `;
   const materialWhere = sql`
     organization_id = ${organizationId}
@@ -2173,6 +2195,7 @@ export async function getGiaPhuReportsData(
     ${materialWeekFilter ? sql`and week = ${materialWeekFilter}` : sql``}
     ${materialCategoryFilter ? sql`and category = ${materialCategoryFilter}` : sql``}
     ${materialSupplierFilter ? sql`and supplier = ${materialSupplierFilter}` : sql``}
+    ${activeCategoryOnly}
   `;
   const operationWhere = sql`
     organization_id = ${organizationId}
@@ -2205,21 +2228,21 @@ export async function getGiaPhuReportsData(
     materialOptionRows,
     operationOptionRows,
   ] = await Promise.all([
-    sql`select material_type, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by material_type`,
-    sql`select count(*)::int as rows, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
+    sql`select material_type, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by material_type`,
+    sql`select count(*)::int as rows, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly}`,
     sql`select count(*)::int as rows, coalesce(sum(amount), 0)::float8 as value from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
     sql`select coalesce(sum(value), 0)::float8 as total from gp_contracts where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
     sql`select coalesce(sum(amount), 0)::float8 as total from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode}`,
-    sql`select coalesce(sum(quantity * price), 0)::float8 as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> 'Đã TT'`,
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
-    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(sum(quantity * price), 0)::float8 as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> 'Đã TT' ${activeCategoryOnly}`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(quantity * price), 0)::float8 as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' ${activeCategoryOnly} group by 1`,
+    sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(total), 0)::float8 as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
     sql`select to_char(coalesce(work_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`select to_char(coalesce(payment_date, created_at::date), 'YYYY-MM') as month, coalesce(sum(amount), 0)::float8 as value from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
-    sql`select week, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select week, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' ${activeCategoryOnly} group by 1`,
+    sql`select week, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
     sql`select week, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
-    sql`select coalesce(category, 'Khác') as category, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' group by 1`,
-    sql`select coalesce(category, 'Khác') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(quantity * price), 0)::float8 as materials from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' ${activeCategoryOnly} group by 1`,
+    sql`select coalesce(category, 'Khác') as category, coalesce(sum(total), 0)::float8 as labor from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} group by 1`,
     sql`select coalesce(description, 'Khác') as category, coalesce(sum(amount), 0)::float8 as operations from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} group by 1`,
     sql`
       select *, count(*) over()::int as __total
@@ -2247,16 +2270,16 @@ export async function getGiaPhuReportsData(
     `,
     sql`
       select
-        ARRAY(select distinct week from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' order by week desc limit 300) as week,
-        ARRAY(select distinct category from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' order by category asc limit 300) as category,
-        ARRAY(select distinct staff_name from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and staff_name <> '' order by staff_name asc limit 300) as staff_name,
-        ARRAY(select distinct position from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and position <> '' order by position asc limit 300) as position
+        ARRAY(select distinct week from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' ${activeCategoryOnly} order by week desc limit 300) as week,
+        ARRAY(select distinct category from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' ${activeCategoryOnly} order by category asc limit 300) as category,
+        ARRAY(select distinct staff_name from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and staff_name <> '' ${activeCategoryOnly} order by staff_name asc limit 300) as staff_name,
+        ARRAY(select distinct position from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and position <> '' ${activeCategoryOnly} order by position asc limit 300) as position
     `,
     sql`
       select
-        ARRAY(select distinct week from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' and week <> '' order by week desc limit 300) as week,
-        ARRAY(select distinct category from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' and category <> '' order by category asc limit 300) as category,
-        ARRAY(select distinct supplier from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' and supplier <> '' order by supplier asc limit 300) as supplier
+        ARRAY(select distinct week from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' and week <> '' ${activeCategoryOnly} order by week desc limit 300) as week,
+        ARRAY(select distinct category from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' and category <> '' ${activeCategoryOnly} order by category asc limit 300) as category,
+        ARRAY(select distinct supplier from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type = 'VT Chính' and supplier <> '' ${activeCategoryOnly} order by supplier asc limit 300) as supplier
     `,
     sql`
       select ARRAY(select distinct week from gp_operations where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' order by week desc limit 300) as week
@@ -2408,6 +2431,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
   const search = text(options.search).trim();
   const pattern = `%${search}%`;
   const filterValue = (key: string) => text(options.filters?.[key]).trim();
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
 
   if (options.dataset === "projects") {
     const whereSearch = search
@@ -2622,11 +2646,11 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
       ${debtOpenFilter ? sql`and (payment_status <> 'Đã TT' or debt = 'Có')` : sql``}
     `;
     const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`select count(*)::int as total from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}`,
       sql`
         select *
         from gp_materials
-        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "materials", options.sorting)}
         limit ${pageSize}
         offset ${offset}
@@ -2659,11 +2683,11 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
       ${shiftFilter ? sql`and shift = ${shiftFilter}` : sql``}
     `;
     const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`select count(*)::int as total from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}`,
       sql`
         select *
         from gp_attendance
-        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "attendance", options.sorting)}
         limit ${pageSize}
         offset ${offset}
@@ -2684,11 +2708,11 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     const categoryFilter = filterValue("category");
     const whereFilters = sql`${categoryFilter ? sql`and category = ${categoryFilter}` : sql``}`;
     const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_labor_norms where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`select count(*)::int as total from gp_labor_norms where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}`,
       sql`
         select *
         from gp_labor_norms
-        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "laborNorms", options.sorting)}
         limit ${pageSize}
         offset ${offset}
@@ -2709,11 +2733,11 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     const categoryFilter = filterValue("category");
     const whereFilters = sql`${categoryFilter ? sql`and category = ${categoryFilter}` : sql``}`;
     const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_progress where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`select count(*)::int as total from gp_progress where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}`,
       sql`
         select *
         from gp_progress
-        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "progress", options.sorting)}
         limit ${pageSize}
         offset ${offset}
@@ -2742,7 +2766,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
       ${contractorNameFilter ? sql`and contractor_name = ${contractorNameFilter}` : sql``}
     `;
     const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`select count(*)::int as total from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}`,
       sql`
         select
           id,
@@ -2773,7 +2797,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
               and document.file_data <> ''
           ) then file_id else '' end as file_id
         from gp_subcontractors
-        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "subcontractors", options.sorting)}
         limit ${pageSize}
         offset ${offset}
@@ -2956,6 +2980,7 @@ export async function getGiaPhuFilterOptions(options: {
   }
 
   if (!activeProjectCode) return {};
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
 
   if (options.dataset === "documents") {
     await ensureDocumentFileColumns();
@@ -2975,11 +3000,11 @@ export async function getGiaPhuFilterOptions(options: {
   if (options.dataset === "materials") {
     const whereDebtOpen = fixedFilterValue("debtOpen") ? sql`and (payment_status <> 'Đã TT' or debt = 'Có')` : sql``;
     const [weekRows, materialTypeRows, paymentStatusRows, categoryRows, supplierRows] = await Promise.all([
-      sql`select distinct week as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' ${whereDebtOpen} order by week desc limit 300`,
-      sql`select distinct material_type as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type <> '' ${whereDebtOpen} order by material_type asc limit 300`,
-      sql`select distinct payment_status as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> '' ${whereDebtOpen} order by payment_status asc limit 300`,
-      sql`select distinct category as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' ${whereDebtOpen} order by category asc limit 300`,
-      sql`select distinct supplier as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and supplier <> '' ${whereDebtOpen} order by supplier asc limit 300`,
+      sql`select distinct week as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' ${whereDebtOpen} ${activeCategoryOnly} order by week desc limit 300`,
+      sql`select distinct material_type as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and material_type <> '' ${whereDebtOpen} ${activeCategoryOnly} order by material_type asc limit 300`,
+      sql`select distinct payment_status as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and payment_status <> '' ${whereDebtOpen} ${activeCategoryOnly} order by payment_status asc limit 300`,
+      sql`select distinct category as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' ${whereDebtOpen} ${activeCategoryOnly} order by category asc limit 300`,
+      sql`select distinct supplier as value from gp_materials where organization_id = ${organizationId} and project_code = ${activeProjectCode} and supplier <> '' ${whereDebtOpen} ${activeCategoryOnly} order by supplier asc limit 300`,
     ]);
 
     return {
@@ -2993,11 +3018,11 @@ export async function getGiaPhuFilterOptions(options: {
 
   if (options.dataset === "attendance") {
     const [weekRows, categoryRows, staffRows, positionRows, shiftRows] = await Promise.all([
-      sql`select distinct week as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' order by week desc limit 300`,
-      sql`select distinct category as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`,
-      sql`select distinct staff_name as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and staff_name <> '' order by staff_name asc limit 300`,
-      sql`select distinct position as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and position <> '' order by position asc limit 300`,
-      sql`select distinct shift as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and shift <> '' order by shift asc limit 300`,
+      sql`select distinct week as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' ${activeCategoryOnly} order by week desc limit 300`,
+      sql`select distinct category as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' ${activeCategoryOnly} order by category asc limit 300`,
+      sql`select distinct staff_name as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and staff_name <> '' ${activeCategoryOnly} order by staff_name asc limit 300`,
+      sql`select distinct position as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and position <> '' ${activeCategoryOnly} order by position asc limit 300`,
+      sql`select distinct shift as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and shift <> '' ${activeCategoryOnly} order by shift asc limit 300`,
     ]);
 
     return {
@@ -3011,21 +3036,21 @@ export async function getGiaPhuFilterOptions(options: {
 
   if (options.dataset === "laborNorms") {
     const rows =
-      await sql`select distinct category as value from gp_labor_norms where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`;
+      await sql`select distinct category as value from gp_labor_norms where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' ${activeCategoryOnly} order by category asc limit 300`;
     return { category: distinctOptions(rows) };
   }
 
   if (options.dataset === "progress") {
     const rows =
-      await sql`select distinct category as value from gp_progress where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`;
+      await sql`select distinct category as value from gp_progress where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' ${activeCategoryOnly} order by category asc limit 300`;
     return { category: distinctOptions(rows) };
   }
 
   if (options.dataset === "subcontractors") {
     const [weekRows, categoryRows, contractorRows] = await Promise.all([
-      sql`select distinct week as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' order by week desc limit 300`,
-      sql`select distinct category as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' order by category asc limit 300`,
-      sql`select distinct contractor_name as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} and contractor_name <> '' order by contractor_name asc limit 300`,
+      sql`select distinct week as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' ${activeCategoryOnly} order by week desc limit 300`,
+      sql`select distinct category as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' ${activeCategoryOnly} order by category asc limit 300`,
+      sql`select distinct contractor_name as value from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} and contractor_name <> '' ${activeCategoryOnly} order by contractor_name asc limit 300`,
     ]);
 
     return {
@@ -3479,6 +3504,36 @@ export async function deleteCatalog(payload: Record<string, unknown>) {
 
   await assertCatalogCanBeDeleted(item, organizationId);
   await sql`delete from gp_catalog_items where organization_id = ${organizationId} and id = ${id}`;
+}
+
+export async function restoreCatalog(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const organizationId = requireOrganizationId(payload.organizationId);
+  const id = text(payload.id).trim();
+  const rows = (await sql`
+    select *
+    from gp_catalog_items
+    where organization_id = ${organizationId} and id = ${id}
+    limit 1
+  `) as Row[];
+  const item = rows[0] ? catalogFromRow(rows[0]) : null;
+
+  if (!item) throw new Error("Không tìm thấy danh mục cần khôi phục.");
+  if (item.kind !== "hangMuc") throw new Error("Chỉ hỗ trợ khôi phục hạng mục đã lưu trữ.");
+
+  await assertUniqueCatalogItem({
+    kind: item.kind,
+    code: item.code,
+    name: item.name,
+    supplier: item.supplier,
+    originalId: item.id,
+    organizationId,
+  });
+  await sql`
+    update gp_catalog_items
+    set archived = false, updated_at = now()
+    where organization_id = ${organizationId} and id = ${id}
+  `;
 }
 
 export async function manageStaff(payload: Record<string, unknown>) {

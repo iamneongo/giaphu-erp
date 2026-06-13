@@ -39,6 +39,7 @@ import {
   markMaterialPaid,
   queryDocuments,
   reopenAttendance,
+  restoreCatalog,
   saveContract,
   saveDocument,
   saveLaborNorm,
@@ -126,6 +127,7 @@ const mutationPermissions = {
   deletePayment: ERP_PERMISSIONS.crmManage,
   manageCatalog: ERP_PERMISSIONS.catalogsManage,
   deleteCatalog: ERP_PERMISSIONS.catalogsManage,
+  restoreCatalog: ERP_PERMISSIONS.catalogsManage,
   manageStaff: ERP_PERMISSIONS.workforceManage,
   deleteStaff: ERP_PERMISSIONS.workforceManage,
   saveMaterial: ERP_PERMISSIONS.materialsManage,
@@ -502,6 +504,10 @@ export async function POST(request: Request) {
       case "deleteCatalog":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteCatalog)) return forbidden();
         await deleteCatalog(payload);
+        break;
+      case "restoreCatalog":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.restoreCatalog)) return forbidden();
+        await restoreCatalog(payload);
         break;
       case "manageStaff":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.manageStaff)) return forbidden();

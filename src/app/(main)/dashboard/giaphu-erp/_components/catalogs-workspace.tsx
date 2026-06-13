@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Archive, BookOpen, Plus, Trash2 } from "lucide-react";
+import { Archive, BookOpen, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
@@ -202,17 +202,20 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
             }}
             actions={[
               {
-                label: kind === "hangMuc" ? "Lưu trữ" : "Xóa",
-                icon: kind === "hangMuc" ? Archive : Trash2,
-                destructive: true,
-                disabled: kind === "hangMuc" && row.archived,
+                label: kind === "hangMuc" ? (row.archived ? "Khôi phục" : "Lưu trữ") : "Xóa",
+                icon: kind === "hangMuc" ? (row.archived ? RotateCcw : Archive) : Trash2,
+                destructive: !(kind === "hangMuc" && row.archived),
                 onSelect: () => {
                   const message =
                     kind === "hangMuc"
-                      ? `Lưu trữ hạng mục "${row.name}"? Hạng mục sẽ không còn hiện ở dropdown nhập mới, nhưng dữ liệu cũ vẫn được giữ trong báo cáo.`
+                      ? row.archived
+                        ? `Khôi phục hạng mục "${row.name}"? Dữ liệu và số liệu liên quan sẽ hiển thị lại.`
+                        : `Lưu trữ hạng mục "${row.name}"? Dữ liệu và số liệu liên quan sẽ tạm ẩn khỏi bảng/báo cáo cho đến khi khôi phục.`
                       : `Xóa "${row.name}" khỏi danh mục?`;
                   if (window.confirm(message)) {
-                    return runAction("deleteCatalog", { id: row.id });
+                    return runAction(kind === "hangMuc" && row.archived ? "restoreCatalog" : "deleteCatalog", {
+                      id: row.id,
+                    });
                   }
                 },
               },
@@ -266,7 +269,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
               ? {
                   confirmMessage: (selectedRows) =>
                     kind === "hangMuc"
-                      ? `Lưu trữ ${selectedRows.length.toLocaleString("vi-VN")} hạng mục đã chọn? Dữ liệu cũ vẫn được giữ trong báo cáo.`
+                      ? `Lưu trữ ${selectedRows.length.toLocaleString("vi-VN")} hạng mục đã chọn? Dữ liệu và số liệu liên quan sẽ tạm ẩn khỏi bảng/báo cáo cho đến khi khôi phục.`
                       : `Xóa ${selectedRows.length.toLocaleString("vi-VN")} mục đã chọn khỏi danh mục?`,
                   onDelete: async (selectedRows) => {
                     for (const row of selectedRows.filter((item) => !item.archived)) {
