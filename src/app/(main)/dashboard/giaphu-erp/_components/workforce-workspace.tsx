@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { useAuth } from "@clerk/nextjs";
 import {
   CalendarCheck,
   Check,
@@ -1269,6 +1270,7 @@ function AttendanceBoard({
 }
 
 export function WorkforceWorkspace({ section = "attendance" }: { section?: WorkforceSection }) {
+  const { has } = useAuth();
   const { data, activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
   const paginatedStaff = usePaginatedErpRows<StaffRow>({
     dataset: "staff",
@@ -1306,6 +1308,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
   const laborNormCategoryOptions = uniqueOptions(scoped.laborNorms.map((row) => row.category));
   const progressCategoryOptions = uniqueOptions(scoped.progress.map((row) => row.category));
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.workforceManage);
+  const canEditPayroll = Boolean(has?.({ role: "org:admin" }));
   const activeProject = React.useMemo(
     () => data.projects.find((project) => project.code === activeProjectCode || project.id === activeProjectCode),
     [activeProjectCode, data.projects],
@@ -1640,7 +1643,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 headerCellClassName: "text-right",
                 render: (row) => <div className="text-right">{formatPayrollMoney(row.total)}</div>,
               },
-              ...(canManage
+              ...(canEditPayroll
                 ? [
                     {
                       key: "actions",
@@ -1723,11 +1726,14 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
 
               return (
                 <TableRow>
-                  <TableCell colSpan={Math.max(columnCount - (canManage ? 2 : 1), 1)} className="text-right font-bold">
+                  <TableCell
+                    colSpan={Math.max(columnCount - (canEditPayroll ? 2 : 1), 1)}
+                    className="text-right font-bold"
+                  >
                     TỔNG CHI PHÍ NHÂN CÔNG:
                   </TableCell>
                   <TableCell className="text-right font-bold">{formatPayrollMoney(total)}</TableCell>
-                  {canManage ? <TableCell /> : null}
+                  {canEditPayroll ? <TableCell /> : null}
                 </TableRow>
               );
             }}

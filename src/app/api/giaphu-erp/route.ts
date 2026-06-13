@@ -174,6 +174,10 @@ function canUsePermission(
   return canAccessErpPermission(session, permission, permissionKeys);
 }
 
+function canUseAdminRole(session: ClerkAuthSession) {
+  return session.has({ role: "org:admin" });
+}
+
 function canUseAnyErpData(
   session: ClerkAuthSession,
   permissionKeys: Awaited<ReturnType<typeof getEffectiveErpPermissions>>,
@@ -461,6 +465,10 @@ export async function POST(request: Request) {
         }
 
         for (const item of items) {
+          if (item.action === "savePayrollAdjustment" && !canUseAdminRole(session)) {
+            return forbidden("Chỉ admin mới có quyền sửa bảng lương.");
+          }
+
           const requiredPermission = mutationPermissions[item.action as keyof typeof mutationPermissions];
 
           if (!requiredPermission || !canUsePermission(session, permissionKeys, requiredPermission)) {
@@ -557,8 +565,8 @@ export async function POST(request: Request) {
         });
       }
       case "savePayrollAdjustment": {
-        if (!canUsePermission(session, permissionKeys, mutationPermissions.savePayrollAdjustment)) {
-          return forbidden();
+        if (!canUseAdminRole(session)) {
+          return forbidden("Chỉ admin mới có quyền sửa bảng lương.");
         }
 
         const { savedRows, adjustment } = await savePayrollAdjustment(payload);
