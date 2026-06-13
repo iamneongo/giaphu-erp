@@ -915,6 +915,21 @@ export async function createGiaPhuSchema() {
 async function ensureOrganizationColumns() {
   const sql = getSql();
 
+  await sql`create table if not exists gp_payroll_adjustments (
+    id text primary key,
+    organization_id text not null default '',
+    project_code text not null references gp_projects(code) on delete cascade,
+    week text not null default '',
+    category text not null default '',
+    staff_name text not null default '',
+    allowance numeric not null default 0,
+    overtime_hours numeric not null default 0,
+    overtime_amount numeric not null default 0,
+    adjustment numeric not null default 0,
+    note text not null default '',
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  )`;
   await sql`alter table gp_projects add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_projects add column if not exists id bigserial`;
   await sql`alter table gp_projects add column if not exists pin_hash text not null default ''`;
