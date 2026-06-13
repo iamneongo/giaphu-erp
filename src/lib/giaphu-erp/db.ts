@@ -338,6 +338,7 @@ function catalogFromRow(row: Row): CatalogItem {
     contact: text(row.contact),
     note: text(row.note),
     sortOrder: number(row.sort_order),
+    archived: bool(row.archived),
   };
 }
 
@@ -623,14 +624,16 @@ async function createGiaPhuSchemaInternal() {
     contact text not null default '',
     note text not null default '',
     sort_order integer not null default 0,
+    archived boolean not null default false,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
   )`;
 
   await sql`drop index if exists gp_catalog_items_kind_name_idx`;
   await sql`drop index if exists gp_catalog_items_org_kind_name_idx`;
-  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name)) where kind not in ('vatTu', 'vatTuPhu')`;
-  await sql`create unique index if not exists gp_catalog_items_org_kind_name_supplier_idx on gp_catalog_items (organization_id, kind, lower(name), lower(supplier)) where kind in ('vatTu', 'vatTuPhu')`;
+  await sql`drop index if exists gp_catalog_items_org_kind_name_supplier_idx`;
+  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name)) where archived = false and kind not in ('vatTu', 'vatTuPhu')`;
+  await sql`create unique index if not exists gp_catalog_items_org_kind_name_supplier_idx on gp_catalog_items (organization_id, kind, lower(name), lower(supplier)) where archived = false and kind in ('vatTu', 'vatTuPhu')`;
 
   await sql`create table if not exists gp_staff (
     id text primary key,
@@ -861,6 +864,7 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_catalog_items add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_catalog_items add column if not exists supplier text not null default ''`;
   await sql`alter table gp_catalog_items add column if not exists sort_order integer not null default 0`;
+  await sql`alter table gp_catalog_items add column if not exists archived boolean not null default false`;
   await sql`alter table gp_staff add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_contracts add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_payments add column if not exists organization_id text not null default ''`;
@@ -875,8 +879,9 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_progress add column if not exists organization_id text not null default ''`;
   await sql`drop index if exists gp_catalog_items_kind_name_idx`;
   await sql`drop index if exists gp_catalog_items_org_kind_name_idx`;
-  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name)) where kind not in ('vatTu', 'vatTuPhu')`;
-  await sql`create unique index if not exists gp_catalog_items_org_kind_name_supplier_idx on gp_catalog_items (organization_id, kind, lower(name), lower(supplier)) where kind in ('vatTu', 'vatTuPhu')`;
+  await sql`drop index if exists gp_catalog_items_org_kind_name_supplier_idx`;
+  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name)) where archived = false and kind not in ('vatTu', 'vatTuPhu')`;
+  await sql`create unique index if not exists gp_catalog_items_org_kind_name_supplier_idx on gp_catalog_items (organization_id, kind, lower(name), lower(supplier)) where archived = false and kind in ('vatTu', 'vatTuPhu')`;
   await sql`drop index if exists gp_subcontractor_contracts_project_name_idx`;
   await sql`create unique index if not exists gp_subcontractor_contracts_org_project_name_idx on gp_subcontractor_contracts (organization_id, project_code, lower(contractor_name))`;
   await sql`alter table gp_labor_norms drop constraint if exists gp_labor_norms_project_code_category_key`;
@@ -1025,7 +1030,7 @@ async function ensureGiaPhuPerformanceIndexes() {
     await sql`create index if not exists gp_projects_org_id_idx on gp_projects (organization_id, id)`;
     await sql`create index if not exists gp_projects_org_date_idx on gp_projects (organization_id, updated_at desc, code asc)`;
     await sql`drop index if exists gp_catalog_items_org_kind_idx`;
-    await sql`create index if not exists gp_catalog_items_org_kind_idx on gp_catalog_items (organization_id, kind, sort_order, code, name)`;
+    await sql`create index if not exists gp_catalog_items_org_kind_idx on gp_catalog_items (organization_id, kind, archived, sort_order, code, name)`;
     await sql`create index if not exists gp_catalog_items_org_kind_supplier_idx on gp_catalog_items (organization_id, kind, supplier)`;
     await sql`create index if not exists gp_staff_org_idx on gp_staff (organization_id, id asc, name asc)`;
     await sql`create index if not exists gp_materials_project_date_idx on gp_materials (project_code, work_date desc, id desc)`;
@@ -1087,7 +1092,7 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
       select *
       from gp_catalog_items
       where organization_id = ${organizationId}
-      order by kind asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
+      order by kind asc, archived asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
     `,
     sql`select * from gp_staff where organization_id = ${organizationId} order by id asc, name asc`,
   ]);
@@ -1221,9 +1226,10 @@ function pagedRowsOrderBy(sql: any, dataset: GiaPhuPagedDataset, sorting?: ErpTa
             case when ${sortId} = 'code' then code end desc nulls last,
             case when ${sortId} = 'name' then name end desc nulls last,
             case when ${sortId} = 'unit' then unit end desc nulls last,
+            case when ${sortId} = 'archived' then archived end desc nulls last,
             case when ${sortId} = 'contact' then contact end desc nulls last,
             case when ${sortId} = 'note' then note end desc nulls last,
-            kind asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
+            kind asc, archived asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
         `;
       case "staff":
         return sql`
@@ -1393,9 +1399,10 @@ function pagedRowsOrderBy(sql: any, dataset: GiaPhuPagedDataset, sorting?: ErpTa
           case when ${sortId} = 'code' then code end asc nulls last,
           case when ${sortId} = 'name' then name end asc nulls last,
           case when ${sortId} = 'unit' then unit end asc nulls last,
+          case when ${sortId} = 'archived' then archived end asc nulls last,
           case when ${sortId} = 'contact' then contact end asc nulls last,
           case when ${sortId} = 'note' then note end asc nulls last,
-          kind asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
+          kind asc, archived asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
       `;
     case "staff":
       return sql`
@@ -2441,11 +2448,13 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
     const unitFilter = filterValue("unit");
     const supplierFilter = filterValue("supplier");
     const contactFilter = filterValue("contact");
+    const archivedFilter = filterValue("archived");
     const whereFilters = sql`
       ${kindFilter ? sql`and kind = ${kindFilter}` : sql``}
       ${unitFilter ? sql`and unit = ${unitFilter}` : sql``}
       ${supplierFilter ? sql`and supplier = ${supplierFilter}` : sql``}
       ${contactFilter ? sql`and contact = ${contactFilter}` : sql``}
+      ${archivedFilter === "true" ? sql`and archived = true` : archivedFilter === "false" ? sql`and archived = false` : sql``}
     `;
     const [countRows, rows] = await Promise.all([
       sql`select count(*)::int as total from gp_catalog_items where organization_id = ${organizationId} ${whereSearch} ${whereFilters}`,
@@ -2904,11 +2913,18 @@ export async function getGiaPhuFilterOptions(options: {
   if (options.dataset === "catalogs") {
     const kindFilter = fixedFilterValue("kind");
     const whereKind = kindFilter ? sql`and kind = ${kindFilter}` : sql``;
-    const [kindRows, unitRows, supplierRows, contactRows] = await Promise.all([
+    const [kindRows, unitRows, supplierRows, contactRows, archivedRows] = await Promise.all([
       sql`select distinct kind as value from gp_catalog_items where organization_id = ${organizationId} and kind <> '' order by kind asc limit 300`,
       sql`select distinct unit as value from gp_catalog_items where organization_id = ${organizationId} and unit <> '' ${whereKind} order by unit asc limit 300`,
       sql`select distinct supplier as value from gp_catalog_items where organization_id = ${organizationId} and supplier <> '' ${whereKind} order by supplier asc limit 300`,
       sql`select distinct contact as value from gp_catalog_items where organization_id = ${organizationId} and contact <> '' ${whereKind} order by contact asc limit 300`,
+      sql`
+        select distinct archived::text as value
+        from gp_catalog_items
+        where organization_id = ${organizationId} ${whereKind}
+        order by value asc
+        limit 2
+      `,
     ]);
 
     return {
@@ -2916,6 +2932,10 @@ export async function getGiaPhuFilterOptions(options: {
       unit: distinctOptions(unitRows),
       supplier: distinctOptions(supplierRows),
       contact: distinctOptions(contactRows),
+      archived: distinctOptions(archivedRows).map((option) => ({
+        label: option.value === "true" ? "Đã lưu trữ" : "Đang dùng",
+        value: option.value,
+      })),
     };
   }
 
@@ -3239,6 +3259,7 @@ async function assertUniqueCatalogItem({
         from gp_catalog_items
         where organization_id = ${organizationId}
           and kind = ${kind}
+          and archived = false
           and id <> ${originalId}
           and (
             lower(code) = lower(${code})
@@ -3251,6 +3272,7 @@ async function assertUniqueCatalogItem({
         from gp_catalog_items
         where organization_id = ${organizationId}
           and kind = ${kind}
+          and archived = false
           and id <> ${originalId}
           and (lower(code) = lower(${code}) or lower(btrim(name)) = lower(btrim(${name})))
         limit 1
@@ -3352,6 +3374,7 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   const contact = text(payload.contact).trim();
   const note = text(payload.note).trim();
   const sortOrder = number(payload.importOrder || payload.sortOrder);
+  const archived = bool(payload.archived);
 
   if ((kind === "vatTu" || kind === "vatTuPhu") && !supplier) {
     throw new Error("Thiếu nhà cung cấp.");
@@ -3387,6 +3410,7 @@ export async function manageCatalog(payload: Record<string, unknown>) {
           supplier = ${supplier},
           contact = ${contact},
           note = ${note},
+          archived = ${archived},
           sort_order = case when ${sortOrder} > 0 then ${sortOrder} else sort_order end,
           updated_at = now()
       where organization_id = ${organizationId} and id = ${originalId}
@@ -3396,8 +3420,8 @@ export async function manageCatalog(payload: Record<string, unknown>) {
 
   if (isExcelImport) {
     await sql`
-      insert into gp_catalog_items (id, organization_id, kind, code, name, unit, supplier, contact, note, sort_order, updated_at)
-      values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, ${sortOrder}, now())
+      insert into gp_catalog_items (id, organization_id, kind, code, name, unit, supplier, contact, note, sort_order, archived, updated_at)
+      values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, ${sortOrder}, false, now())
       on conflict (id) do update
       set kind = excluded.kind,
           code = excluded.code,
@@ -3407,14 +3431,26 @@ export async function manageCatalog(payload: Record<string, unknown>) {
           contact = excluded.contact,
           note = excluded.note,
           sort_order = excluded.sort_order,
+          archived = false,
           updated_at = now()
     `;
     return;
   }
 
   await sql`
-    insert into gp_catalog_items (id, organization_id, kind, code, name, unit, supplier, contact, note, sort_order, updated_at)
-    values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, ${sortOrder}, now())
+    insert into gp_catalog_items (id, organization_id, kind, code, name, unit, supplier, contact, note, sort_order, archived, updated_at)
+    values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, ${sortOrder}, false, now())
+    on conflict (id) do update
+    set kind = excluded.kind,
+        code = excluded.code,
+        name = excluded.name,
+        unit = excluded.unit,
+        supplier = excluded.supplier,
+        contact = excluded.contact,
+        note = excluded.note,
+        sort_order = excluded.sort_order,
+        archived = false,
+        updated_at = now()
   `;
 }
 
@@ -3431,6 +3467,15 @@ export async function deleteCatalog(payload: Record<string, unknown>) {
   const item = rows[0] ? catalogFromRow(rows[0]) : null;
 
   if (!item) throw new Error("Không tìm thấy danh mục cần xóa.");
+
+  if (item.kind === "hangMuc") {
+    await sql`
+      update gp_catalog_items
+      set archived = true, updated_at = now()
+      where organization_id = ${organizationId} and id = ${id}
+    `;
+    return;
+  }
 
   await assertCatalogCanBeDeleted(item, organizationId);
   await sql`delete from gp_catalog_items where organization_id = ${organizationId} and id = ${id}`;

@@ -13,7 +13,7 @@ import type { CatalogItem, MaterialRow, MaterialType } from "@/lib/giaphu-erp/ty
 import { DashboardLink } from "../../_components/dashboard-link";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { currentIsoWeek, isoWeekFromDate, todayIso } from "../_lib/date-utils";
-import { catalogOptions } from "../_lib/form-options";
+import { catalogOptions, catalogOptionsWithValue } from "../_lib/form-options";
 import { ActionForm, type FormFieldDefinition, type FormPayload } from "./action-dialog";
 import { ModuleHeader } from "./module-header";
 
@@ -64,8 +64,9 @@ function getSupplierOptionsForMaterial({
   const selectedMaterialKey = textKey(materialName);
   if (!selectedMaterialKey) return [];
 
-  const supplierNames = materialCatalogItems
-    .filter((item) => textKey(item.name) === selectedMaterialKey)
+  const matchingMaterials = materialCatalogItems.filter((item) => textKey(item.name) === selectedMaterialKey);
+  const activeMatchingMaterials = matchingMaterials.filter((item) => !item.archived);
+  const supplierNames = (activeMatchingMaterials.length ? activeMatchingMaterials : matchingMaterials)
     .map((item) => item.supplier)
     .filter(Boolean);
   const supplierKeys = new Set(supplierNames.map(textKey));
@@ -223,10 +224,17 @@ export function MaterialEditorPage({ materialType, mode, materialId, listHref }:
       ? data.materials.find((row) => row.id === numericMaterialId && row.materialType === materialType)
       : undefined;
   const missingEditRow = mode === "edit" && numericMaterialId > 0 && !editingRow;
-  const categoryOptions = React.useMemo(() => catalogOptions(data.catalogs.hangMuc), [data.catalogs.hangMuc]);
+  const categoryOptions = React.useMemo(
+    () => catalogOptionsWithValue(data.catalogs.hangMuc, editingRow?.category),
+    [data.catalogs.hangMuc, editingRow?.category],
+  );
   const materialOptions = React.useMemo(
-    () => catalogOptions(materialType === "VT Chính" ? data.catalogs.vatTu : data.catalogs.vatTuPhu),
-    [data.catalogs.vatTu, data.catalogs.vatTuPhu, materialType],
+    () =>
+      catalogOptionsWithValue(
+        materialType === "VT Chính" ? data.catalogs.vatTu : data.catalogs.vatTuPhu,
+        editingRow?.materialName,
+      ),
+    [data.catalogs.vatTu, data.catalogs.vatTuPhu, editingRow?.materialName, materialType],
   );
   const materialCatalogItems = materialType === "VT Chính" ? data.catalogs.vatTu : data.catalogs.vatTuPhu;
   const supplierCatalogOptions = React.useMemo(

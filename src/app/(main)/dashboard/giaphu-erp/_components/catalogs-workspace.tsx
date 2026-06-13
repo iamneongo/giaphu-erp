@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { BookOpen, Plus, Trash2 } from "lucide-react";
+import { Archive, BookOpen, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
@@ -148,6 +148,17 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
 
   columns.push({ key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" });
 
+  if (kind === "hangMuc") {
+    columns.push({
+      key: "archived",
+      label: "Trạng thái",
+      accessor: (row) => (row.archived ? "Đã lưu trữ" : "Đang dùng"),
+      render: (row) => (
+        <Badge variant={row.archived ? "secondary" : "outline"}>{row.archived ? "Đã lưu trữ" : "Đang dùng"}</Badge>
+      ),
+    });
+  }
+
   if (canManage) {
     columns.push({
       key: "actions",
@@ -164,6 +175,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
               onAction: runAction,
               fields: [
                 { name: "originalId", label: "ID", type: "hidden", value: row.id },
+                { name: "archived", label: "Lưu trữ", type: "hidden", value: row.archived ? "true" : "false" },
                 { name: "kind", label: "Loại danh mục", type: "hidden", value: section.kind },
                 { name: "code", label: section.codeLabel, required: true, value: row.code },
                 { name: "name", label: section.nameLabel, required: true, value: row.name },
@@ -190,11 +202,16 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
             }}
             actions={[
               {
-                label: "Xóa",
-                icon: Trash2,
+                label: kind === "hangMuc" ? "Lưu trữ" : "Xóa",
+                icon: kind === "hangMuc" ? Archive : Trash2,
                 destructive: true,
+                disabled: kind === "hangMuc" && row.archived,
                 onSelect: () => {
-                  if (window.confirm(`Xóa "${row.name}" khỏi danh mục?`)) {
+                  const message =
+                    kind === "hangMuc"
+                      ? `Lưu trữ hạng mục "${row.name}"? Hạng mục sẽ không còn hiện ở dropdown nhập mới, nhưng dữ liệu cũ vẫn được giữ trong báo cáo.`
+                      : `Xóa "${row.name}" khỏi danh mục?`;
+                  if (window.confirm(message)) {
                     return runAction("deleteCatalog", { id: row.id });
                   }
                 },
@@ -248,9 +265,11 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
             canManage
               ? {
                   confirmMessage: (selectedRows) =>
-                    `Xóa ${selectedRows.length.toLocaleString("vi-VN")} mục đã chọn khỏi danh mục?`,
+                    kind === "hangMuc"
+                      ? `Lưu trữ ${selectedRows.length.toLocaleString("vi-VN")} hạng mục đã chọn? Dữ liệu cũ vẫn được giữ trong báo cáo.`
+                      : `Xóa ${selectedRows.length.toLocaleString("vi-VN")} mục đã chọn khỏi danh mục?`,
                   onDelete: async (selectedRows) => {
-                    for (const row of selectedRows) {
+                    for (const row of selectedRows.filter((item) => !item.archived)) {
                       await runAction("deleteCatalog", { id: row.id });
                     }
                     paginatedCatalogs.refresh();
@@ -269,6 +288,18 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
               : []),
             ...(section.showContact
               ? [{ key: "contact", label: "Liên hệ", options: uniqueOptions(rows.map((row) => row.contact)) }]
+              : []),
+            ...(kind === "hangMuc"
+              ? [
+                  {
+                    key: "archived",
+                    label: "Trạng thái",
+                    options: [
+                      { label: "Đang dùng", value: "false" },
+                      { label: "Đã lưu trữ", value: "true" },
+                    ],
+                  },
+                ]
               : []),
           ]}
         />

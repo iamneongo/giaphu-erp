@@ -153,6 +153,7 @@ export interface CatalogItem {
   contact: string;
   note: string;
   sortOrder: number;
+  archived: boolean;
 }
 
 export interface StaffRow {

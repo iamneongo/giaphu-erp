@@ -30,7 +30,7 @@ import { useCanAccessErpPermission } from "../../_components/effective-permissio
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, isoWeekFromDate, todayIso } from "../_lib/date-utils";
-import { catalogOptions, uniqueOptions } from "../_lib/form-options";
+import { catalogOptions, catalogOptionsWithValue, catalogOptionsWithValues, uniqueOptions } from "../_lib/form-options";
 import { formatCount, formatMoney } from "../_lib/formatters";
 import type { GiaPhuActionResult } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
@@ -640,6 +640,7 @@ function AttendanceBoard({
   rows,
   staff,
   categoryOptions,
+  activeCategoryValues,
   activeProjectCode,
   canManage,
   loading,
@@ -648,6 +649,7 @@ function AttendanceBoard({
   rows: AttendanceRow[];
   staff: StaffRow[];
   categoryOptions: Array<{ label: string; value: string }>;
+  activeCategoryValues: string[];
   activeProjectCode: string;
   canManage: boolean;
   loading: boolean;
@@ -667,6 +669,10 @@ function AttendanceBoard({
   const [dirtyStaffNames, setDirtyStaffNames] = React.useState<Set<string>>(new Set());
   const [savingStaffName, setSavingStaffName] = React.useState("");
   const [deletingStaffName, setDeletingStaffName] = React.useState("");
+  const selectedCategoryIsActive = React.useMemo(
+    () => activeCategoryValues.includes(selectedCategory),
+    [activeCategoryValues, selectedCategory],
+  );
 
   const applyAnchorDate = React.useCallback((value: string) => {
     const nextDate = value.slice(0, 10);
@@ -771,7 +777,7 @@ function AttendanceBoard({
       .map((name) => staff.find((row) => row.name === name))
       .filter((row): row is StaffRow => Boolean(row));
 
-    if (!staffRows.length || !selectedCategory) return;
+    if (!staffRows.length || !selectedCategory || !selectedCategoryIsActive) return;
 
     setDraftParticipants((current) => {
       const currentIds = new Set(current.map((participant) => participant.id));
@@ -1185,13 +1191,16 @@ function AttendanceBoard({
               values={selectedStaffNames}
               onValuesChange={setSelectedStaffNames}
               options={availableStaff}
-              disabled={!canManage || availableStaff.length === 0 || !selectedCategory}
+              disabled={!canManage || availableStaff.length === 0 || !selectedCategory || !selectedCategoryIsActive}
             />
+            {!selectedCategoryIsActive && selectedCategory ? (
+              <div className="text-muted-foreground text-xs">Hạng mục đã lưu trữ: chỉ cho sửa/xóa dữ liệu cũ.</div>
+            ) : null}
           </div>
           <Button
             type="button"
             size="sm"
-            disabled={!canManage || !selectedStaffNames.length || !selectedCategory}
+            disabled={!canManage || !selectedStaffNames.length || !selectedCategory || !selectedCategoryIsActive}
             onClick={addParticipants}
             className="h-9"
           >
@@ -1238,6 +1247,18 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
     enabled: section === "progress",
   });
   const categoryOptions = catalogOptions(data.catalogs.hangMuc);
+  const attendanceBoardCategoryOptions = React.useMemo(
+    () =>
+      catalogOptionsWithValues(
+        data.catalogs.hangMuc,
+        scoped.attendance.map((row) => row.category),
+      ),
+    [data.catalogs.hangMuc, scoped.attendance],
+  );
+  const activeCategoryValues = React.useMemo(
+    () => data.catalogs.hangMuc.filter((item) => !item.archived).map((item) => item.name),
+    [data.catalogs.hangMuc],
+  );
   const staffTeamOptions = uniqueOptions(data.staff.map((row) => row.team));
   const staffPositionOptions = uniqueOptions(data.staff.map((row) => row.position));
   const laborNormCategoryOptions = uniqueOptions(scoped.laborNorms.map((row) => row.category));
@@ -1465,7 +1486,8 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             <AttendanceBoard
               rows={scoped.attendance}
               staff={data.staff}
-              categoryOptions={categoryOptions}
+              categoryOptions={attendanceBoardCategoryOptions}
+              activeCategoryValues={activeCategoryValues}
               activeProjectCode={activeProjectCode}
               canManage={canManage}
               loading={isSwitchingProject}
@@ -1846,7 +1868,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                                   name: "category",
                                   label: "Hạng mục",
                                   type: "select",
-                                  options: categoryOptions,
+                                  options: catalogOptionsWithValue(data.catalogs.hangMuc, row.category),
                                   value: row.category,
                                   required: true,
                                 },
@@ -1964,7 +1986,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                                   name: "category",
                                   label: "Hạng mục",
                                   type: "select",
-                                  options: categoryOptions,
+                                  options: catalogOptionsWithValue(data.catalogs.hangMuc, row.category),
                                   value: row.category,
                                   required: true,
                                 },

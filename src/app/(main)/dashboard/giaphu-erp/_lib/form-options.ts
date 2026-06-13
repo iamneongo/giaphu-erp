@@ -15,7 +15,30 @@ export function projectOptions(projects: ProjectRow[]) {
 }
 
 export function catalogOptions(items: CatalogItem[]) {
-  return items.map((item) => ({ label: item.name, value: item.name }));
+  return items.filter((item) => !item.archived).map((item) => ({ label: item.name, value: item.name }));
+}
+
+export function catalogOptionsWithValues(items: CatalogItem[], values: Array<string | null | undefined>) {
+  const options = catalogOptions(items);
+  const optionValues = new Set(options.map((option) => option.value));
+  const archivedValues = new Set(items.filter((item) => item.archived).map((item) => item.name));
+
+  for (const value of values) {
+    const normalizedValue = String(value ?? "").trim();
+    if (!normalizedValue || optionValues.has(normalizedValue)) continue;
+
+    options.push({
+      label: archivedValues.has(normalizedValue) ? `${normalizedValue} (đã lưu trữ)` : normalizedValue,
+      value: normalizedValue,
+    });
+    optionValues.add(normalizedValue);
+  }
+
+  return options;
+}
+
+export function catalogOptionsWithValue(items: CatalogItem[], value: string | null | undefined) {
+  return catalogOptionsWithValues(items, [value]);
 }
 
 export function staffOptions(items: StaffRow[]) {

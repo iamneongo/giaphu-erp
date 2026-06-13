@@ -13,7 +13,7 @@ import { useCanAccessErpPermission } from "../../_components/effective-permissio
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, todayIso } from "../_lib/date-utils";
-import { catalogOptions, uniqueOptions } from "../_lib/form-options";
+import { catalogOptions, catalogOptionsWithValue, uniqueOptions } from "../_lib/form-options";
 import { formatMoney } from "../_lib/formatters";
 import { runGiaPhuAction, uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
@@ -436,7 +436,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                                   name: "category",
                                   label: "Hạng mục",
                                   type: "select",
-                                  options: categoryOptions,
+                                  options: catalogOptionsWithValue(data.catalogs.hangMuc, row.category),
                                   required: true,
                                   value: row.category,
                                 },
