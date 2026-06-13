@@ -746,9 +746,7 @@ function AttendanceBoard({
   const availableStaff = React.useMemo(() => {
     const participantNames = new Set(boardRows.map((row) => row.name));
 
-    return staff
-      .filter((row) => !row.resigned && !participantNames.has(row.name))
-      .sort((first, second) => first.name.localeCompare(second.name, "vi"));
+    return staff.filter((row) => !row.resigned && !participantNames.has(row.name));
   }, [boardRows, staff]);
 
   React.useEffect(() => {
@@ -773,9 +771,11 @@ function AttendanceBoard({
   );
 
   function addParticipants() {
+    const staffOrder = new Map(staff.map((row, index) => [row.name, index]));
     const staffRows = selectedStaffNames
       .map((name) => staff.find((row) => row.name === name))
-      .filter((row): row is StaffRow => Boolean(row));
+      .filter((row): row is StaffRow => Boolean(row))
+      .sort((first, second) => (staffOrder.get(first.name) ?? 0) - (staffOrder.get(second.name) ?? 0));
 
     if (!staffRows.length || !selectedCategory || !selectedCategoryIsActive) return;
 
