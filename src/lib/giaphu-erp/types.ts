@@ -204,6 +204,19 @@ export interface AttendanceRow {
   coefficient: number;
 }
 
+export interface PayrollAdjustmentRow {
+  id: string;
+  projectCode: string;
+  week: string;
+  category: string;
+  staffName: string;
+  allowance: number;
+  overtimeHours: number;
+  overtimeAmount: number;
+  adjustment: number;
+  note: string;
+}
+
 export interface SubcontractorRow {
   id: number;
   date: string;
@@ -321,6 +334,7 @@ export interface GiaPhuDashboardData {
   staff: StaffRow[];
   materials: MaterialRow[];
   attendance: AttendanceRow[];
+  payrollAdjustments: PayrollAdjustmentRow[];
   subcontractors: SubcontractorRow[];
   subcontractorContracts: SubcontractorContractRow[];
   operations: OperationRow[];

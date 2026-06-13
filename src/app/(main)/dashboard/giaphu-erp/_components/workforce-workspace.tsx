@@ -23,7 +23,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
-import type { AttendanceRow, LaborNormRow, ProgressRow, ProjectRow, StaffRow } from "@/lib/giaphu-erp/types";
+import type {
+  AttendanceRow,
+  LaborNormRow,
+  PayrollAdjustmentRow,
+  ProgressRow,
+  ProjectRow,
+  StaffRow,
+} from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
 import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
@@ -143,6 +150,8 @@ type PayrollRow = {
   allowance: number;
   overtimeHours: number;
   overtimeAmount: number;
+  adjustment: number;
+  adjustmentNote: string;
   total: number;
   dates: string;
 };
@@ -220,6 +229,12 @@ function printPayslipRows(
               <tr>
                 <th>Phụ cấp</th>
                 <td class="value">${formatPayrollMoney(row.allowance)}</td>
+                <th>Điều chỉnh</th>
+                <td class="value">${formatPayrollMoney(row.adjustment)}</td>
+              </tr>
+              <tr>
+                <th>OT giờ</th>
+                <td class="value">${formatCount(row.overtimeHours)}</td>
                 <th>Thành tiền</th>
                 <td class="value total">${formatPayrollMoney(row.total)}</td>
               </tr>
@@ -372,8 +387,9 @@ function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: St
   return Array.from(staffMap.values()).sort((first, second) => first.name.localeCompare(second.name, "vi"));
 }
 
-function buildPayrollRows(rows: AttendanceRow[]) {
+function buildPayrollRows(rows: AttendanceRow[], adjustments: PayrollAdjustmentRow[]) {
   const payrollMap = new Map<string, PayrollRow & { dateSet: Set<string> }>();
+  const adjustmentMap = new Map(adjustments.map((row) => [[row.week, row.category, row.staffName].join("::"), row]));
 
   for (const row of rows) {
     const key = [row.week, row.category, row.staffName].join("::");
@@ -391,6 +407,8 @@ function buildPayrollRows(rows: AttendanceRow[]) {
       allowance: 0,
       overtimeHours: 0,
       overtimeAmount: 0,
+      adjustment: 0,
+      adjustmentNote: "",
       total: 0,
       dates: "",
       dateSet: new Set<string>(),
@@ -414,10 +432,17 @@ function buildPayrollRows(rows: AttendanceRow[]) {
   }
 
   return Array.from(payrollMap.values())
-    .map(({ dateSet, ...row }) => ({
-      ...row,
-      dates: Array.from(dateSet).sort().join(", "),
-    }))
+    .map(({ dateSet, ...row }) => {
+      const adjustment = adjustmentMap.get([row.week, row.category, row.staffName].join("::"));
+
+      return {
+        ...row,
+        adjustment: Number(adjustment?.adjustment || 0),
+        adjustmentNote: adjustment?.note ?? "",
+        total: row.total + Number(adjustment?.adjustment || 0),
+        dates: Array.from(dateSet).sort().join(", "),
+      };
+    })
     .sort((first, second) => {
       const weekCompare = second.week.localeCompare(first.week, "vi");
       if (weekCompare !== 0) return weekCompare;
@@ -426,6 +451,23 @@ function buildPayrollRows(rows: AttendanceRow[]) {
       return first.staffName.localeCompare(second.staffName, "vi");
     })
     .map((row, index) => ({ ...row, stt: index + 1 }));
+}
+
+function validatePayrollNonNegativeNumber(value: string, label = "Giá trị") {
+  const raw = String(value ?? "").trim();
+  if (!raw) return `${label} không được để trống.`;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return `${label} phải là số hợp lệ.`;
+  if (parsed < 0) return `${label} không được âm.`;
+  return undefined;
+}
+
+function validatePayrollAdjustmentNumber(value: string) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "Điều chỉnh lương không được để trống.";
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return "Điều chỉnh lương phải là số hợp lệ.";
+  return undefined;
 }
 
 function dateTimeFromInput(value: unknown) {
@@ -1268,7 +1310,10 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
     () => data.projects.find((project) => project.code === activeProjectCode || project.id === activeProjectCode),
     [activeProjectCode, data.projects],
   );
-  const payrollRows = React.useMemo(() => buildPayrollRows(scoped.attendance), [scoped.attendance]);
+  const payrollRows = React.useMemo(
+    () => buildPayrollRows(scoped.attendance, scoped.payrollAdjustments),
+    [scoped.attendance, scoped.payrollAdjustments],
+  );
   const attendanceWeekOptions = React.useMemo(
     () => uniqueOptions(scoped.attendance.map((row) => row.week)),
     [scoped.attendance],
@@ -1292,6 +1337,10 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
     const result = await runAction(action, { ...payload, __returnData: false });
     if (result) paginatedProgress.refresh();
     return result;
+  }
+
+  async function runPayrollAdjustmentAction(action: string, payload: Record<string, unknown>) {
+    return runAction(action, { ...payload, __returnData: false });
   }
 
   const actions = {
@@ -1574,6 +1623,15 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 exportValue: (row) => row.overtimeAmount,
               },
               {
+                key: "adjustment",
+                label: "Điều chỉnh",
+                accessor: (row) => row.adjustment,
+                className: "text-right",
+                headerClassName: "text-right",
+                headerCellClassName: "text-right",
+                render: (row) => <div className="text-right">{formatPayrollMoney(row.adjustment)}</div>,
+              },
+              {
                 key: "total",
                 label: "Thực nhận",
                 accessor: (row) => row.total,
@@ -1582,6 +1640,73 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 headerCellClassName: "text-right",
                 render: (row) => <div className="text-right">{formatPayrollMoney(row.total)}</div>,
               },
+              ...(canManage
+                ? [
+                    {
+                      key: "actions",
+                      label: "Thao tác",
+                      hideable: false,
+                      searchable: false,
+                      sortable: false,
+                      render: (row: PayrollRow) => (
+                        <div className="flex justify-end">
+                          <TableRowActions
+                            edit={{
+                              title: "Sửa bảng lương",
+                              action: "savePayrollAdjustment",
+                              onAction: runPayrollAdjustmentAction,
+                              fields: [
+                                { name: "projectCode", label: "Công trình", type: "hidden", value: activeProjectCode },
+                                { name: "week", label: "Tuần", type: "hidden", value: row.week },
+                                { name: "category", label: "Hạng mục", type: "hidden", value: row.category },
+                                { name: "staffName", label: "Nhân sự", type: "hidden", value: row.staffName },
+                                {
+                                  name: "allowance",
+                                  label: "Phụ cấp",
+                                  type: "number",
+                                  value: row.allowance,
+                                  required: true,
+                                  validate: (value) => validatePayrollNonNegativeNumber(value, "Phụ cấp"),
+                                },
+                                {
+                                  name: "overtimeHours",
+                                  label: "OT giờ",
+                                  type: "number",
+                                  value: row.overtimeHours,
+                                  required: true,
+                                  validate: (value) => validatePayrollNonNegativeNumber(value, "OT giờ"),
+                                },
+                                {
+                                  name: "overtimeAmount",
+                                  label: "OT tiền",
+                                  type: "number",
+                                  value: row.overtimeAmount,
+                                  required: true,
+                                  validate: (value) => validatePayrollNonNegativeNumber(value, "OT tiền"),
+                                },
+                                {
+                                  name: "adjustment",
+                                  label: "Điều chỉnh lương",
+                                  type: "number",
+                                  value: row.adjustment,
+                                  required: true,
+                                  helperText: "Có thể nhập số âm để giảm thực nhận.",
+                                  validate: validatePayrollAdjustmentNumber,
+                                },
+                                {
+                                  name: "note",
+                                  label: "Lý do điều chỉnh",
+                                  type: "textarea",
+                                  value: row.adjustmentNote,
+                                },
+                              ],
+                            }}
+                          />
+                        </div>
+                      ),
+                    } satisfies DataTableColumn<PayrollRow>,
+                  ]
+                : []),
             ]}
             rows={payrollRows}
             getRowId={(row) => row.id}
@@ -1598,10 +1723,11 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
 
               return (
                 <TableRow>
-                  <TableCell colSpan={Math.max(columnCount - 1, 1)} className="text-right font-bold">
+                  <TableCell colSpan={Math.max(columnCount - (canManage ? 2 : 1), 1)} className="text-right font-bold">
                     TỔNG CHI PHÍ NHÂN CÔNG:
                   </TableCell>
                   <TableCell className="text-right font-bold">{formatPayrollMoney(total)}</TableCell>
+                  {canManage ? <TableCell /> : null}
                 </TableRow>
               );
             }}
@@ -1670,6 +1796,15 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 render: (row) => <div className="text-right">{formatPayrollMoney(row.overtimeAmount)}</div>,
               },
               {
+                key: "adjustment",
+                label: "Điều chỉnh",
+                accessor: (row) => row.adjustment,
+                className: "text-right",
+                headerClassName: "text-right",
+                headerCellClassName: "text-right",
+                render: (row) => <div className="text-right">{formatPayrollMoney(row.adjustment)}</div>,
+              },
+              {
                 key: "total",
                 label: "Thành tiền",
                 accessor: (row) => row.total,
@@ -1718,6 +1853,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
               const totalWorkdays = rows.reduce((sum, row) => sum + row.workdays, 0);
               const totalAllowance = rows.reduce((sum, row) => sum + row.allowance, 0);
               const totalOvertime = rows.reduce((sum, row) => sum + row.overtimeAmount, 0);
+              const totalAdjustment = rows.reduce((sum, row) => sum + row.adjustment, 0);
               const total = rows.reduce((sum, row) => sum + row.total, 0);
               const label =
                 rows.length && rows.every((row) => row.category === rows[0]?.category)
@@ -1726,12 +1862,13 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
 
               return (
                 <TableRow>
-                  <TableCell colSpan={Math.max(columnCount - 4, 1)} className="font-bold">
+                  <TableCell colSpan={Math.max(columnCount - 5, 1)} className="font-bold">
                     {label}
                   </TableCell>
                   <TableCell className="text-center font-bold">{formatCount(totalWorkdays)} công</TableCell>
                   <TableCell className="text-right font-bold">{formatPayrollMoney(totalAllowance)}</TableCell>
                   <TableCell className="text-right font-bold">{formatPayrollMoney(totalOvertime)}</TableCell>
+                  <TableCell className="text-right font-bold">{formatPayrollMoney(totalAdjustment)}</TableCell>
                   <TableCell className="text-right font-bold">{formatPayrollMoney(total)}</TableCell>
                 </TableRow>
               );

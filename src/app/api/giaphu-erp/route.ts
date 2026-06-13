@@ -46,6 +46,7 @@ import {
   saveMaterial,
   saveOperation,
   savePayment,
+  savePayrollAdjustment,
   saveProgress,
   saveProject,
   saveStaffWeeklyAttendance,
@@ -137,6 +138,7 @@ const mutationPermissions = {
   markMaterialPaid: ERP_PERMISSIONS.materialsManage,
   saveWeeklyAttendance: ERP_PERMISSIONS.workforceManage,
   saveStaffWeeklyAttendance: ERP_PERMISSIONS.workforceManage,
+  savePayrollAdjustment: ERP_PERMISSIONS.workforceManage,
   deleteAttendanceRow: ERP_PERMISSIONS.workforceManage,
   closeAttendance: ERP_PERMISSIONS.workforceManage,
   reopenAttendance: ERP_PERMISSIONS.workforceManage,
@@ -552,6 +554,17 @@ export async function POST(request: Request) {
         return NextResponse.json({
           status: "success",
           patch: { attendanceUpsert: savedRows, attendanceDeleteIds: deletedIds },
+        });
+      }
+      case "savePayrollAdjustment": {
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.savePayrollAdjustment)) {
+          return forbidden();
+        }
+
+        const { savedRows, adjustment } = await savePayrollAdjustment(payload);
+        return NextResponse.json({
+          status: "success",
+          patch: { attendanceUpsert: savedRows, payrollAdjustmentUpsert: [adjustment] },
         });
       }
       case "deleteAttendanceRow": {

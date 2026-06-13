@@ -247,6 +247,7 @@ export function filterGiaPhuDashboardDataByPermissions(
     staff: canReadWorkforce ? data.staff : [],
     materials: canReadMaterials ? data.materials : [],
     attendance: canReadWorkforce ? data.attendance : [],
+    payrollAdjustments: canReadWorkforce ? data.payrollAdjustments : [],
     subcontractors: canReadSubcontractors ? data.subcontractors : [],
     subcontractorContracts: canReadSubcontractors ? data.subcontractorContracts : [],
     operations: canReadSubcontractors ? data.operations : [],

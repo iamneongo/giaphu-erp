@@ -18,6 +18,7 @@ import type {
   MaterialRow,
   OperationRow,
   PaymentRow,
+  PayrollAdjustmentRow,
   ProgressRow,
   ProjectRow,
   ReportTableState,
@@ -110,6 +111,7 @@ function emptyDashboardData(): GiaPhuDashboardData {
     staff: [],
     materials: [],
     attendance: [],
+    payrollAdjustments: [],
     subcontractors: [],
     subcontractorContracts: [],
     operations: [],
@@ -396,6 +398,21 @@ function attendanceFromRow(row: Row): AttendanceRow {
   };
 }
 
+function payrollAdjustmentFromRow(row: Row): PayrollAdjustmentRow {
+  return {
+    id: text(row.id),
+    projectCode: text(row.project_code),
+    week: text(row.week),
+    category: text(row.category),
+    staffName: text(row.staff_name),
+    allowance: number(row.allowance),
+    overtimeHours: number(row.overtime_hours),
+    overtimeAmount: number(row.overtime_amount),
+    adjustment: number(row.adjustment),
+    note: text(row.note),
+  };
+}
+
 function subcontractorFromRow(row: Row): SubcontractorRow {
   return {
     id: number(row.id),
@@ -553,7 +570,7 @@ async function getGiaPhuSummaries(activeProjectCode?: string, organizationId?: s
     return summaries[key];
   };
 
-  const [materialRows, attendanceRows, subcontractorRows, operationRows] = await Promise.all([
+  const [materialRows, attendanceRows, payrollAdjustmentRows, subcontractorRows, operationRows] = await Promise.all([
     sql`
       select project_code, material_type, coalesce(sum(quantity * price), 0)::float8 as total
       from gp_materials
@@ -564,6 +581,13 @@ async function getGiaPhuSummaries(activeProjectCode?: string, organizationId?: s
     sql`
       select project_code, coalesce(sum(total), 0)::float8 as total
       from gp_attendance
+      where organization_id = ${orgId} and project_code = ${projectCode}
+        ${excludeArchivedCategory(sql, orgId)}
+      group by project_code
+    `,
+    sql`
+      select project_code, coalesce(sum(adjustment), 0)::float8 as total
+      from gp_payroll_adjustments
       where organization_id = ${orgId} and project_code = ${projectCode}
         ${excludeArchivedCategory(sql, orgId)}
       group by project_code
@@ -593,6 +617,7 @@ async function getGiaPhuSummaries(activeProjectCode?: string, organizationId?: s
   }
 
   for (const row of attendanceRows as Row[]) get(text(row.project_code)).labor += number(row.total);
+  for (const row of payrollAdjustmentRows as Row[]) get(text(row.project_code)).labor += number(row.total);
   for (const row of subcontractorRows as Row[]) get(text(row.project_code)).subcontractor += number(row.total);
   for (const row of operationRows as Row[]) get(text(row.project_code)).operations += number(row.total);
 
@@ -746,6 +771,22 @@ async function createGiaPhuSchemaInternal() {
     updated_at timestamptz not null default now()
   )`;
 
+  await sql`create table if not exists gp_payroll_adjustments (
+    id text primary key,
+    organization_id text not null default '',
+    project_code text not null references gp_projects(code) on delete cascade,
+    week text not null default '',
+    category text not null default '',
+    staff_name text not null default '',
+    allowance numeric not null default 0,
+    overtime_hours numeric not null default 0,
+    overtime_amount numeric not null default 0,
+    adjustment numeric not null default 0,
+    note text not null default '',
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  )`;
+
   await sql`create table if not exists gp_attendance_locks (
     lock_key text primary key,
     organization_id text not null default '',
@@ -887,6 +928,12 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_documents add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_materials add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_attendance add column if not exists organization_id text not null default ''`;
+  await sql`alter table gp_payroll_adjustments add column if not exists organization_id text not null default ''`;
+  await sql`alter table gp_payroll_adjustments add column if not exists allowance numeric not null default 0`;
+  await sql`alter table gp_payroll_adjustments add column if not exists overtime_hours numeric not null default 0`;
+  await sql`alter table gp_payroll_adjustments add column if not exists overtime_amount numeric not null default 0`;
+  await sql`alter table gp_payroll_adjustments add column if not exists adjustment numeric not null default 0`;
+  await sql`alter table gp_payroll_adjustments add column if not exists note text not null default ''`;
   await sql`alter table gp_attendance_locks add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_subcontractors add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_subcontractor_contracts add column if not exists organization_id text not null default ''`;
@@ -1057,6 +1104,7 @@ async function ensureGiaPhuPerformanceIndexes() {
     await sql`create index if not exists gp_attendance_org_project_date_idx on gp_attendance (organization_id, project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_attendance_project_filters_idx on gp_attendance (project_code, week, category, staff_name, position, shift)`;
     await sql`create index if not exists gp_attendance_org_project_filters_idx on gp_attendance (organization_id, project_code, week, category, staff_name, position, shift)`;
+    await sql`create index if not exists gp_payroll_adjustments_org_project_staff_idx on gp_payroll_adjustments (organization_id, project_code, week, category, staff_name)`;
     await sql`create index if not exists gp_subcontractors_project_date_idx on gp_subcontractors (project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_subcontractors_org_project_date_idx on gp_subcontractors (organization_id, project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_subcontractors_project_filters_idx on gp_subcontractors (project_code, week, category, contractor_name)`;
@@ -1122,6 +1170,7 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
   const [
     materialRows,
     attendanceRows,
+    payrollAdjustmentRows,
     subcontractorRows,
     subcontractorContractRows,
     operationRows,
@@ -1138,6 +1187,9 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     activeProjectCode
       ? sql`select * from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by work_date desc nulls last, id desc limit 280`
       : sql`select * from gp_attendance where false`,
+    activeProjectCode
+      ? sql`select * from gp_payroll_adjustments where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by updated_at desc`
+      : sql`select * from gp_payroll_adjustments where false`,
     activeProjectCode
       ? sql`select * from gp_subcontractors where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by work_date desc nulls last, id desc limit 80`
       : sql`select * from gp_subcontractors where false`,
@@ -1182,6 +1234,7 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     staff: (staffRows as Row[]).map(staffFromRow),
     materials,
     attendance,
+    payrollAdjustments: (payrollAdjustmentRows as Row[]).map(payrollAdjustmentFromRow),
     subcontractors,
     subcontractorContracts: (subcontractorContractRows as Row[]).map(subcontractorContractFromRow),
     operations,
@@ -4009,6 +4062,97 @@ export async function saveStaffWeeklyAttendance(payload: Record<string, unknown>
     savedRows.push(...insertedRows.map(attendanceFromRow));
 
     return { savedRows, deletedIds };
+  }
+
+  if (typeof sql.begin === "function") {
+    return sql.begin((transactionSql: ReturnType<typeof getSql>) => persist(transactionSql));
+  }
+
+  return persist(sql);
+}
+
+export async function savePayrollAdjustment(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const organizationId = requireOrganizationId(payload.organizationId);
+  const projectCode = text(payload.projectCode).trim();
+  const week = text(payload.week).trim();
+  const category = text(payload.category).trim();
+  const staffName = text(payload.staffName).trim();
+  const allowance = requireNonNegativeNumericInput(payload.allowance, "Phụ cấp");
+  const overtimeHours = requireNonNegativeNumericInput(payload.overtimeHours, "OT giờ");
+  const overtimeAmount = requireNonNegativeNumericInput(payload.overtimeAmount, "OT tiền");
+  const adjustment = requireNumericInput(payload.adjustment ?? 0, "Điều chỉnh lương");
+  const note = text(payload.note).trim();
+
+  if (!projectCode) throw new Error("Thiếu công trình.");
+  if (!week) throw new Error("Thiếu tuần.");
+  if (!category) throw new Error("Thiếu hạng mục.");
+  if (!staffName) throw new Error("Thiếu nhân sự.");
+
+  async function persist(database: ReturnType<typeof getSql>) {
+    const lockKey = attendanceLockKey(organizationId, projectCode, week, category);
+    const [lock] =
+      (await database`select status from gp_attendance_locks where organization_id = ${organizationId} and lock_key = ${lockKey}`) as Row[];
+    if (text(lock?.status) === "CLOSED") throw new Error("Tuần/hạng mục đã kết sổ, không thể sửa bảng lương.");
+
+    const rows = (await database`
+      select *
+      from gp_attendance
+      where organization_id = ${organizationId}
+        and project_code = ${projectCode}
+        and week = ${week}
+        and category = ${category}
+        and staff_name = ${staffName}
+      order by work_date asc nulls last, id asc
+    `) as Row[];
+
+    if (!rows.length) throw new Error("Không tìm thấy chấm công tương ứng để cập nhật bảng lương.");
+
+    const savedRows: AttendanceRow[] = [];
+
+    for (const [index, row] of rows.entries()) {
+      const rowAllowance = index === 0 ? allowance : 0;
+      const rowOvertimeHours = index === 0 ? overtimeHours : 0;
+      const rowOvertimeAmount = index === 0 ? overtimeAmount : 0;
+      const baseSalary = Math.max(0, number(row.total) - number(row.allowance) - number(row.overtime_amount));
+      const nextTotal = baseSalary + rowAllowance + rowOvertimeAmount;
+      const [savedRow] = (await database`
+        update gp_attendance
+        set allowance = ${rowAllowance},
+            overtime_hours = ${rowOvertimeHours},
+            overtime_amount = ${rowOvertimeAmount},
+            total = ${nextTotal},
+            updated_at = now()
+        where organization_id = ${organizationId} and id = ${number(row.id)}
+        returning *
+      `) as Row[];
+
+      if (savedRow) savedRows.push(attendanceFromRow(savedRow));
+    }
+
+    const adjustmentId = [organizationId, projectCode, week, category, staffName]
+      .map((part) => encodeURIComponent(part))
+      .join("::");
+    const [savedAdjustment] = (await database`
+      insert into gp_payroll_adjustments (
+        id, organization_id, project_code, week, category, staff_name,
+        allowance, overtime_hours, overtime_amount, adjustment, note, updated_at
+      )
+      values (
+        ${adjustmentId}, ${organizationId}, ${projectCode}, ${week}, ${category}, ${staffName},
+        ${allowance}, ${overtimeHours}, ${overtimeAmount}, ${adjustment}, ${note}, now()
+      )
+      on conflict (id) do update set
+        allowance = excluded.allowance,
+        overtime_hours = excluded.overtime_hours,
+        overtime_amount = excluded.overtime_amount,
+        adjustment = excluded.adjustment,
+        note = excluded.note,
+        updated_at = now()
+      returning *
+    `) as Row[];
+
+    return { savedRows, adjustment: payrollAdjustmentFromRow(savedAdjustment) };
   }
 
   if (typeof sql.begin === "function") {

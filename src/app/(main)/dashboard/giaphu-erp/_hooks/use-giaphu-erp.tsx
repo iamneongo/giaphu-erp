@@ -22,6 +22,7 @@ import type {
   MaterialRow,
   OperationRow,
   PaymentRow,
+  PayrollAdjustmentRow,
   ProjectRow,
 } from "@/lib/giaphu-erp/types";
 import { normalizeVietnameseMojibake } from "@/lib/text/mojibake";
@@ -47,6 +48,7 @@ interface GiaPhuErpContextValue {
   scoped: {
     materials: MaterialRow[];
     attendance: GiaPhuDashboardData["attendance"];
+    payrollAdjustments: GiaPhuDashboardData["payrollAdjustments"];
     subcontractors: GiaPhuDashboardData["subcontractors"];
     subcontractorContracts: GiaPhuDashboardData["subcontractorContracts"];
     operations: OperationRow[];
@@ -72,10 +74,13 @@ const emptySummary: CostSummary = {
 type GiaPhuDataPatch = {
   attendanceUpsert?: AttendanceRow[];
   attendanceDeleteIds?: number[];
+  payrollAdjustmentUpsert?: PayrollAdjustmentRow[];
 };
 
 function applyDataPatch(current: GiaPhuDashboardData, patch: GiaPhuDataPatch) {
-  if (!patch.attendanceUpsert?.length && !patch.attendanceDeleteIds?.length) return current;
+  if (!patch.attendanceUpsert?.length && !patch.attendanceDeleteIds?.length && !patch.payrollAdjustmentUpsert?.length) {
+    return current;
+  }
 
   const deleteIds = new Set(patch.attendanceDeleteIds ?? []);
   const upsertById = new Map((patch.attendanceUpsert ?? []).map((row) => [row.id, row]));
@@ -106,6 +111,20 @@ function applyDataPatch(current: GiaPhuDashboardData, patch: GiaPhuDataPatch) {
     addLaborDiff(row.projectCode, Number(row.total || 0));
   }
 
+  const currentPayrollAdjustmentsById = new Map(current.payrollAdjustments.map((row) => [row.id, row]));
+  const payrollAdjustmentUpserts = new Map((patch.payrollAdjustmentUpsert ?? []).map((row) => [row.id, row]));
+  for (const row of payrollAdjustmentUpserts.values()) {
+    const previousAdjustment = currentPayrollAdjustmentsById.get(row.id)?.adjustment ?? 0;
+    addLaborDiff(row.projectCode, Number(row.adjustment || 0) - Number(previousAdjustment || 0));
+  }
+  const payrollAdjustments = current.payrollAdjustments
+    .map((row) => payrollAdjustmentUpserts.get(row.id) ?? row)
+    .concat(
+      Array.from(payrollAdjustmentUpserts.values()).filter(
+        (row) => !current.payrollAdjustments.some((currentRow) => currentRow.id === row.id),
+      ),
+    );
+
   const summaries = { ...current.summaries };
   for (const [projectCode, laborDiff] of laborDiffByProject) {
     const summary = summaries[projectCode];
@@ -118,7 +137,7 @@ function applyDataPatch(current: GiaPhuDashboardData, patch: GiaPhuDataPatch) {
     };
   }
 
-  return { ...current, attendance, summaries };
+  return { ...current, attendance, payrollAdjustments, summaries };
 }
 
 export function GiaPhuErpProvider({
@@ -274,6 +293,7 @@ export function GiaPhuErpProvider({
     () => ({
       materials: data.materials.filter((row) => row.projectCode === normalizedProjectCode),
       attendance: data.attendance.filter((row) => row.projectCode === normalizedProjectCode),
+      payrollAdjustments: data.payrollAdjustments.filter((row) => row.projectCode === normalizedProjectCode),
       subcontractors: data.subcontractors.filter((row) => row.projectCode === normalizedProjectCode),
       subcontractorContracts: data.subcontractorContracts.filter((row) => row.projectCode === normalizedProjectCode),
       operations: data.operations.filter((row) => row.projectCode === normalizedProjectCode),
