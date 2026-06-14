@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TableCell, TableRow } from "@/components/ui/table";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type {
+  AttendanceLockRow,
   AttendanceRow,
   LaborNormRow,
   PayrollAdjustmentRow,
@@ -686,6 +687,25 @@ function attendanceStaffKey(staffName: string) {
   return staffName;
 }
 
+function applyAttendanceActionPatch(
+  currentRows: AttendanceRow[],
+  result: GiaPhuActionResult | false | boolean | undefined,
+) {
+  if (!result || typeof result !== "object" || !("patch" in result) || !result.patch) return currentRows;
+
+  const deleteIds = new Set(result.patch.attendanceDeleteIds ?? []);
+  const upsertRows = result.patch.attendanceUpsert ?? [];
+  if (!deleteIds.size && !upsertRows.length) return currentRows;
+
+  const upsertIds = new Set(upsertRows.map((row) => row.id));
+
+  return currentRows.filter((row) => !deleteIds.has(row.id) && !upsertIds.has(row.id)).concat(upsertRows);
+}
+
+function isClosedAttendanceLock(lock: AttendanceLockRow | undefined) {
+  return lock?.status === "CLOSED";
+}
+
 function countAttendanceWorkdays(cells: AttendanceCellDraft[]) {
   return cells.reduce((total, cell) => total + (cell.morning ? 0.5 : 0) + (cell.afternoon ? 0.5 : 0), 0);
 }
@@ -709,6 +729,7 @@ function getAttendanceExtraDraft(rows: AttendanceRow[]): AttendanceExtraDraft {
 
 function AttendanceBoard({
   rows,
+  locks,
   staff,
   categoryOptions,
   activeCategoryValues,
@@ -718,6 +739,7 @@ function AttendanceBoard({
   onAction,
 }: {
   rows: AttendanceRow[];
+  locks: AttendanceLockRow[];
   staff: StaffRow[];
   categoryOptions: Array<{ label: string; value: string }>;
   activeCategoryValues: string[];
@@ -743,12 +765,20 @@ function AttendanceBoard({
   const [attendanceRows, setAttendanceRows] = React.useState<AttendanceRow[]>(rows);
   const [attendanceRowsLoaded, setAttendanceRowsLoaded] = React.useState(false);
   const [attendanceRowsLoading, setAttendanceRowsLoading] = React.useState(false);
-  const [attendanceRefreshToken, setAttendanceRefreshToken] = React.useState(0);
   const selectedCategoryIsActive = React.useMemo(
     () => activeCategoryValues.includes(selectedCategory),
     [activeCategoryValues, selectedCategory],
   );
-  const refreshAttendanceRows = React.useCallback(() => setAttendanceRefreshToken((current) => current + 1), []);
+  const selectedLock = React.useMemo(
+    () =>
+      locks.find(
+        (lock) =>
+          lock.projectCode === activeProjectCode && lock.week === selectedWeek && lock.category === selectedCategory,
+      ),
+    [activeProjectCode, locks, selectedCategory, selectedWeek],
+  );
+  const isAttendanceLocked = isClosedAttendanceLock(selectedLock);
+  const canEditAttendance = canManage && !isAttendanceLocked;
 
   const applyAnchorDate = React.useCallback((value: string) => {
     const nextDate = value.slice(0, 10);
@@ -788,7 +818,6 @@ function AttendanceBoard({
     }
 
     const controller = new AbortController();
-    const requestRefreshToken = attendanceRefreshToken;
     setAttendanceRowsLoaded(false);
     setAttendanceRowsLoading(true);
 
@@ -803,7 +832,7 @@ function AttendanceBoard({
       signal: controller.signal,
     })
       .then((result) => {
-        if (controller.signal.aborted || requestRefreshToken < 0) return;
+        if (controller.signal.aborted) return;
         setAttendanceRows(result.rows);
         setAttendanceRowsLoaded(true);
       })
@@ -817,7 +846,7 @@ function AttendanceBoard({
       });
 
     return () => controller.abort();
-  }, [activeProjectCode, attendanceRefreshToken, selectedCategory, selectedWeek]);
+  }, [activeProjectCode, selectedCategory, selectedWeek]);
 
   const weekDates = React.useMemo(() => getWeekDates(selectedWeek), [selectedWeek]);
   const attendanceRowsSource = attendanceRowsLoaded ? attendanceRows : rows;
@@ -889,6 +918,8 @@ function AttendanceBoard({
   );
 
   function addParticipants() {
+    if (!canEditAttendance) return;
+
     const staffOrder = new Map(staff.map((row, index) => [row.name, index]));
     const staffRows = selectedStaffNames
       .map((name) => staff.find((row) => row.name === name))
@@ -915,7 +946,7 @@ function AttendanceBoard({
 
   const updateCell = React.useCallback(
     (staffName: string, date: string, key: AttendanceShiftKey, checked: boolean) => {
-      if (!canManage) return;
+      if (!canEditAttendance) return;
 
       const cellKey = attendanceCellKey(staffName, date);
       const baseDraft = draftCells[cellKey] ?? getAttendanceCellDraft(rowByCell.get(cellKey) ?? []);
@@ -928,12 +959,12 @@ function AttendanceBoard({
       }));
       setDirtyStaffNames((current) => new Set(current).add(staffName));
     },
-    [canManage, draftCells, rowByCell],
+    [canEditAttendance, draftCells, rowByCell],
   );
 
   const updateStaffExtra = React.useCallback(
     (staffName: string, key: keyof AttendanceExtraDraft, value: number) => {
-      if (!canManage) return;
+      if (!canEditAttendance) return;
 
       const staffKey = attendanceStaffKey(staffName);
       setDraftExtras((current) => {
@@ -949,12 +980,12 @@ function AttendanceBoard({
       });
       setDirtyStaffNames((current) => new Set(current).add(staffName));
     },
-    [canManage, rowByStaff],
+    [canEditAttendance, rowByStaff],
   );
 
   const saveStaffAttendance = React.useCallback(
     async (staffRow: AttendanceBoardRow) => {
-      if (!canManage || !selectedCategory || savingStaffName) return;
+      if (!canEditAttendance || !selectedCategory || savingStaffName) return;
 
       setSavingStaffName(staffRow.name);
       const salaryDay = Math.max(0, Math.round(Number(staffRow.salaryDay || 0)));
@@ -1017,16 +1048,15 @@ function AttendanceBoard({
           return next;
         });
         setDraftParticipants((current) => current.filter((participant) => participant.staff.name !== staffRow.name));
-        refreshAttendanceRows();
+        setAttendanceRows((current) => applyAttendanceActionPatch(current, result));
       }
     },
     [
       activeProjectCode,
-      canManage,
+      canEditAttendance,
       getCurrentCellDraft,
       getCurrentStaffExtras,
       onAction,
-      refreshAttendanceRows,
       savingStaffName,
       selectedCategory,
       selectedWeek,
@@ -1058,7 +1088,7 @@ function AttendanceBoard({
 
   const deleteStaffAttendance = React.useCallback(
     async (staffRow: AttendanceBoardRow) => {
-      if (!canManage || !selectedCategory || deletingStaffName || savingStaffName) return;
+      if (!canEditAttendance || !selectedCategory || deletingStaffName || savingStaffName) return;
 
       const existingRows = rowByStaff.get(staffRow.name) ?? [];
       const hasDraftRow = visibleDraftParticipants.some((participant) => participant.staff.name === staffRow.name);
@@ -1083,16 +1113,15 @@ function AttendanceBoard({
 
       if (result !== false) {
         clearStaffDraft(staffRow.name);
-        refreshAttendanceRows();
+        setAttendanceRows((current) => applyAttendanceActionPatch(current, result));
       }
     },
     [
       activeProjectCode,
-      canManage,
+      canEditAttendance,
       clearStaffDraft,
       deletingStaffName,
       onAction,
-      refreshAttendanceRows,
       rowByStaff,
       savingStaffName,
       selectedCategory,
@@ -1156,7 +1185,7 @@ function AttendanceBoard({
                   <span>{option.shortLabel}</span>
                   <Checkbox
                     checked={draft[option.key]}
-                    disabled={!canManage}
+                    disabled={!canEditAttendance}
                     onCheckedChange={(checked) => updateCell(row.name, date, option.key, checked === true)}
                   />
                 </div>
@@ -1174,7 +1203,7 @@ function AttendanceBoard({
 
           return (
             <Input
-              disabled={!canManage}
+              disabled={!canEditAttendance}
               min={0}
               type="number"
               defaultValue={extras.allowance}
@@ -1194,7 +1223,7 @@ function AttendanceBoard({
 
           return (
             <Input
-              disabled={!canManage}
+              disabled={!canEditAttendance}
               min={0}
               step={0.5}
               type="number"
@@ -1234,7 +1263,9 @@ function AttendanceBoard({
             <Button
               size="sm"
               type="button"
-              disabled={!canManage || !dirtyStaffNames.has(row.name) || Boolean(savingStaffName || deletingStaffName)}
+              disabled={
+                !canEditAttendance || !dirtyStaffNames.has(row.name) || Boolean(savingStaffName || deletingStaffName)
+              }
               onClick={() => saveStaffAttendance(row)}
             >
               <Check />
@@ -1244,7 +1275,7 @@ function AttendanceBoard({
               size="sm"
               type="button"
               variant="outline"
-              disabled={!canManage || Boolean(savingStaffName || deletingStaffName)}
+              disabled={!canEditAttendance || Boolean(savingStaffName || deletingStaffName)}
               onClick={() => deleteStaffAttendance(row)}
             >
               {deletingStaffName === row.name ? <RefreshCw className="animate-spin" /> : <Trash2 />}
@@ -1255,7 +1286,7 @@ function AttendanceBoard({
       },
     ],
     [
-      canManage,
+      canEditAttendance,
       deleteStaffAttendance,
       deletingStaffName,
       dirtyStaffNames,
@@ -1313,8 +1344,15 @@ function AttendanceBoard({
               values={selectedStaffNames}
               onValuesChange={setSelectedStaffNames}
               options={availableStaff}
-              disabled={!canManage || availableStaff.length === 0 || !selectedCategory || !selectedCategoryIsActive}
+              disabled={
+                !canEditAttendance || availableStaff.length === 0 || !selectedCategory || !selectedCategoryIsActive
+              }
             />
+            {isAttendanceLocked ? (
+              <div className="text-muted-foreground text-xs">
+                Tuần/hạng mục đã kết sổ, cần mở khóa trước khi chỉnh sửa.
+              </div>
+            ) : null}
             {!selectedCategoryIsActive && selectedCategory ? (
               <div className="text-muted-foreground text-xs">Hạng mục đã lưu trữ: chỉ cho sửa/xóa dữ liệu cũ.</div>
             ) : null}
@@ -1322,7 +1360,9 @@ function AttendanceBoard({
           <Button
             type="button"
             size="sm"
-            disabled={!canManage || !selectedStaffNames.length || !selectedCategory || !selectedCategoryIsActive}
+            disabled={
+              !canEditAttendance || !selectedStaffNames.length || !selectedCategory || !selectedCategoryIsActive
+            }
             onClick={addParticipants}
             className="h-9"
           >
@@ -1616,6 +1656,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
           <div className="space-y-3">
             <AttendanceBoard
               rows={scoped.attendance}
+              locks={data.attendanceLocks.filter((lock) => lock.projectCode === activeProjectCode)}
               staff={data.staff}
               categoryOptions={attendanceBoardCategoryOptions}
               activeCategoryValues={activeCategoryValues}
