@@ -40,7 +40,7 @@ import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, isoWeekFromDate, todayIso } from "../_lib/date-utils";
 import { catalogOptions, catalogOptionsWithValue, catalogOptionsWithValues, uniqueOptions } from "../_lib/form-options";
 import { formatCount, formatMoney } from "../_lib/formatters";
-import type { GiaPhuActionResult } from "../_lib/giaphu-erp-api";
+import { fetchGiaPhuPagedRows, type GiaPhuActionResult } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable, type DataTableColumn } from "./data-table";
 import { DatePickerField } from "./date-picker-field";
@@ -712,10 +712,15 @@ function AttendanceBoard({
   const [dirtyStaffNames, setDirtyStaffNames] = React.useState<Set<string>>(new Set());
   const [savingStaffName, setSavingStaffName] = React.useState("");
   const [deletingStaffName, setDeletingStaffName] = React.useState("");
+  const [attendanceRows, setAttendanceRows] = React.useState<AttendanceRow[]>(rows);
+  const [attendanceRowsLoaded, setAttendanceRowsLoaded] = React.useState(false);
+  const [attendanceRowsLoading, setAttendanceRowsLoading] = React.useState(false);
+  const [attendanceRefreshToken, setAttendanceRefreshToken] = React.useState(0);
   const selectedCategoryIsActive = React.useMemo(
     () => activeCategoryValues.includes(selectedCategory),
     [activeCategoryValues, selectedCategory],
   );
+  const refreshAttendanceRows = React.useCallback(() => setAttendanceRefreshToken((current) => current + 1), []);
 
   const applyAnchorDate = React.useCallback((value: string) => {
     const nextDate = value.slice(0, 10);
@@ -746,10 +751,51 @@ function AttendanceBoard({
     setSelectedStaffNames([]);
   }, [selectedCategory, selectedWeek]);
 
+  React.useEffect(() => {
+    if (!activeProjectCode || !selectedWeek || !selectedCategory) {
+      setAttendanceRows([]);
+      setAttendanceRowsLoaded(true);
+      setAttendanceRowsLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const requestRefreshToken = attendanceRefreshToken;
+    setAttendanceRowsLoaded(false);
+    setAttendanceRowsLoading(true);
+
+    fetchGiaPhuPagedRows<AttendanceRow>({
+      dataset: "attendance",
+      projectCode: activeProjectCode,
+      pageIndex: 0,
+      pageSize: 5000,
+      search: "",
+      filters: { week: selectedWeek, category: selectedCategory },
+      sorting: [{ id: "date", desc: false }],
+      signal: controller.signal,
+    })
+      .then((result) => {
+        if (controller.signal.aborted || requestRefreshToken < 0) return;
+        setAttendanceRows(result.rows);
+        setAttendanceRowsLoaded(true);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setAttendanceRows([]);
+        setAttendanceRowsLoaded(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setAttendanceRowsLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [activeProjectCode, attendanceRefreshToken, selectedCategory, selectedWeek]);
+
   const weekDates = React.useMemo(() => getWeekDates(selectedWeek), [selectedWeek]);
+  const attendanceRowsSource = attendanceRowsLoaded ? attendanceRows : rows;
   const filteredRows = React.useMemo(
-    () => rows.filter((row) => row.week === selectedWeek && row.category === selectedCategory),
-    [rows, selectedCategory, selectedWeek],
+    () => attendanceRowsSource.filter((row) => row.week === selectedWeek && row.category === selectedCategory),
+    [attendanceRowsSource, selectedCategory, selectedWeek],
   );
   const visibleDraftParticipants = React.useMemo(
     () =>
@@ -942,6 +988,7 @@ function AttendanceBoard({
           return next;
         });
         setDraftParticipants((current) => current.filter((participant) => participant.staff.name !== staffRow.name));
+        refreshAttendanceRows();
       }
     },
     [
@@ -950,6 +997,7 @@ function AttendanceBoard({
       getCurrentCellDraft,
       getCurrentStaffExtras,
       onAction,
+      refreshAttendanceRows,
       savingStaffName,
       selectedCategory,
       selectedWeek,
@@ -1006,6 +1054,7 @@ function AttendanceBoard({
 
       if (result !== false) {
         clearStaffDraft(staffRow.name);
+        refreshAttendanceRows();
       }
     },
     [
@@ -1014,6 +1063,7 @@ function AttendanceBoard({
       clearStaffDraft,
       deletingStaffName,
       onAction,
+      refreshAttendanceRows,
       rowByStaff,
       savingStaffName,
       selectedCategory,
@@ -1216,11 +1266,11 @@ function AttendanceBoard({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <div className="font-medium text-muted-foreground text-xs">Ngày neo trong tuần (thường T2)</div>
+            <div className="font-medium text-muted-foreground text-xs">Lọc tuần theo ngày</div>
             <DatePickerField
               name="attendanceAnchorDate"
               value={anchorDate}
-              placeholder="Chọn ngày neo"
+              placeholder="Chọn ngày bất kỳ trong tuần"
               className="h-9"
               onValueChange={applyAnchorDate}
             />
@@ -1258,7 +1308,7 @@ function AttendanceBoard({
         columns={columns}
         rows={boardRows}
         getRowId={(row) => row.id || row.name}
-        loading={loading}
+        loading={loading || attendanceRowsLoading}
         pageSize={10}
         empty={selectedCategory ? "Chưa có nhân công trong tuần này." : "Chọn hạng mục để chấm công."}
         searchPlaceholder="Tìm nhân công..."
