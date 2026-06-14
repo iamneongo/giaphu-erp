@@ -364,28 +364,56 @@ function printPayslipRows(
   }, 250);
 }
 
-function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: StaffRow[]) {
+function attendancePositionRank(value: string) {
+  const position = normalizeSearchText(value);
+  if (position.includes("doi truong")) return 1;
+  if (position.includes("doi pho")) return 2;
+  if (position.includes("tho")) return 3;
+  if (position.includes("phu")) return 4;
+  return 9;
+}
+
+function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: StaffRow[], staff: StaffRow[]) {
+  const staffOrder = new Map(staff.map((row, index) => [row.name, index]));
+  const staffByName = new Map(staff.map((row) => [row.name, row]));
   const staffMap = new Map<string, StaffRow>();
 
   for (const row of draftStaff) {
-    staffMap.set(row.name, row);
+    staffMap.set(row.name, staffByName.get(row.name) ?? row);
   }
 
   for (const row of attendance) {
     if (!staffMap.has(row.staffName)) {
-      staffMap.set(row.staffName, {
-        id: row.staffName,
-        name: row.staffName,
-        team: "",
-        position: row.position,
-        salaryDay: row.halfDaySalary,
-        resigned: false,
-        offDate: "",
-      });
+      const catalogStaff = staffByName.get(row.staffName);
+      staffMap.set(
+        row.staffName,
+        catalogStaff ?? {
+          id: row.staffName,
+          name: row.staffName,
+          team: "",
+          position: row.position,
+          salaryDay: row.halfDaySalary,
+          resigned: false,
+          offDate: "",
+        },
+      );
     }
   }
 
-  return Array.from(staffMap.values()).sort((first, second) => first.name.localeCompare(second.name, "vi"));
+  return Array.from(staffMap.values()).sort((first, second) => {
+    const firstOrder = staffOrder.get(first.name);
+    const secondOrder = staffOrder.get(second.name);
+
+    if (firstOrder != null && secondOrder != null) return firstOrder - secondOrder;
+    if (firstOrder != null) return -1;
+    if (secondOrder != null) return 1;
+
+    return (
+      first.team.localeCompare(second.team, "vi", { numeric: true }) ||
+      attendancePositionRank(first.position) - attendancePositionRank(second.position) ||
+      first.name.localeCompare(second.name, "vi")
+    );
+  });
 }
 
 function buildPayrollRows(rows: AttendanceRow[], adjustments: PayrollAdjustmentRow[]) {
@@ -809,8 +837,9 @@ function AttendanceBoard({
       buildAttendanceParticipants(
         filteredRows,
         visibleDraftParticipants.map((participant) => participant.staff),
+        staff,
       ),
-    [filteredRows, visibleDraftParticipants],
+    [filteredRows, staff, visibleDraftParticipants],
   );
   const rowByCell = React.useMemo(() => {
     const map = new Map<string, AttendanceRow[]>();
