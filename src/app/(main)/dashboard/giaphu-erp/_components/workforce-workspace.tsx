@@ -924,38 +924,6 @@ function AttendanceBoard({
     [draftExtras, rowByStaff],
   );
 
-  function addParticipants() {
-    if (!canEditAttendance) return;
-
-    const staffOrder = new Map(staff.map((row, index) => [row.name, index]));
-    const staffRows = selectedStaffNames
-      .map((name) => staff.find((row) => row.name === name))
-      .filter((row): row is StaffRow => Boolean(row))
-      .sort((first, second) => (staffOrder.get(first.name) ?? 0) - (staffOrder.get(second.name) ?? 0));
-
-    if (!staffRows.length || !selectedCategory || !selectedCategoryIsActive) return;
-
-    setDraftParticipants((current) => {
-      const currentIds = new Set(current.map((participant) => participant.id));
-      const nextParticipants = staffRows
-        .map((staffRow) => ({
-          id: [selectedWeek, selectedCategory, staffRow.name].join("::"),
-          week: selectedWeek,
-          category: selectedCategory,
-          staff: staffRow,
-        }))
-        .filter((participant) => !currentIds.has(participant.id));
-
-      return nextParticipants.length ? [...current, ...nextParticipants] : current;
-    });
-    setSelectedStaffNames([]);
-    setDirtyStaffNames((current) => {
-      const next = new Set(current);
-      for (const row of staffRows) next.add(row.name);
-      return next;
-    });
-  }
-
   const updateCell = React.useCallback(
     (staffName: string, date: string, key: AttendanceShiftKey, checked: boolean) => {
       if (!canEditAttendance) return;
@@ -993,6 +961,65 @@ function AttendanceBoard({
       setDirtyStaffNames((current) => new Set(current).add(staffName));
     },
     [canEditAttendance, rowByStaff],
+  );
+
+  const buildRowsToSave = React.useCallback(
+    (staffRow: AttendanceBoardRow) => {
+      const salaryDay = Math.max(0, Math.round(Number(staffRow.salaryDay || 0)));
+      const staffExtras = getCurrentStaffExtras(staffRow.name);
+      const overtimeAmount = Math.round(staffExtras.overtimeHours * (salaryDay / 8));
+      const selectedRows = weekDates.flatMap((date) => {
+        const draft = getCurrentCellDraft(staffRow.name, date);
+
+        return attendanceShiftOptions
+          .filter((option) => draft[option.key])
+          .map((option) => ({
+            projectCode: activeProjectCode,
+            date,
+            week: selectedWeek,
+            shift: option.shift,
+            category: selectedCategory,
+            staffName: staffRow.name,
+            position: staffRow.position || "Nhân công",
+            halfDaySalary: salaryDay,
+            allowance: 0,
+            overtimeHours: 0,
+            overtimeAmount: 0,
+            coefficient: option.coefficient,
+            total: Math.round(salaryDay * option.coefficient),
+            status: option.status,
+          }));
+      });
+      const payloadRows = selectedRows.map((row, index) => ({
+        ...row,
+        allowance: index === 0 ? staffExtras.allowance : 0,
+        overtimeHours: index === 0 ? staffExtras.overtimeHours : 0,
+        overtimeAmount: index === 0 ? overtimeAmount : 0,
+        total: row.total + (index === 0 ? staffExtras.allowance + overtimeAmount : 0),
+      }));
+
+      return payloadRows.length
+        ? payloadRows
+        : [
+            {
+              projectCode: activeProjectCode,
+              date: weekDates[0] ?? todayIso(),
+              week: selectedWeek,
+              shift: attendancePlaceholderStatus,
+              category: selectedCategory,
+              staffName: staffRow.name,
+              position: staffRow.position || "Nhân công",
+              halfDaySalary: salaryDay,
+              allowance: staffExtras.allowance,
+              overtimeHours: staffExtras.overtimeHours,
+              overtimeAmount,
+              coefficient: 0,
+              total: staffExtras.allowance + overtimeAmount,
+              status: attendancePlaceholderStatus,
+            },
+          ];
+    },
+    [activeProjectCode, getCurrentCellDraft, getCurrentStaffExtras, selectedCategory, selectedWeek, weekDates],
   );
 
   const saveStaffAttendance = React.useCallback(
@@ -1095,6 +1122,70 @@ function AttendanceBoard({
       weekDates,
     ],
   );
+
+  const addParticipants = React.useCallback(async () => {
+    if (!canEditAttendance || savingStaffName) return;
+
+    const staffOrder = new Map(staff.map((row, index) => [row.name, index]));
+    const staffRows = selectedStaffNames
+      .map((name) => staff.find((row) => row.name === name))
+      .filter((row): row is StaffRow => Boolean(row))
+      .sort((first, second) => (staffOrder.get(first.name) ?? 0) - (staffOrder.get(second.name) ?? 0));
+
+    if (!staffRows.length || !selectedCategory || !selectedCategoryIsActive) return;
+
+    setDraftParticipants((current) => {
+      const currentIds = new Set(current.map((participant) => participant.id));
+      const nextParticipants = staffRows
+        .map((staffRow) => ({
+          id: [selectedWeek, selectedCategory, staffRow.name].join("::"),
+          week: selectedWeek,
+          category: selectedCategory,
+          staff: staffRow,
+        }))
+        .filter((participant) => !currentIds.has(participant.id));
+
+      return nextParticipants.length ? [...current, ...nextParticipants] : current;
+    });
+    setSelectedStaffNames([]);
+
+    for (const staffRow of staffRows) {
+      setSavingStaffName(staffRow.name);
+      const result = await onAction("saveStaffWeeklyAttendance", {
+        projectCode: activeProjectCode,
+        week: selectedWeek,
+        category: selectedCategory,
+        staffName: staffRow.name,
+        rows: buildRowsToSave(staffRow),
+        __returnData: false,
+      });
+
+      if (result !== false) {
+        setDirtyStaffNames((current) => {
+          const next = new Set(current);
+          next.delete(staffRow.name);
+          return next;
+        });
+        setDraftParticipants((current) => current.filter((participant) => participant.staff.name !== staffRow.name));
+        setAttendanceRows((current) => applyAttendanceActionPatch(current, result));
+      } else {
+        setDirtyStaffNames((current) => new Set(current).add(staffRow.name));
+      }
+    }
+
+    setSavingStaffName("");
+  }, [
+    activeProjectCode,
+    buildRowsToSave,
+    canEditAttendance,
+    onAction,
+    savingStaffName,
+    selectedCategory,
+    selectedCategoryIsActive,
+    selectedStaffNames,
+    selectedWeek,
+    staff,
+  ]);
 
   const clearStaffDraft = React.useCallback(
     (staffName: string) => {
@@ -1393,7 +1484,11 @@ function AttendanceBoard({
             type="button"
             size="sm"
             disabled={
-              !canEditAttendance || !selectedStaffNames.length || !selectedCategory || !selectedCategoryIsActive
+              !canEditAttendance ||
+              !selectedStaffNames.length ||
+              !selectedCategory ||
+              !selectedCategoryIsActive ||
+              Boolean(savingStaffName)
             }
             onClick={addParticipants}
             className="h-9"
