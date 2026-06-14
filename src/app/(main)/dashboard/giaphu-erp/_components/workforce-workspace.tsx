@@ -41,7 +41,7 @@ import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, isoWeekFromDate, todayIso } from "../_lib/date-utils";
 import { catalogOptions, catalogOptionsWithValue, catalogOptionsWithValues, uniqueOptions } from "../_lib/form-options";
 import { formatCount, formatMoney } from "../_lib/formatters";
-import { fetchGiaPhuPagedRows, type GiaPhuActionResult } from "../_lib/giaphu-erp-api";
+import { fetchGiaPhuFilterOptions, fetchGiaPhuPagedRows, type GiaPhuActionResult } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable, type DataTableColumn } from "./data-table";
 import { DatePickerField } from "./date-picker-field";
@@ -129,6 +129,15 @@ function getWeekDates(weekValue: string) {
 
 function defaultAttendanceAnchorDate() {
   return getWeekDates(currentIsoWeek())[0] ?? todayIso();
+}
+
+function weekSortValue(value: string) {
+  const [weekText, yearText] = value.split(".");
+  const week = Number(weekText);
+  const year = Number(yearText);
+
+  if (!week || !year) return 0;
+  return year * 100 + week;
 }
 
 function formatShortDate(value: string) {
@@ -709,6 +718,19 @@ function applyAttendanceActionPatch(
   return currentRows.filter((row) => !deleteIds.has(row.id) && !upsertIds.has(row.id)).concat(upsertRows);
 }
 
+function mergeOptions(...optionGroups: Array<Array<{ label: string; value: string }>>) {
+  const byValue = new Map<string, { label: string; value: string }>();
+
+  for (const group of optionGroups) {
+    for (const option of group) {
+      if (!option.value || byValue.has(option.value)) continue;
+      byValue.set(option.value, option);
+    }
+  }
+
+  return Array.from(byValue.values());
+}
+
 function isClosedAttendanceLock(lock: AttendanceLockRow | undefined) {
   return lock?.status === "CLOSED";
 }
@@ -772,9 +794,27 @@ function AttendanceBoard({
   const [attendanceRows, setAttendanceRows] = React.useState<AttendanceRow[]>(rows);
   const [attendanceRowsLoaded, setAttendanceRowsLoaded] = React.useState(false);
   const [attendanceRowsLoading, setAttendanceRowsLoading] = React.useState(false);
+  const [attendanceWeekOptions, setAttendanceWeekOptions] = React.useState<Array<{ label: string; value: string }>>([]);
+  const [attendanceWeekCategoryOptions, setAttendanceWeekCategoryOptions] = React.useState<
+    Array<{ label: string; value: string }>
+  >([]);
+  const autoCategoryWeekRef = React.useRef("");
   const selectedCategoryIsActive = React.useMemo(
     () => activeCategoryValues.includes(selectedCategory),
     [activeCategoryValues, selectedCategory],
+  );
+  const resolvedWeekOptions = React.useMemo(
+    () =>
+      mergeOptions(
+        uniqueOptions([selectedWeek]),
+        attendanceWeekOptions,
+        uniqueOptions(rows.map((row) => row.week)),
+      ).sort((first, second) => weekSortValue(second.value) - weekSortValue(first.value)),
+    [attendanceWeekOptions, rows, selectedWeek],
+  );
+  const resolvedCategoryOptions = React.useMemo(
+    () => mergeOptions(attendanceWeekCategoryOptions, categoryOptions, uniqueOptions(rows.map((row) => row.category))),
+    [attendanceWeekCategoryOptions, categoryOptions, rows],
   );
   const selectedLock = React.useMemo(
     () =>
@@ -796,16 +836,81 @@ function AttendanceBoard({
     setSelectedWeek(nextWeek);
   }, []);
 
+  const applyWeekValue = React.useCallback((value: string) => {
+    if (!value) return;
+
+    setSelectedWeek(value);
+    setAnchorDate(getWeekDates(value)[0] ?? todayIso());
+  }, []);
+
   React.useEffect(() => {
-    if (categoryOptions.length === 0) {
+    if (!activeProjectCode) {
+      setAttendanceWeekOptions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    fetchGiaPhuFilterOptions({
+      dataset: "attendance",
+      projectCode: activeProjectCode,
+      signal: controller.signal,
+    })
+      .then((options) => {
+        if (controller.signal.aborted) return;
+        setAttendanceWeekOptions(options.week ?? []);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setAttendanceWeekOptions([]);
+      });
+
+    return () => controller.abort();
+  }, [activeProjectCode]);
+
+  React.useEffect(() => {
+    if (!activeProjectCode || !selectedWeek) {
+      setAttendanceWeekCategoryOptions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    fetchGiaPhuFilterOptions({
+      dataset: "attendance",
+      projectCode: activeProjectCode,
+      filters: { week: selectedWeek },
+      signal: controller.signal,
+    })
+      .then((options) => {
+        if (controller.signal.aborted) return;
+        setAttendanceWeekCategoryOptions(options.category ?? []);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setAttendanceWeekCategoryOptions([]);
+      });
+
+    return () => controller.abort();
+  }, [activeProjectCode, selectedWeek]);
+
+  React.useEffect(() => {
+    if (resolvedCategoryOptions.length === 0) {
       setSelectedCategory("");
       return;
     }
 
-    if (!selectedCategory || !categoryOptions.some((option) => option.value === selectedCategory)) {
-      setSelectedCategory(categoryOptions[0].value);
+    if (!selectedCategory || !resolvedCategoryOptions.some((option) => option.value === selectedCategory)) {
+      setSelectedCategory(resolvedCategoryOptions[0].value);
     }
-  }, [categoryOptions, selectedCategory]);
+  }, [resolvedCategoryOptions, selectedCategory]);
+
+  React.useEffect(() => {
+    if (!attendanceWeekCategoryOptions.length || autoCategoryWeekRef.current === selectedWeek) return;
+
+    if (!attendanceWeekCategoryOptions.some((option) => option.value === selectedCategory)) {
+      setSelectedCategory(attendanceWeekCategoryOptions[0].value);
+    }
+    autoCategoryWeekRef.current = selectedWeek;
+  }, [attendanceWeekCategoryOptions, selectedCategory, selectedWeek]);
 
   React.useEffect(() => {
     if (!selectedCategory && !selectedWeek) return;
@@ -1431,7 +1536,18 @@ function AttendanceBoard({
         <div className="grid gap-3 sm:grid-cols-[140px_224px_220px]">
           <div className="space-y-1.5">
             <div className="font-medium text-muted-foreground text-xs">Tuần</div>
-            <Input value={selectedWeek} readOnly className="bg-muted/50" />
+            <Select value={selectedWeek} onValueChange={applyWeekValue}>
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue placeholder="Chọn tuần" />
+              </SelectTrigger>
+              <SelectContent>
+                {resolvedWeekOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
             <div className="font-medium text-muted-foreground text-xs">Hạng mục</div>
@@ -1440,7 +1556,7 @@ function AttendanceBoard({
                 <SelectValue placeholder="Chọn hạng mục" />
               </SelectTrigger>
               <SelectContent>
-                {categoryOptions.map((option) => (
+                {resolvedCategoryOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>

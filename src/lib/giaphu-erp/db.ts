@@ -2751,11 +2751,11 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
       ${shiftFilter ? sql`and shift = ${shiftFilter}` : sql``}
     `;
     const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}`,
+      sql`select count(*)::int as total from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
       sql`
         select *
         from gp_attendance
-        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}
+        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "attendance", options.sorting)}
         limit ${pageSize}
         offset ${offset}
@@ -3085,12 +3085,16 @@ export async function getGiaPhuFilterOptions(options: {
   }
 
   if (options.dataset === "attendance") {
+    const weekFilter = fixedFilterValue("week");
+    const categoryFilter = fixedFilterValue("category");
+    const whereWeek = weekFilter ? sql`and week = ${weekFilter}` : sql``;
+    const whereCategory = categoryFilter ? sql`and category = ${categoryFilter}` : sql``;
     const [weekRows, categoryRows, staffRows, positionRows, shiftRows] = await Promise.all([
-      sql`select distinct week as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' ${activeCategoryOnly} order by week desc limit 300`,
-      sql`select distinct category as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' ${activeCategoryOnly} order by category asc limit 300`,
-      sql`select distinct staff_name as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and staff_name <> '' ${activeCategoryOnly} order by staff_name asc limit 300`,
-      sql`select distinct position as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and position <> '' ${activeCategoryOnly} order by position asc limit 300`,
-      sql`select distinct shift as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and shift <> '' ${activeCategoryOnly} order by shift asc limit 300`,
+      sql`select distinct week as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and week <> '' ${whereCategory} order by week desc limit 300`,
+      sql`select distinct category as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and category <> '' ${whereWeek} order by category asc limit 300`,
+      sql`select distinct staff_name as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and staff_name <> '' ${whereWeek} ${whereCategory} order by staff_name asc limit 300`,
+      sql`select distinct position as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and position <> '' ${whereWeek} ${whereCategory} order by position asc limit 300`,
+      sql`select distinct shift as value from gp_attendance where organization_id = ${organizationId} and project_code = ${activeProjectCode} and shift <> '' ${whereWeek} ${whereCategory} order by shift asc limit 300`,
     ]);
 
     return {
