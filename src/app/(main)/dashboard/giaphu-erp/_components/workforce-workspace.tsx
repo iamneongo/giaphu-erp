@@ -58,6 +58,7 @@ const attendanceShiftOptions = [
   { key: "morning", label: "Sáng", shortLabel: "S", shift: "Sáng", status: "Sáng", coefficient: 0.5 },
   { key: "afternoon", label: "Chiều", shortLabel: "C", shift: "Chiều", status: "Chiều", coefficient: 0.5 },
 ] as const;
+const attendancePlaceholderStatus = "Chưa chấm";
 
 type AttendanceShiftKey = (typeof attendanceShiftOptions)[number]["key"];
 type AttendanceCellDraft = Record<AttendanceShiftKey, boolean>;
@@ -82,6 +83,10 @@ function getAttendanceShiftKey(row?: AttendanceRow): AttendanceShiftKey | null {
   if (statusText.includes("sang")) return "morning";
   if (statusText.includes("chieu")) return "afternoon";
   return null;
+}
+
+function isAttendancePlaceholder(row: AttendanceRow) {
+  return Number(row.coefficient || 0) === 0 && normalizeSearchText(`${row.status} ${row.shift}`).includes("chua cham");
 }
 
 function isoDate(date: Date) {
@@ -422,6 +427,8 @@ function buildPayrollRows(rows: AttendanceRow[], adjustments: PayrollAdjustmentR
   const adjustmentMap = new Map(adjustments.map((row) => [[row.week, row.category, row.staffName].join("::"), row]));
 
   for (const row of rows) {
+    if (isAttendancePlaceholder(row)) continue;
+
     const key = [row.week, row.category, row.staffName].join("::");
     const current = payrollMap.get(key) ?? {
       id: key,
@@ -942,6 +949,11 @@ function AttendanceBoard({
       return nextParticipants.length ? [...current, ...nextParticipants] : current;
     });
     setSelectedStaffNames([]);
+    setDirtyStaffNames((current) => {
+      const next = new Set(current);
+      for (const row of staffRows) next.add(row.name);
+      return next;
+    });
   }
 
   const updateCell = React.useCallback(
@@ -1020,13 +1032,33 @@ function AttendanceBoard({
         overtimeAmount: index === 0 ? overtimeAmount : 0,
         total: row.total + (index === 0 ? staffExtras.allowance + overtimeAmount : 0),
       }));
+      const rowsToSave = payloadRows.length
+        ? payloadRows
+        : [
+            {
+              projectCode: activeProjectCode,
+              date: weekDates[0] ?? todayIso(),
+              week: selectedWeek,
+              shift: attendancePlaceholderStatus,
+              category: selectedCategory,
+              staffName: staffRow.name,
+              position: staffRow.position || "Nhân công",
+              halfDaySalary: salaryDay,
+              allowance: staffExtras.allowance,
+              overtimeHours: staffExtras.overtimeHours,
+              overtimeAmount,
+              coefficient: 0,
+              total: staffExtras.allowance + overtimeAmount,
+              status: attendancePlaceholderStatus,
+            },
+          ];
 
       const result = await onAction("saveStaffWeeklyAttendance", {
         projectCode: activeProjectCode,
         week: selectedWeek,
         category: selectedCategory,
         staffName: staffRow.name,
-        rows: payloadRows,
+        rows: rowsToSave,
         __returnData: false,
       });
       setSavingStaffName("");
