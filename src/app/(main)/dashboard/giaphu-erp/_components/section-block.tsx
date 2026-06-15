@@ -10,11 +10,7 @@ type SectionBlockProps = {
 
 export function SectionBlock({ title, meta, children }: SectionBlockProps) {
   void title;
+  void meta;
 
-  return (
-    <section className="space-y-3">
-      {meta !== undefined && meta !== null ? <div className="flex justify-end px-1">{meta}</div> : null}
-      {children}
-    </section>
-  );
+  return <section className="space-y-3">{children}</section>;
 }
