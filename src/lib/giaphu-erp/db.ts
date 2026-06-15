@@ -3657,72 +3657,147 @@ async function assertUniqueCatalogItem({
   throw new Error(`${labels.name} "${name}" đã tồn tại. Vui lòng nhập tên khác.`);
 }
 
-async function assertSupplierCatalogCanBeDeleted(item: CatalogItem, organizationId: string) {
+async function getCatalogUsageLabels(item: CatalogItem, organizationId: string) {
   const sql = getSql();
-  const supplierName = item.name.trim();
-  if (!supplierName) return;
+  const normalizedName = item.name.trim();
+  const normalizedCode = item.code.trim();
+  const normalizedSupplier = item.supplier.trim();
 
-  const [materialUsage, materialCatalogUsage] = await Promise.all([
-    sql`
-      select count(*)::int as count
-      from gp_materials
-      where organization_id = ${organizationId} and lower(btrim(supplier)) = lower(${supplierName})
-    `,
-    sql`
-      select count(*)::int as count
-      from gp_catalog_items
-      where organization_id = ${organizationId}
-        and kind in ('vatTu', 'vatTuPhu')
-        and lower(btrim(supplier)) = lower(${supplierName})
-    `,
-  ]);
-  const usedInMaterials = number((materialUsage as Row[])[0]?.count);
-  const usedInMaterialCatalogs = number((materialCatalogUsage as Row[])[0]?.count);
-  const usedIn = [
-    usedInMaterials > 0 ? `Vật tư hiện tại (${usedInMaterials} dòng)` : "",
-    usedInMaterialCatalogs > 0 ? `Danh mục > Vật tư (${usedInMaterialCatalogs} mục)` : "",
-  ].filter(Boolean);
+  if (!normalizedName && !normalizedCode) return [];
 
-  if (!usedIn.length) return;
-
-  throw new Error(`Không thể xóa nhà cung cấp "${item.name}" vì đang được sử dụng ở ${usedIn.join(" và ")}.`);
-}
-
-async function assertCatalogCanBeDeleted(item: CatalogItem, organizationId: string) {
   if (item.kind === "nhaCungCap") {
-    await assertSupplierCatalogCanBeDeleted(item, organizationId);
-    return;
+    const [materialUsage, materialCatalogUsage] = await Promise.all([
+      sql`
+        select count(*)::int as count
+        from gp_materials
+        where organization_id = ${organizationId} and lower(btrim(supplier)) = lower(${normalizedName})
+      `,
+      sql`
+        select count(*)::int as count
+        from gp_catalog_items
+        where organization_id = ${organizationId}
+          and kind in ('vatTu', 'vatTuPhu')
+          and id <> ${item.id}
+          and lower(btrim(supplier)) = lower(${normalizedName})
+      `,
+    ]);
+    const usedInMaterials = number((materialUsage as Row[])[0]?.count);
+    const usedInMaterialCatalogs = number((materialCatalogUsage as Row[])[0]?.count);
+
+    return [
+      usedInMaterials > 0 ? `Vật tư hiện tại (${usedInMaterials} dòng)` : "",
+      usedInMaterialCatalogs > 0 ? `Danh mục > Vật tư (${usedInMaterialCatalogs} mục)` : "",
+    ].filter(Boolean);
   }
 
-  if (item.kind !== "hangMuc") return;
+  if (item.kind === "thauPhu") {
+    const [advanceUsage, contractUsage] = await Promise.all([
+      sql`
+        select count(*)::int as count
+        from gp_subcontractors
+        where organization_id = ${organizationId}
+          and lower(btrim(contractor_name)) = lower(${normalizedName})
+      `,
+      sql`
+        select count(*)::int as count
+        from gp_subcontractor_contracts
+        where organization_id = ${organizationId}
+          and lower(btrim(contractor_name)) = lower(${normalizedName})
+      `,
+    ]);
+    const usedInAdvances = number((advanceUsage as Row[])[0]?.count);
+    const usedInContracts = number((contractUsage as Row[])[0]?.count);
 
-  const sql = getSql();
-  const [laborNormUsage, progressUsage] = await Promise.all([
-    sql`
+    return [
+      usedInAdvances > 0 ? `Thầu phụ > Tạm ứng (${usedInAdvances} dòng)` : "",
+      usedInContracts > 0 ? `Thầu phụ > Hợp đồng (${usedInContracts} dòng)` : "",
+    ].filter(Boolean);
+  }
+
+  if (item.kind === "vatTu" || item.kind === "vatTuPhu") {
+    const materialType = item.kind === "vatTu" ? "VT Chính" : "VT Phụ";
+    const materialUsage = await sql`
       select count(*)::int as count
-      from gp_labor_norms
+      from gp_materials
       where organization_id = ${organizationId}
-        and project_code = ${item.projectCode}
-        and lower(category) = lower(${item.name})
-    `,
-    sql`
-      select count(*)::int as count
-      from gp_progress
-      where organization_id = ${organizationId}
-        and project_code = ${item.projectCode}
-        and lower(category) = lower(${item.name})
-    `,
-  ]);
-  const usedInLaborNorms = number((laborNormUsage as Row[])[0]?.count);
-  const usedInProgress = number((progressUsage as Row[])[0]?.count);
-  const usedIn = [
-    usedInLaborNorms > 0 ? "Nhân công > Định mức" : "",
-    usedInProgress > 0 ? "Nhân công > Tiến độ" : "",
-  ].filter(Boolean);
+        and material_type = ${materialType}
+        and (
+          lower(btrim(material_code)) = lower(${normalizedCode})
+          or (
+            lower(btrim(material_name)) = lower(${normalizedName})
+            ${normalizedSupplier ? sql`and lower(btrim(supplier)) = lower(${normalizedSupplier})` : sql``}
+          )
+        )
+    `;
+    const usedInMaterials = number((materialUsage as Row[])[0]?.count);
 
-  if (!usedIn.length) return;
+    return [usedInMaterials > 0 ? `Vật tư hiện tại (${usedInMaterials} dòng)` : ""].filter(Boolean);
+  }
 
-  throw new Error(`Không thể xóa hạng mục "${item.name}" vì đang được sử dụng ở ${usedIn.join(" và ")}.`);
+  if (item.kind === "hangMuc") {
+    const [materialUsage, attendanceUsage, payrollUsage, subcontractorUsage, laborNormUsage, progressUsage] =
+      await Promise.all([
+        sql`
+          select count(*)::int as count
+          from gp_materials
+          where organization_id = ${organizationId}
+            and project_code = ${item.projectCode}
+            and lower(btrim(category)) = lower(${normalizedName})
+        `,
+        sql`
+          select count(*)::int as count
+          from gp_attendance
+          where organization_id = ${organizationId}
+            and project_code = ${item.projectCode}
+            and lower(btrim(category)) = lower(${normalizedName})
+        `,
+        sql`
+          select count(*)::int as count
+          from gp_payroll_adjustments
+          where organization_id = ${organizationId}
+            and project_code = ${item.projectCode}
+            and lower(btrim(category)) = lower(${normalizedName})
+        `,
+        sql`
+          select count(*)::int as count
+          from gp_subcontractors
+          where organization_id = ${organizationId}
+            and project_code = ${item.projectCode}
+            and lower(btrim(category)) = lower(${normalizedName})
+        `,
+        sql`
+          select count(*)::int as count
+          from gp_labor_norms
+          where organization_id = ${organizationId}
+            and project_code = ${item.projectCode}
+            and lower(btrim(category)) = lower(${normalizedName})
+        `,
+        sql`
+          select count(*)::int as count
+          from gp_progress
+          where organization_id = ${organizationId}
+            and project_code = ${item.projectCode}
+            and lower(btrim(category)) = lower(${normalizedName})
+        `,
+      ]);
+    const usedInMaterials = number((materialUsage as Row[])[0]?.count);
+    const usedInAttendance = number((attendanceUsage as Row[])[0]?.count);
+    const usedInPayroll = number((payrollUsage as Row[])[0]?.count);
+    const usedInSubcontractors = number((subcontractorUsage as Row[])[0]?.count);
+    const usedInLaborNorms = number((laborNormUsage as Row[])[0]?.count);
+    const usedInProgress = number((progressUsage as Row[])[0]?.count);
+
+    return [
+      usedInMaterials > 0 ? `Vật tư (${usedInMaterials} dòng)` : "",
+      usedInAttendance > 0 ? `Nhân công > Chấm công (${usedInAttendance} dòng)` : "",
+      usedInPayroll > 0 ? `Nhân công > Bảng lương (${usedInPayroll} dòng)` : "",
+      usedInSubcontractors > 0 ? `Thầu phụ > Tạm ứng (${usedInSubcontractors} dòng)` : "",
+      usedInLaborNorms > 0 ? "Nhân công > Định mức" : "",
+      usedInProgress > 0 ? "Nhân công > Tiến độ" : "",
+    ].filter(Boolean);
+  }
+
+  return [];
 }
 
 export async function manageCatalog(payload: Record<string, unknown>) {
@@ -3843,7 +3918,9 @@ export async function deleteCatalog(payload: Record<string, unknown>) {
 
   if (!item) throw new Error("Không tìm thấy danh mục cần xóa.");
 
-  if (item.kind === "hangMuc") {
+  const usageLabels = await getCatalogUsageLabels(item, organizationId);
+
+  if (usageLabels.length) {
     await sql`
       update gp_catalog_items
       set archived = true, updated_at = now()
@@ -3852,7 +3929,6 @@ export async function deleteCatalog(payload: Record<string, unknown>) {
     return;
   }
 
-  await assertCatalogCanBeDeleted(item, organizationId);
   await sql`delete from gp_catalog_items where organization_id = ${organizationId} and id = ${id}`;
 }
 
@@ -3869,7 +3945,6 @@ export async function restoreCatalog(payload: Record<string, unknown>) {
   const item = rows[0] ? catalogFromRow(rows[0]) : null;
 
   if (!item) throw new Error("Không tìm thấy danh mục cần khôi phục.");
-  if (item.kind !== "hangMuc") throw new Error("Chỉ hỗ trợ khôi phục hạng mục đã lưu trữ.");
 
   await assertUniqueCatalogItem({
     kind: item.kind,

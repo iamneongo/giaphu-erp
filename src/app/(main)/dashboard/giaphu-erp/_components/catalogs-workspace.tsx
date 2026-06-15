@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Archive, BookOpen, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { BookOpen, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
@@ -154,16 +154,14 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
 
   columns.push({ key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" });
 
-  if (kind === "hangMuc") {
-    columns.push({
-      key: "archived",
-      label: "Trạng thái",
-      accessor: (row) => (row.archived ? "Đã lưu trữ" : "Đang dùng"),
-      render: (row) => (
-        <Badge variant={row.archived ? "secondary" : "outline"}>{row.archived ? "Đã lưu trữ" : "Đang dùng"}</Badge>
-      ),
-    });
-  }
+  columns.push({
+    key: "archived",
+    label: "Trạng thái",
+    accessor: (row) => (row.archived ? "Đã lưu trữ" : "Đang dùng"),
+    render: (row) => (
+      <Badge variant={row.archived ? "secondary" : "outline"}>{row.archived ? "Đã lưu trữ" : "Đang dùng"}</Badge>
+    ),
+  });
 
   if (canManage) {
     columns.push({
@@ -218,18 +216,15 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
             }}
             actions={[
               {
-                label: kind === "hangMuc" ? (row.archived ? "Khôi phục" : "Lưu trữ") : "Xóa",
-                icon: kind === "hangMuc" ? (row.archived ? RotateCcw : Archive) : Trash2,
-                destructive: !(kind === "hangMuc" && row.archived),
+                label: row.archived ? "Khôi phục" : "Xóa / lưu trữ",
+                icon: row.archived ? RotateCcw : Trash2,
+                destructive: !row.archived,
                 onSelect: () => {
-                  const message =
-                    kind === "hangMuc"
-                      ? row.archived
-                        ? `Khôi phục hạng mục "${row.name}"? Dữ liệu và số liệu liên quan sẽ hiển thị lại.`
-                        : `Lưu trữ hạng mục "${row.name}"? Dữ liệu và số liệu liên quan sẽ tạm ẩn khỏi bảng/báo cáo cho đến khi khôi phục.`
-                      : `Xóa "${row.name}" khỏi danh mục?`;
+                  const message = row.archived
+                    ? `Khôi phục "${row.name}"? Mục này sẽ hiển thị lại trong danh mục chọn.`
+                    : `Xóa "${row.name}" khỏi danh mục? Nếu mục này đã phát sinh dữ liệu, hệ thống sẽ lưu trữ thay vì xóa hẳn.`;
                   if (window.confirm(message)) {
-                    return runAction(kind === "hangMuc" && row.archived ? "restoreCatalog" : "deleteCatalog", {
+                    return runAction(row.archived ? "restoreCatalog" : "deleteCatalog", {
                       id: row.id,
                     });
                   }
@@ -284,9 +279,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
             canManage
               ? {
                   confirmMessage: (selectedRows) =>
-                    kind === "hangMuc"
-                      ? `Lưu trữ ${selectedRows.length.toLocaleString("vi-VN")} hạng mục đã chọn? Dữ liệu và số liệu liên quan sẽ tạm ẩn khỏi bảng/báo cáo cho đến khi khôi phục.`
-                      : `Xóa ${selectedRows.length.toLocaleString("vi-VN")} mục đã chọn khỏi danh mục?`,
+                    `Xóa ${selectedRows.length.toLocaleString("vi-VN")} mục đã chọn? Mục đã phát sinh dữ liệu sẽ được lưu trữ thay vì xóa hẳn.`,
                   onDelete: async (selectedRows) => {
                     for (const row of selectedRows.filter((item) => !item.archived)) {
                       await runAction("deleteCatalog", { id: row.id });
@@ -308,18 +301,14 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
             ...(section.showContact
               ? [{ key: "contact", label: "Liên hệ", options: uniqueOptions(rows.map((row) => row.contact)) }]
               : []),
-            ...(kind === "hangMuc"
-              ? [
-                  {
-                    key: "archived",
-                    label: "Trạng thái",
-                    options: [
-                      { label: "Đang dùng", value: "false" },
-                      { label: "Đã lưu trữ", value: "true" },
-                    ],
-                  },
-                ]
-              : []),
+            {
+              key: "archived",
+              label: "Trạng thái",
+              options: [
+                { label: "Đang dùng", value: "false" },
+                { label: "Đã lưu trữ", value: "true" },
+              ],
+            },
           ]}
         />
       </SectionBlock>
