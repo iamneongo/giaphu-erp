@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TableCell, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type {
   AttendanceLockRow,
@@ -1635,10 +1636,23 @@ function AttendanceBoard({
 export function WorkforceWorkspace({ section = "attendance" }: { section?: WorkforceSection }) {
   const { has } = useAuth();
   const { data, activeProjectCode, isSwitchingProject, runAction, scoped } = useGiaPhuErp();
+  const [staffArchiveTab, setStaffArchiveTab] = React.useState<"active" | "archived">("active");
+  const isStaffArchivedTab = staffArchiveTab === "archived";
+  const activeStaffCount = React.useMemo(() => data.staff.filter((row) => !row.resigned).length, [data.staff]);
+  const archivedStaffCount = React.useMemo(() => data.staff.filter((row) => row.resigned).length, [data.staff]);
+  const initialStaffRows = React.useMemo(
+    () => data.staff.filter((row) => row.resigned === isStaffArchivedTab),
+    [data.staff, isStaffArchivedTab],
+  );
+  const staffFixedFilters = React.useMemo(
+    () => ({ resigned: isStaffArchivedTab ? "Đã nghỉ việc" : "Đang làm" }),
+    [isStaffArchivedTab],
+  );
   const paginatedStaff = usePaginatedErpRows<StaffRow>({
     dataset: "staff",
     projectCode: "",
-    initialRows: data.staff,
+    initialRows: initialStaffRows,
+    fixedFilters: staffFixedFilters,
     enabled: section === "staff",
   });
   const paginatedLaborNorms = usePaginatedErpRows<LaborNormRow>({
@@ -2264,7 +2278,16 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
       title: "Nhân sự",
       description: "Nhân sự, đội nhóm, mức lương và trạng thái nghỉ việc.",
       content: (
-        <SectionBlock title="Danh sách nhân sự">
+        <SectionBlock
+          title="Danh sách nhân sự"
+          meta={<Badge variant="outline">{paginatedStaff.total.toLocaleString("vi-VN")} nhân sự</Badge>}
+        >
+          <Tabs value={staffArchiveTab} onValueChange={(value) => setStaffArchiveTab(value as "active" | "archived")}>
+            <TabsList variant="line" className="mb-3 w-fit">
+              <TabsTrigger value="active">Đang làm ({activeStaffCount.toLocaleString("vi-VN")})</TabsTrigger>
+              <TabsTrigger value="archived">Lưu trữ ({archivedStaffCount.toLocaleString("vi-VN")})</TabsTrigger>
+            </TabsList>
+          </Tabs>
           <DataTable
             loading={isSwitchingProject}
             columns={[
@@ -2373,7 +2396,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             detailType="staff"
             selectable
             bulkDeleteAction={
-              canManage
+              canManage && !isStaffArchivedTab
                 ? {
                     confirmMessage: (selectedRows) =>
                       `Lưu trữ ${selectedRows.length.toLocaleString("vi-VN")} nhân sự đã chọn? Hồ sơ và dữ liệu cũ vẫn được giữ lại.`,
@@ -2391,14 +2414,6 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             filters={[
               { key: "team", label: "Đội", options: staffTeamOptions },
               { key: "position", label: "Chức vụ", options: staffPositionOptions },
-              {
-                key: "resigned",
-                label: "Trạng thái",
-                options: [
-                  { label: "Đang làm", value: "Đang làm" },
-                  { label: "Đã nghỉ việc", value: "Đã nghỉ việc" },
-                ],
-              },
             ]}
           />
         </SectionBlock>

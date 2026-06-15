@@ -5,6 +5,7 @@ import * as React from "react";
 import { Archive, BookOpen, Plus, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import { buildNextCatalogCode } from "@/lib/giaphu-erp/catalog-codes";
 import { isValidPhoneNumber } from "@/lib/giaphu-erp/phone";
@@ -27,12 +28,23 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
   const { activeProjectCode, data, isSwitchingProject, runAction } = useGiaPhuErp();
   const section = getCatalogSectionByKind(kind);
   const rows = data.catalogs[kind];
+  const [archiveTab, setArchiveTab] = React.useState<"active" | "archived">("active");
+  const isArchivedTab = archiveTab === "archived";
   const supplierOptions = React.useMemo(() => catalogOptions(data.catalogs.nhaCungCap), [data.catalogs.nhaCungCap]);
-  const catalogFixedFilters = React.useMemo(() => ({ kind }), [kind]);
+  const activeRowsCount = React.useMemo(() => rows.filter((row) => !row.archived).length, [rows]);
+  const archivedRowsCount = React.useMemo(() => rows.filter((row) => row.archived).length, [rows]);
+  const initialTabRows = React.useMemo(
+    () => rows.filter((row) => row.archived === isArchivedTab),
+    [isArchivedTab, rows],
+  );
+  const catalogFixedFilters = React.useMemo(
+    () => ({ kind, archived: isArchivedTab ? "true" : "false" }),
+    [isArchivedTab, kind],
+  );
   const paginatedCatalogs = usePaginatedErpRows<CatalogItem>({
     dataset: "catalogs",
     projectCode: kind === "hangMuc" ? activeProjectCode : "",
-    initialRows: rows,
+    initialRows: initialTabRows,
     fixedFilters: catalogFixedFilters,
   });
   const requiresPhoneContact = kind === "thauPhu" || kind === "nhaCungCap";
@@ -266,7 +278,16 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
         }
       />
 
-      <SectionBlock title={section.navigationTitle} meta={<Badge variant="outline">{rows.length} mục</Badge>}>
+      <SectionBlock
+        title={section.navigationTitle}
+        meta={<Badge variant="outline">{paginatedCatalogs.total.toLocaleString("vi-VN")} mục</Badge>}
+      >
+        <Tabs value={archiveTab} onValueChange={(value) => setArchiveTab(value as "active" | "archived")}>
+          <TabsList variant="line" className="mb-3 w-fit">
+            <TabsTrigger value="active">Hiện tại ({activeRowsCount.toLocaleString("vi-VN")})</TabsTrigger>
+            <TabsTrigger value="archived">Lưu trữ ({archivedRowsCount.toLocaleString("vi-VN")})</TabsTrigger>
+          </TabsList>
+        </Tabs>
         <DataTable
           loading={isSwitchingProject}
           columns={columns}
@@ -276,7 +297,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
           detailType="catalogs"
           selectable
           bulkDeleteAction={
-            canManage
+            canManage && !isArchivedTab
               ? {
                   confirmMessage: (selectedRows) =>
                     `Lưu trữ ${selectedRows.length.toLocaleString("vi-VN")} mục đã chọn? Dữ liệu cũ vẫn được giữ lại.`,
@@ -301,14 +322,6 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
             ...(section.showContact
               ? [{ key: "contact", label: "Liên hệ", options: uniqueOptions(rows.map((row) => row.contact)) }]
               : []),
-            {
-              key: "archived",
-              label: "Trạng thái",
-              options: [
-                { label: "Đang dùng", value: "false" },
-                { label: "Đã lưu trữ", value: "true" },
-              ],
-            },
           ]}
         />
       </SectionBlock>
