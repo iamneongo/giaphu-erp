@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { useAuth } from "@clerk/nextjs";
 import {
+  Archive,
   CalendarCheck,
   Check,
   ChevronsUpDown,
@@ -2327,6 +2328,38 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                                 },
                               ],
                             }}
+                            actions={[
+                              {
+                                label: row.resigned ? "Khôi phục" : "Lưu trữ",
+                                icon: row.resigned ? RefreshCw : Archive,
+                                destructive: false,
+                                onSelect: () => {
+                                  if (row.resigned) {
+                                    if (!window.confirm(`Khôi phục "${row.name}" về trạng thái đang làm?`)) return;
+                                    return runAction("manageStaff", {
+                                      originalId: row.id,
+                                      id: row.id,
+                                      name: row.name,
+                                      team: row.team,
+                                      position: row.position,
+                                      salaryDay: row.salaryDay,
+                                      resigned: false,
+                                      offDate: "",
+                                    });
+                                  }
+
+                                  if (
+                                    !window.confirm(
+                                      `Lưu trữ "${row.name}"? Hồ sơ và dữ liệu chấm công cũ vẫn được giữ lại.`,
+                                    )
+                                  ) {
+                                    return;
+                                  }
+
+                                  return runAction("deleteStaff", { id: row.id });
+                                },
+                              },
+                            ]}
                           />
                         </div>
                       ),
@@ -2339,11 +2372,33 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
             serverSide={paginatedStaff.serverSide}
             detailType="staff"
             selectable
+            bulkDeleteAction={
+              canManage
+                ? {
+                    confirmMessage: (selectedRows) =>
+                      `Lưu trữ ${selectedRows.length.toLocaleString("vi-VN")} nhân sự đã chọn? Hồ sơ và dữ liệu cũ vẫn được giữ lại.`,
+                    onDelete: async (selectedRows) => {
+                      for (const row of selectedRows.filter((item) => !item.resigned)) {
+                        await runAction("deleteStaff", { id: row.id });
+                      }
+                      paginatedStaff.refresh();
+                    },
+                  }
+                : undefined
+            }
             exportFileName="nhan-su"
             searchPlaceholder="Tìm theo mã, tên, đội..."
             filters={[
               { key: "team", label: "Đội", options: staffTeamOptions },
               { key: "position", label: "Chức vụ", options: staffPositionOptions },
+              {
+                key: "resigned",
+                label: "Trạng thái",
+                options: [
+                  { label: "Đang làm", value: "Đang làm" },
+                  { label: "Đã nghỉ việc", value: "Đã nghỉ việc" },
+                ],
+              },
             ]}
           />
         </SectionBlock>

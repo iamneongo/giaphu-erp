@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { BookOpen, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, BookOpen, Plus, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
@@ -216,13 +216,13 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
             }}
             actions={[
               {
-                label: row.archived ? "Khôi phục" : "Xóa / lưu trữ",
-                icon: row.archived ? RotateCcw : Trash2,
-                destructive: !row.archived,
+                label: row.archived ? "Khôi phục" : "Lưu trữ",
+                icon: row.archived ? RotateCcw : Archive,
+                destructive: false,
                 onSelect: () => {
                   const message = row.archived
                     ? `Khôi phục "${row.name}"? Mục này sẽ hiển thị lại trong danh mục chọn.`
-                    : `Xóa "${row.name}" khỏi danh mục? Nếu mục này đã phát sinh dữ liệu, hệ thống sẽ lưu trữ thay vì xóa hẳn.`;
+                    : `Lưu trữ "${row.name}"? Mục này sẽ ẩn khỏi danh mục chọn nhưng dữ liệu cũ vẫn được giữ lại.`;
                   if (window.confirm(message)) {
                     return runAction(row.archived ? "restoreCatalog" : "deleteCatalog", {
                       id: row.id,
@@ -279,7 +279,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
             canManage
               ? {
                   confirmMessage: (selectedRows) =>
-                    `Xóa ${selectedRows.length.toLocaleString("vi-VN")} mục đã chọn? Mục đã phát sinh dữ liệu sẽ được lưu trữ thay vì xóa hẳn.`,
+                    `Lưu trữ ${selectedRows.length.toLocaleString("vi-VN")} mục đã chọn? Dữ liệu cũ vẫn được giữ lại.`,
                   onDelete: async (selectedRows) => {
                     for (const row of selectedRows.filter((item) => !item.archived)) {
                       await runAction("deleteCatalog", { id: row.id });

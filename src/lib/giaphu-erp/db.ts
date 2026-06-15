@@ -3918,18 +3918,11 @@ export async function deleteCatalog(payload: Record<string, unknown>) {
 
   if (!item) throw new Error("Không tìm thấy danh mục cần xóa.");
 
-  const usageLabels = await getCatalogUsageLabels(item, organizationId);
-
-  if (usageLabels.length) {
-    await sql`
-      update gp_catalog_items
-      set archived = true, updated_at = now()
-      where organization_id = ${organizationId} and id = ${id}
-    `;
-    return;
-  }
-
-  await sql`delete from gp_catalog_items where organization_id = ${organizationId} and id = ${id}`;
+  await sql`
+    update gp_catalog_items
+    set archived = true, updated_at = now()
+    where organization_id = ${organizationId} and id = ${id}
+  `;
 }
 
 export async function restoreCatalog(payload: Record<string, unknown>) {
@@ -4010,8 +4003,24 @@ export async function manageStaff(payload: Record<string, unknown>) {
   `;
 }
 
-export async function deleteStaff(_payload: Record<string, unknown>) {
-  throw new Error("Không thể xóa nhân sự. Hãy đánh dấu Đã nghỉ việc và chọn thời gian nghỉ để lưu trữ hồ sơ nhân sự.");
+export async function deleteStaff(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const organizationId = requireOrganizationId(payload.organizationId);
+  const id = text(payload.id).trim();
+  const offDate = dateOnly(payload.offDate) || dateOnly(new Date());
+
+  if (!id) throw new Error("Thiếu nhân sự cần lưu trữ.");
+
+  const rows = (await sql`
+    update gp_staff
+    set resigned = true,
+        off_date = coalesce(off_date, ${offDate || null}),
+        updated_at = now()
+    where organization_id = ${organizationId} and id = ${id}
+    returning id
+  `) as Row[];
+
+  if (!rows.length) throw new Error("Không tìm thấy nhân sự cần lưu trữ.");
 }
 
 export async function saveMaterial(payload: Record<string, unknown>) {
