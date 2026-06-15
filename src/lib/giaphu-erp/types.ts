@@ -145,6 +145,7 @@ export interface ProjectRow {
 
 export interface CatalogItem {
   id: string;
+  projectCode: string;
   kind: "hangMuc" | "vatTu" | "vatTuPhu" | "thauPhu" | "nhaCungCap";
   code: string;
   name: string;

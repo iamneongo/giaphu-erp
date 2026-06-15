@@ -332,6 +332,7 @@ function projectFromRow(row: Row): ProjectRow {
 function catalogFromRow(row: Row): CatalogItem {
   return {
     id: text(row.id),
+    projectCode: text(row.project_code),
     kind: text(row.kind) as CatalogItem["kind"],
     code: text(row.code),
     name: text(row.name),
@@ -556,13 +557,20 @@ function emptySummary(): CostSummary {
   };
 }
 
-function excludeArchivedCategory(sql: any, organizationId: string, categoryColumn = sql`category`) {
+function excludeArchivedCategory(
+  sql: any,
+  organizationId: string,
+  activeProjectCode?: string,
+  categoryColumn = sql`category`,
+) {
+  const projectCode = text(activeProjectCode).trim();
   return sql`
     and not exists (
       select 1
       from gp_catalog_items archived_category
       where archived_category.organization_id = ${organizationId}
         and archived_category.kind = 'hangMuc'
+        ${projectCode ? sql`and archived_category.project_code = ${projectCode}` : sql``}
         and archived_category.archived = true
         and lower(btrim(archived_category.name)) = lower(btrim(${categoryColumn}))
     )
@@ -587,28 +595,28 @@ async function getGiaPhuSummaries(activeProjectCode?: string, organizationId?: s
       select project_code, material_type, coalesce(sum(quantity * price), 0)::float8 as total
       from gp_materials
       where organization_id = ${orgId} and project_code = ${projectCode}
-        ${excludeArchivedCategory(sql, orgId)}
+        ${excludeArchivedCategory(sql, orgId, projectCode)}
       group by project_code, material_type
     `,
     sql`
       select project_code, coalesce(sum(total), 0)::float8 as total
       from gp_attendance
       where organization_id = ${orgId} and project_code = ${projectCode}
-        ${excludeArchivedCategory(sql, orgId)}
+        ${excludeArchivedCategory(sql, orgId, projectCode)}
       group by project_code
     `,
     sql`
       select project_code, coalesce(sum(adjustment), 0)::float8 as total
       from gp_payroll_adjustments
       where organization_id = ${orgId} and project_code = ${projectCode}
-        ${excludeArchivedCategory(sql, orgId)}
+        ${excludeArchivedCategory(sql, orgId, projectCode)}
       group by project_code
     `,
     sql`
       select project_code, coalesce(sum(advance), 0)::float8 as total
       from gp_subcontractors
       where organization_id = ${orgId} and project_code = ${projectCode}
-        ${excludeArchivedCategory(sql, orgId)}
+        ${excludeArchivedCategory(sql, orgId, projectCode)}
       group by project_code
     `,
     sql`
@@ -669,6 +677,7 @@ async function createGiaPhuSchemaInternal() {
   await sql`create table if not exists gp_catalog_items (
     id text primary key,
     organization_id text not null default '',
+    project_code text not null default '',
     kind text not null,
     code text not null,
     name text not null,
@@ -684,8 +693,10 @@ async function createGiaPhuSchemaInternal() {
 
   await sql`drop index if exists gp_catalog_items_kind_name_idx`;
   await sql`drop index if exists gp_catalog_items_org_kind_name_idx`;
+  await sql`drop index if exists gp_catalog_items_org_project_hangmuc_name_idx`;
   await sql`drop index if exists gp_catalog_items_org_kind_name_supplier_idx`;
-  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name)) where archived = false and kind not in ('vatTu', 'vatTuPhu')`;
+  await sql`create unique index if not exists gp_catalog_items_org_project_hangmuc_name_idx on gp_catalog_items (organization_id, project_code, lower(name)) where archived = false and kind = 'hangMuc'`;
+  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name)) where archived = false and kind not in ('vatTu', 'vatTuPhu', 'hangMuc')`;
   await sql`create unique index if not exists gp_catalog_items_org_kind_name_supplier_idx on gp_catalog_items (organization_id, kind, lower(name), lower(supplier)) where archived = false and kind in ('vatTu', 'vatTuPhu')`;
 
   await sql`create table if not exists gp_staff (
@@ -950,6 +961,7 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_projects add column if not exists id bigserial`;
   await sql`alter table gp_projects add column if not exists pin_hash text not null default ''`;
   await sql`alter table gp_catalog_items add column if not exists organization_id text not null default ''`;
+  await sql`alter table gp_catalog_items add column if not exists project_code text not null default ''`;
   await sql`alter table gp_catalog_items add column if not exists supplier text not null default ''`;
   await sql`alter table gp_catalog_items add column if not exists sort_order integer not null default 0`;
   await sql`alter table gp_catalog_items add column if not exists archived boolean not null default false`;
@@ -977,8 +989,11 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_progress add column if not exists organization_id text not null default ''`;
   await sql`drop index if exists gp_catalog_items_kind_name_idx`;
   await sql`drop index if exists gp_catalog_items_org_kind_name_idx`;
+  await sql`drop index if exists gp_catalog_items_org_project_hangmuc_name_idx`;
   await sql`drop index if exists gp_catalog_items_org_kind_name_supplier_idx`;
-  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name)) where archived = false and kind not in ('vatTu', 'vatTuPhu')`;
+  await migrateProjectScopedCategories();
+  await sql`create unique index if not exists gp_catalog_items_org_project_hangmuc_name_idx on gp_catalog_items (organization_id, project_code, lower(name)) where archived = false and kind = 'hangMuc'`;
+  await sql`create unique index if not exists gp_catalog_items_org_kind_name_idx on gp_catalog_items (organization_id, kind, lower(name)) where archived = false and kind not in ('vatTu', 'vatTuPhu', 'hangMuc')`;
   await sql`create unique index if not exists gp_catalog_items_org_kind_name_supplier_idx on gp_catalog_items (organization_id, kind, lower(name), lower(supplier)) where archived = false and kind in ('vatTu', 'vatTuPhu')`;
   await sql`drop index if exists gp_subcontractor_contracts_project_name_idx`;
   await sql`create unique index if not exists gp_subcontractor_contracts_org_project_name_idx on gp_subcontractor_contracts (organization_id, project_code, lower(contractor_name))`;
@@ -986,6 +1001,50 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_progress drop constraint if exists gp_progress_project_code_category_key`;
   await sql`create unique index if not exists gp_labor_norms_org_project_category_idx on gp_labor_norms (organization_id, project_code, category)`;
   await sql`create unique index if not exists gp_progress_org_project_category_idx on gp_progress (organization_id, project_code, category)`;
+}
+
+async function migrateProjectScopedCategories() {
+  const sql = getSql();
+
+  await sql`
+    insert into gp_catalog_items (
+      id,
+      organization_id,
+      project_code,
+      kind,
+      code,
+      name,
+      unit,
+      supplier,
+      contact,
+      note,
+      sort_order,
+      archived,
+      created_at,
+      updated_at
+    )
+    select
+      legacy.organization_id || ':' || project.code || ':hangMuc:' || coalesce(nullif(legacy.code, ''), legacy.id),
+      legacy.organization_id,
+      project.code,
+      legacy.kind,
+      legacy.code,
+      legacy.name,
+      legacy.unit,
+      legacy.supplier,
+      legacy.contact,
+      legacy.note,
+      legacy.sort_order,
+      legacy.archived,
+      legacy.created_at,
+      now()
+    from gp_catalog_items legacy
+    join gp_projects project
+      on project.organization_id = legacy.organization_id
+    where legacy.kind = 'hangMuc'
+      and legacy.project_code = ''
+    on conflict do nothing
+  `;
 }
 
 async function cleanupOrphanDocumentReferences() {
@@ -1188,7 +1247,7 @@ async function ensureGiaPhuPerformanceIndexes() {
     await sql`create index if not exists gp_projects_org_id_idx on gp_projects (organization_id, id)`;
     await sql`create index if not exists gp_projects_org_date_idx on gp_projects (organization_id, updated_at desc, code asc)`;
     await sql`drop index if exists gp_catalog_items_org_kind_idx`;
-    await sql`create index if not exists gp_catalog_items_org_kind_idx on gp_catalog_items (organization_id, kind, archived, sort_order, code, name)`;
+    await sql`create index if not exists gp_catalog_items_org_kind_idx on gp_catalog_items (organization_id, kind, project_code, archived, sort_order, code, name)`;
     await sql`create index if not exists gp_catalog_items_org_kind_supplier_idx on gp_catalog_items (organization_id, kind, supplier)`;
     await sql`create index if not exists gp_staff_org_idx on gp_staff (organization_id, id asc, name asc)`;
     await sql`create index if not exists gp_materials_project_date_idx on gp_materials (project_code, work_date desc, id desc)`;
@@ -1245,14 +1304,8 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
   const organizationId = organizationIdFrom(options.organizationId);
   if (!organizationId) return emptyDashboardData();
 
-  const [projects, catalogRows, staffRows] = await Promise.all([
+  const [projects, staffRows] = await Promise.all([
     getGiaPhuProjectList({ organizationId }),
-    sql`
-      select *
-      from gp_catalog_items
-      where organization_id = ${organizationId}
-      order by kind asc, archived asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
-    `,
     sql`select * from gp_staff where organization_id = ${organizationId} order by id asc, name asc`,
   ]);
   const requestedProject = text(options.activeProjectCode).trim();
@@ -1260,7 +1313,22 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
     projects.find((project) => project.code === requestedProject || project.id === requestedProject)?.code ??
     projects[0]?.code ??
     "";
-  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
+  const catalogRows = activeProjectCode
+    ? await sql`
+        select *
+        from gp_catalog_items
+        where organization_id = ${organizationId}
+          and (kind <> 'hangMuc' or project_code = ${activeProjectCode})
+        order by kind asc, archived asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
+      `
+    : await sql`
+        select *
+        from gp_catalog_items
+        where organization_id = ${organizationId}
+          and kind <> 'hangMuc'
+        order by kind asc, archived asc, case when sort_order > 0 then 0 else 1 end asc, sort_order asc, code asc, name asc
+      `;
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId, activeProjectCode);
 
   const [
     materialRows,
@@ -1863,7 +1931,7 @@ export async function getGiaPhuOverviewInsights(options: DashboardDataOptions = 
       },
     };
   }
-  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId, activeProjectCode);
 
   const [
     materialBreakdown,
@@ -2094,7 +2162,7 @@ export async function getGiaPhuMaterialDebtSummary(
     where organization_id = ${organizationId}
       and project_code = ${activeProjectCode}
       and (payment_status <> 'Đã TT' or debt = 'Có')
-      ${excludeArchivedCategory(sql, organizationId)}
+      ${excludeArchivedCategory(sql, organizationId, activeProjectCode)}
   `) as Row[];
 
   return {
@@ -2130,7 +2198,7 @@ export async function getGiaPhuReportsInsights(options: DashboardDataOptions = {
       },
     };
   }
-  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId, activeProjectCode);
 
   const [
     monthlyMaterialRows,
@@ -2340,7 +2408,7 @@ export async function getGiaPhuReportsData(
   const laborOffset = laborState.pageIndex * laborState.pageSize;
   const materialOffset = materialState.pageIndex * materialState.pageSize;
   const operationOffset = operationState.pageIndex * operationState.pageSize;
-  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId, activeProjectCode);
   const laborPattern = `%${laborState.search}%`;
   const materialPattern = `%${materialState.search}%`;
   const operationPattern = `%${operationState.search}%`;
@@ -2607,7 +2675,7 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
   const search = text(options.search).trim();
   const pattern = `%${search}%`;
   const filterValue = (key: string) => text(options.filters?.[key]).trim();
-  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId, activeProjectCode);
 
   if (options.dataset === "projects") {
     const whereSearch = search
@@ -2645,6 +2713,10 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
       ? sql`and lower(concat_ws(' ', kind, code, name, unit, supplier, contact, note)) like lower(${pattern})`
       : sql``;
     const kindFilter = filterValue("kind");
+    const catalogProjectScope =
+      kindFilter === "hangMuc"
+        ? sql`and project_code = ${activeProjectCode}`
+        : sql`and (kind <> 'hangMuc' or project_code = ${activeProjectCode})`;
     const unitFilter = filterValue("unit");
     const supplierFilter = filterValue("supplier");
     const contactFilter = filterValue("contact");
@@ -2657,11 +2729,11 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
       ${archivedFilter === "true" ? sql`and archived = true` : archivedFilter === "false" ? sql`and archived = false` : sql``}
     `;
     const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_catalog_items where organization_id = ${organizationId} ${whereSearch} ${whereFilters}`,
+      sql`select count(*)::int as total from gp_catalog_items where organization_id = ${organizationId} ${catalogProjectScope} ${whereSearch} ${whereFilters}`,
       sql`
         select *
         from gp_catalog_items
-        where organization_id = ${organizationId} ${whereSearch} ${whereFilters}
+        where organization_id = ${organizationId} ${catalogProjectScope} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "catalogs", options.sorting)}
         limit ${pageSize}
         offset ${offset}
@@ -3147,15 +3219,19 @@ export async function getGiaPhuFilterOptions(options: {
   if (options.dataset === "catalogs") {
     const kindFilter = fixedFilterValue("kind");
     const whereKind = kindFilter ? sql`and kind = ${kindFilter}` : sql``;
+    const catalogProjectScope =
+      kindFilter === "hangMuc"
+        ? sql`and project_code = ${activeProjectCode}`
+        : sql`and (kind <> 'hangMuc' or project_code = ${activeProjectCode})`;
     const [kindRows, unitRows, supplierRows, contactRows, archivedRows] = await Promise.all([
       sql`select distinct kind as value from gp_catalog_items where organization_id = ${organizationId} and kind <> '' order by kind asc limit 300`,
-      sql`select distinct unit as value from gp_catalog_items where organization_id = ${organizationId} and unit <> '' ${whereKind} order by unit asc limit 300`,
-      sql`select distinct supplier as value from gp_catalog_items where organization_id = ${organizationId} and supplier <> '' ${whereKind} order by supplier asc limit 300`,
-      sql`select distinct contact as value from gp_catalog_items where organization_id = ${organizationId} and contact <> '' ${whereKind} order by contact asc limit 300`,
+      sql`select distinct unit as value from gp_catalog_items where organization_id = ${organizationId} and unit <> '' ${catalogProjectScope} ${whereKind} order by unit asc limit 300`,
+      sql`select distinct supplier as value from gp_catalog_items where organization_id = ${organizationId} and supplier <> '' ${catalogProjectScope} ${whereKind} order by supplier asc limit 300`,
+      sql`select distinct contact as value from gp_catalog_items where organization_id = ${organizationId} and contact <> '' ${catalogProjectScope} ${whereKind} order by contact asc limit 300`,
       sql`
         select distinct archived::text as value
         from gp_catalog_items
-        where organization_id = ${organizationId} ${whereKind}
+        where organization_id = ${organizationId} ${catalogProjectScope} ${whereKind}
         order by value asc
         limit 2
       `,
@@ -3190,7 +3266,7 @@ export async function getGiaPhuFilterOptions(options: {
   }
 
   if (!activeProjectCode) return {};
-  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId, activeProjectCode);
 
   if (options.dataset === "documents") {
     await ensureDocumentFileColumns();
@@ -3486,13 +3562,20 @@ export async function deletePayment(payload: Record<string, unknown>) {
   await deleteAttachmentDocumentIfUnused(number(row?.file_id), organizationId);
 }
 
-async function getNextCatalogCode(kind: CatalogItem["kind"], organizationId: string) {
+async function getNextCatalogCode(kind: CatalogItem["kind"], organizationId: string, projectCode = "") {
   const sql = getSql();
-  const rows = (await sql`
-    select code
-    from gp_catalog_items
-    where organization_id = ${organizationId} and kind = ${kind}
-  `) as Row[];
+  const rows =
+    kind === "hangMuc"
+      ? ((await sql`
+          select code
+          from gp_catalog_items
+          where organization_id = ${organizationId} and kind = ${kind} and project_code = ${projectCode}
+        `) as Row[])
+      : ((await sql`
+          select code
+          from gp_catalog_items
+          where organization_id = ${organizationId} and kind = ${kind}
+        `) as Row[]);
 
   return buildNextCatalogCode(
     kind,
@@ -3507,6 +3590,7 @@ async function assertUniqueCatalogItem({
   supplier,
   originalId,
   organizationId,
+  projectCode,
 }: {
   kind: CatalogItem["kind"];
   code: string;
@@ -3514,9 +3598,11 @@ async function assertUniqueCatalogItem({
   supplier: string;
   originalId: string;
   organizationId: string;
+  projectCode?: string;
 }) {
   const sql = getSql();
   const isMaterialCatalog = kind === "vatTu" || kind === "vatTuPhu";
+  const normalizedProjectCode = text(projectCode).trim();
   const duplicateRows = isMaterialCatalog
     ? ((await sql`
         select id, code, name, supplier
@@ -3531,7 +3617,19 @@ async function assertUniqueCatalogItem({
           )
         limit 1
       `) as Row[])
-    : ((await sql`
+    : kind === "hangMuc"
+      ? ((await sql`
+          select id, code, name, supplier
+          from gp_catalog_items
+          where organization_id = ${organizationId}
+            and kind = ${kind}
+            and project_code = ${normalizedProjectCode}
+            and archived = false
+            and id <> ${originalId}
+            and (lower(code) = lower(${code}) or lower(btrim(name)) = lower(btrim(${name})))
+          limit 1
+        `) as Row[])
+      : ((await sql`
         select id, code, name, supplier
         from gp_catalog_items
         where organization_id = ${organizationId}
@@ -3603,12 +3701,16 @@ async function assertCatalogCanBeDeleted(item: CatalogItem, organizationId: stri
     sql`
       select count(*)::int as count
       from gp_labor_norms
-      where organization_id = ${organizationId} and lower(category) = lower(${item.name})
+      where organization_id = ${organizationId}
+        and project_code = ${item.projectCode}
+        and lower(category) = lower(${item.name})
     `,
     sql`
       select count(*)::int as count
       from gp_progress
-      where organization_id = ${organizationId} and lower(category) = lower(${item.name})
+      where organization_id = ${organizationId}
+        and project_code = ${item.projectCode}
+        and lower(category) = lower(${item.name})
     `,
   ]);
   const usedInLaborNorms = number((laborNormUsage as Row[])[0]?.count);
@@ -3629,9 +3731,13 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   const kind = text(payload.kind) as CatalogItem["kind"];
   if (!catalogKinds.includes(kind)) throw new Error("Loại danh mục không hợp lệ.");
   const labels = catalogFieldLabels[kind];
+  const projectCode = kind === "hangMuc" ? text(payload.projectCode).trim() : "";
+  if (kind === "hangMuc" && !projectCode) throw new Error("Thiếu công trình cho hạng mục.");
   const name = text(payload.name).trim();
   if (!name) throw new Error(`Thiếu ${labels.name.toLowerCase()}.`);
-  const code = normalizeCatalogCode(text(payload.code).trim() || (await getNextCatalogCode(kind, organizationId)));
+  const code = normalizeCatalogCode(
+    text(payload.code).trim() || (await getNextCatalogCode(kind, organizationId, projectCode)),
+  );
   if (!code) throw new Error(`Thiếu ${labels.code.toLowerCase()}.`);
   const unit = text(payload.unit).trim();
   const supplier = kind === "vatTu" || kind === "vatTuPhu" ? text(payload.supplier).trim() : "";
@@ -3649,7 +3755,8 @@ export async function manageCatalog(payload: Record<string, unknown>) {
     if (!isValidPhoneNumber(contact)) throw new Error("Liên hệ phải là số điện thoại hợp lệ.");
   }
 
-  const nextId = `${organizationId}:${kind}:${code}`;
+  const nextId =
+    kind === "hangMuc" ? `${organizationId}:${projectCode}:hangMuc:${code}` : `${organizationId}:${kind}:${code}`;
   const isExcelImport = sortOrder > 0;
   const originalId = text(payload.originalId || payload.id);
   const uniqueCheckOriginalId = originalId || (isExcelImport ? nextId : "");
@@ -3661,12 +3768,14 @@ export async function manageCatalog(payload: Record<string, unknown>) {
     supplier,
     originalId: uniqueCheckOriginalId,
     organizationId,
+    projectCode,
   });
 
   if (originalId) {
     await sql`
       update gp_catalog_items
       set id = ${nextId},
+          project_code = ${projectCode},
           kind = ${kind},
           code = ${code},
           name = ${name},
@@ -3684,10 +3793,11 @@ export async function manageCatalog(payload: Record<string, unknown>) {
 
   if (isExcelImport) {
     await sql`
-      insert into gp_catalog_items (id, organization_id, kind, code, name, unit, supplier, contact, note, sort_order, archived, updated_at)
-      values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, ${sortOrder}, false, now())
+      insert into gp_catalog_items (id, organization_id, project_code, kind, code, name, unit, supplier, contact, note, sort_order, archived, updated_at)
+      values (${nextId}, ${organizationId}, ${projectCode}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, ${sortOrder}, false, now())
       on conflict (id) do update
-      set kind = excluded.kind,
+      set project_code = excluded.project_code,
+          kind = excluded.kind,
           code = excluded.code,
           name = excluded.name,
           unit = excluded.unit,
@@ -3702,10 +3812,11 @@ export async function manageCatalog(payload: Record<string, unknown>) {
   }
 
   await sql`
-    insert into gp_catalog_items (id, organization_id, kind, code, name, unit, supplier, contact, note, sort_order, archived, updated_at)
-    values (${nextId}, ${organizationId}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, ${sortOrder}, false, now())
+    insert into gp_catalog_items (id, organization_id, project_code, kind, code, name, unit, supplier, contact, note, sort_order, archived, updated_at)
+    values (${nextId}, ${organizationId}, ${projectCode}, ${kind}, ${code}, ${name}, ${unit}, ${supplier}, ${contact}, ${note}, ${sortOrder}, false, now())
     on conflict (id) do update
-    set kind = excluded.kind,
+    set project_code = excluded.project_code,
+        kind = excluded.kind,
         code = excluded.code,
         name = excluded.name,
         unit = excluded.unit,
@@ -3767,6 +3878,7 @@ export async function restoreCatalog(payload: Record<string, unknown>) {
     supplier: item.supplier,
     originalId: item.id,
     organizationId,
+    projectCode: item.projectCode,
   });
   await sql`
     update gp_catalog_items

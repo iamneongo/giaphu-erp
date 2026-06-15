@@ -153,6 +153,9 @@ function buildImportConfig(target: ImportTarget, query: Record<string, string>, 
     const section = getCatalogSectionByKind(kind);
     const fields: ExcelImportField[] = [
       { key: "kind", label: "Loại", hidden: true, defaultValue: section.kind },
+      ...(kind === "hangMuc"
+        ? [{ key: "projectCode", label: "Công trình", hidden: true, defaultValue: activeProjectCode }]
+        : []),
       { key: "code", label: section.codeLabel, aliases: ["Mã", "Ma", "Code"] },
       { key: "name", label: section.nameLabel, aliases: ["Tên", "Ten", "Name"], required: true },
     ];

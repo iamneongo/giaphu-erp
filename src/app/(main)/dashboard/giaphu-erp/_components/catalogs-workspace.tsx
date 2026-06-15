@@ -24,14 +24,14 @@ import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
 
 export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
-  const { data, isSwitchingProject, runAction } = useGiaPhuErp();
+  const { activeProjectCode, data, isSwitchingProject, runAction } = useGiaPhuErp();
   const section = getCatalogSectionByKind(kind);
   const rows = data.catalogs[kind];
   const supplierOptions = React.useMemo(() => catalogOptions(data.catalogs.nhaCungCap), [data.catalogs.nhaCungCap]);
   const catalogFixedFilters = React.useMemo(() => ({ kind }), [kind]);
   const paginatedCatalogs = usePaginatedErpRows<CatalogItem>({
     dataset: "catalogs",
-    projectCode: "",
+    projectCode: kind === "hangMuc" ? activeProjectCode : "",
     initialRows: rows,
     fixedFilters: catalogFixedFilters,
   });
@@ -51,6 +51,9 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.catalogsManage);
   const fields: FormFieldDefinition[] = [
     { name: "kind", label: "Loại danh mục", type: "hidden", value: section.kind },
+    ...(kind === "hangMuc"
+      ? [{ name: "projectCode", label: "Công trình", type: "hidden" as const, value: activeProjectCode }]
+      : []),
     {
       name: "code",
       label: section.codeLabel,
@@ -87,6 +90,9 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
 
   const importFields: ExcelImportField[] = [
     { key: "kind", label: "Loại", hidden: true, defaultValue: section.kind },
+    ...(kind === "hangMuc"
+      ? [{ key: "projectCode", label: "Công trình", hidden: true, defaultValue: activeProjectCode }]
+      : []),
     { key: "code", label: section.codeLabel, aliases: ["Mã", "Ma", "Code"] },
     { key: "name", label: section.nameLabel, aliases: ["Tên", "Ten", "Name"], required: true },
   ];
@@ -177,6 +183,16 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
                 { name: "originalId", label: "ID", type: "hidden", value: row.id },
                 { name: "archived", label: "Lưu trữ", type: "hidden", value: row.archived ? "true" : "false" },
                 { name: "kind", label: "Loại danh mục", type: "hidden", value: section.kind },
+                ...(kind === "hangMuc"
+                  ? [
+                      {
+                        name: "projectCode",
+                        label: "Công trình",
+                        type: "hidden" as const,
+                        value: row.projectCode || activeProjectCode,
+                      },
+                    ]
+                  : []),
                 { name: "code", label: section.codeLabel, required: true, value: row.code },
                 { name: "name", label: section.nameLabel, required: true, value: row.name },
                 ...(section.showUnit ? [{ name: "unit", label: "Đơn vị", required: true, value: row.unit }] : []),
