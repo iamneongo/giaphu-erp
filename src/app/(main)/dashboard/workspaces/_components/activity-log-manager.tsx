@@ -73,6 +73,50 @@ const activityActions = [
   "verifyProjectPin",
 ];
 
+const activityActionLabels: Record<string, string> = {
+  saveProject: "Lưu công trình",
+  deleteProject: "Xóa công trình",
+  saveContract: "Lưu hợp đồng",
+  deleteContract: "Xóa hợp đồng",
+  savePayment: "Lưu thu tiền",
+  deletePayment: "Xóa thu tiền",
+  manageCatalog: "Lưu danh mục",
+  deleteCatalog: "Lưu trữ danh mục",
+  restoreCatalog: "Khôi phục danh mục",
+  manageStaff: "Lưu nhân sự",
+  deleteStaff: "Lưu trữ nhân sự",
+  saveMaterial: "Lưu vật tư",
+  deleteMaterial: "Xóa vật tư",
+  saveWeeklyAttendance: "Lưu chấm công",
+  saveStaffWeeklyAttendance: "Lưu chấm công nhân sự",
+  deleteAttendanceRow: "Xóa dòng chấm công",
+  closeAttendance: "Kết sổ chấm công",
+  reopenAttendance: "Mở khóa chấm công",
+  saveSubcontractor: "Lưu tạm ứng thầu phụ",
+  deleteSubcontractor: "Xóa tạm ứng thầu phụ",
+  saveSubcontractorContract: "Lưu hợp đồng thầu phụ",
+  deleteSubcontractorContract: "Xóa hợp đồng thầu phụ",
+  approveSubcontractorContract: "Duyệt hợp đồng thầu phụ",
+  saveOperation: "Lưu vận hành",
+  deleteOperation: "Xóa vận hành",
+  saveLaborNorm: "Lưu định mức",
+  deleteLaborNorm: "Xóa định mức",
+  saveProgress: "Lưu tiến độ",
+  deleteProgress: "Xóa tiến độ",
+  saveDocument: "Lưu hồ sơ",
+  deleteDocument: "Xóa hồ sơ",
+  bulkImport: "Import Excel",
+  syncPermissions: "Đồng bộ quyền",
+  createRole: "Tạo vai trò",
+  updateRolePermissions: "Cập nhật quyền vai trò",
+  deleteRole: "Xóa vai trò",
+  updateMembershipRole: "Cập nhật vai trò thành viên",
+  inviteMember: "Mời thành viên",
+  revokeInvitation: "Thu hồi lời mời",
+  removeMembership: "Xóa thành viên khỏi tổ chức",
+  verifyProjectPin: "Mở khóa công trình",
+};
+
 function formatDateTime(value: string) {
   if (!value) return "-";
   const date = new Date(value);
@@ -169,7 +213,9 @@ export function ActivityLogManager() {
             <div className="truncate font-medium" title={row.summary}>
               {row.summary}
             </div>
-            <div className="truncate text-muted-foreground text-xs">{row.action}</div>
+            <div className="truncate text-muted-foreground text-xs">
+              {activityActionLabels[row.action] ?? "Thao tác ERP"}
+            </div>
           </div>
         ),
       },
@@ -203,7 +249,7 @@ export function ActivityLogManager() {
         key: "action",
         label: "Thao tác",
         allLabel: "Tất cả thao tác",
-        options: activityActions.map((action) => ({ label: action, value: action })),
+        options: activityActions.map((action) => ({ label: activityActionLabels[action] ?? action, value: action })),
       },
     ],
     [],
