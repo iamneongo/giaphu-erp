@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 import {
   canAccessAnyErpPermission,
@@ -27,6 +27,7 @@ import {
   deleteStaff,
   deleteSubcontractor,
   deleteSubcontractorContract,
+  getGiaPhuActivityLogs,
   getGiaPhuDashboardData,
   getGiaPhuFilterOptions,
   getGiaPhuMaterialDebtSummary,
@@ -38,6 +39,7 @@ import {
   manageStaff,
   markMaterialPaid,
   queryDocuments,
+  recordGiaPhuActivity,
   reopenAttendance,
   restoreCatalog,
   saveContract,
@@ -202,6 +204,223 @@ function readActiveProjectCode(request: Request, payload?: Record<string, unknow
     ?.split("=")[1];
 
   return cookieValue ? decodeProjectRouteSegment(cookieValue) : undefined;
+}
+
+function requestIpAddress(request: Request) {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip")?.trim() || ""
+  );
+}
+
+function activityModuleForAction(action: string | undefined) {
+  switch (action) {
+    case "saveProject":
+    case "deleteProject":
+    case "saveContract":
+    case "deleteContract":
+    case "savePayment":
+    case "deletePayment":
+      return "CRM công trình";
+    case "manageCatalog":
+    case "deleteCatalog":
+    case "restoreCatalog":
+      return "Danh mục";
+    case "manageStaff":
+    case "deleteStaff":
+    case "saveWeeklyAttendance":
+    case "saveStaffWeeklyAttendance":
+    case "savePayrollAdjustment":
+    case "deleteAttendanceRow":
+    case "closeAttendance":
+    case "reopenAttendance":
+    case "saveLaborNorm":
+    case "deleteLaborNorm":
+    case "saveProgress":
+    case "deleteProgress":
+      return "Nhân công";
+    case "saveMaterial":
+    case "saveZaloMaterialBreakdown":
+    case "deleteMaterial":
+    case "updateMaterialPrice":
+    case "markMaterialPaid":
+      return "Vật tư";
+    case "saveSubcontractor":
+    case "deleteSubcontractor":
+    case "saveSubcontractorContract":
+    case "deleteSubcontractorContract":
+    case "approveSubcontractorContract":
+    case "saveOperation":
+    case "deleteOperation":
+      return "Thầu phụ";
+    case "saveDocument":
+    case "deleteDocument":
+      return "Hồ sơ";
+    case "bulkImport":
+      return "Import Excel";
+    case "verifyProjectPin":
+      return "Công trình";
+    default:
+      return "ERP";
+  }
+}
+
+function activityLabelForAction(action: string | undefined) {
+  switch (action) {
+    case "saveProject":
+      return "Lưu công trình";
+    case "deleteProject":
+      return "Xóa công trình";
+    case "saveContract":
+      return "Lưu hợp đồng";
+    case "deleteContract":
+      return "Xóa hợp đồng";
+    case "savePayment":
+      return "Lưu thu tiền";
+    case "deletePayment":
+      return "Xóa thu tiền";
+    case "manageCatalog":
+      return "Lưu danh mục";
+    case "deleteCatalog":
+      return "Lưu trữ danh mục";
+    case "restoreCatalog":
+      return "Khôi phục danh mục";
+    case "manageStaff":
+      return "Lưu nhân sự";
+    case "deleteStaff":
+      return "Lưu trữ nhân sự";
+    case "saveMaterial":
+      return "Lưu vật tư";
+    case "saveZaloMaterialBreakdown":
+      return "Phân rã vật tư";
+    case "deleteMaterial":
+      return "Xóa vật tư";
+    case "updateMaterialPrice":
+      return "Cập nhật giá vật tư";
+    case "markMaterialPaid":
+      return "Đánh dấu thanh toán vật tư";
+    case "saveWeeklyAttendance":
+    case "saveStaffWeeklyAttendance":
+      return "Lưu chấm công";
+    case "savePayrollAdjustment":
+      return "Lưu điều chỉnh lương";
+    case "deleteAttendanceRow":
+      return "Xóa dòng chấm công";
+    case "closeAttendance":
+      return "Kết sổ chấm công";
+    case "reopenAttendance":
+      return "Mở khóa chấm công";
+    case "saveSubcontractor":
+      return "Lưu tạm ứng thầu phụ";
+    case "deleteSubcontractor":
+      return "Xóa tạm ứng thầu phụ";
+    case "saveSubcontractorContract":
+      return "Lưu hợp đồng thầu phụ";
+    case "deleteSubcontractorContract":
+      return "Xóa hợp đồng thầu phụ";
+    case "approveSubcontractorContract":
+      return "Duyệt hợp đồng thầu phụ";
+    case "saveOperation":
+      return "Lưu vận hành";
+    case "deleteOperation":
+      return "Xóa vận hành";
+    case "saveLaborNorm":
+      return "Lưu định mức";
+    case "deleteLaborNorm":
+      return "Xóa định mức";
+    case "saveProgress":
+      return "Lưu tiến độ";
+    case "deleteProgress":
+      return "Xóa tiến độ";
+    case "saveDocument":
+      return "Lưu hồ sơ";
+    case "deleteDocument":
+      return "Xóa hồ sơ";
+    case "bulkImport":
+      return "Import Excel";
+    case "verifyProjectPin":
+      return "Mở khóa công trình";
+    default:
+      return `Thao tác ${action ?? "ERP"}`;
+  }
+}
+
+function activityEntityId(action: string | undefined, payload: Record<string, unknown>) {
+  if (payload.id != null) return String(payload.id);
+  if (payload.code != null) return String(payload.code);
+  if (payload.contractNo != null) return String(payload.contractNo);
+  if (payload.name != null) return String(payload.name);
+  if (payload.staffName != null) return String(payload.staffName);
+  if (payload.materialName != null) return String(payload.materialName);
+  if (payload.contractorName != null) return String(payload.contractorName);
+  if (action === "bulkImport" && Array.isArray(payload.items)) return `${payload.items.length} dòng`;
+  return "";
+}
+
+function activitySummary(action: string | undefined, payload: Record<string, unknown>) {
+  const label = activityLabelForAction(action);
+  const namedValue =
+    payload.name ??
+    payload.code ??
+    payload.contractNo ??
+    payload.staffName ??
+    payload.materialName ??
+    payload.contractorName ??
+    payload.category ??
+    payload.id ??
+    "";
+
+  if (action === "bulkImport" && Array.isArray(payload.items)) {
+    return `${label}: ${payload.items.length.toLocaleString("vi-VN")} dòng`;
+  }
+
+  return namedValue ? `${label}: ${namedValue}` : label;
+}
+
+async function recordRequestActivity({
+  request,
+  session,
+  action,
+  payload,
+  summary,
+  module,
+  entityId,
+  projectCode,
+}: {
+  request: Request;
+  session: ClerkAuthSession;
+  action: string | undefined;
+  payload: Record<string, unknown>;
+  summary?: string;
+  module?: string;
+  entityId?: string | number;
+  projectCode?: string;
+}) {
+  if (!session.orgId || !session.userId || !action) return;
+
+  try {
+    const user = await currentUser();
+    await recordGiaPhuActivity({
+      organizationId: session.orgId,
+      userId: session.userId,
+      actorName: user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || "",
+      actorEmail: user?.primaryEmailAddress?.emailAddress ?? "",
+      action,
+      module: module ?? activityModuleForAction(action),
+      entityId: entityId ?? activityEntityId(action, payload),
+      projectCode:
+        projectCode ??
+        (typeof payload.projectCode === "string"
+          ? payload.projectCode
+          : typeof payload.code === "string" && (action === "saveProject" || action === "deleteProject")
+            ? payload.code
+            : readActiveProjectCode(request, payload) || ""),
+      summary: summary ?? activitySummary(action, payload),
+      ipAddress: requestIpAddress(request),
+      userAgent: request.headers.get("user-agent") ?? "",
+    });
+  } catch (error) {
+    console.error("Failed to record Gia Phu activity", error);
+  }
 }
 
 async function runGiaPhuMutation(action: string | undefined, payload: Record<string, unknown>) {
@@ -386,6 +605,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ status: "success", materialDebtSummary });
     }
 
+    if (searchParams.get("view") === "activity-logs") {
+      if (!canUsePermission(session, permissionKeys, ERP_PERMISSIONS.organizationsManage)) {
+        return forbidden("Bạn không có quyền xem lịch sử hoạt động.");
+      }
+
+      const result = await getGiaPhuActivityLogs({
+        organizationId,
+        pageIndex: Number(searchParams.get("pageIndex") ?? 0),
+        pageSize: Number(searchParams.get("pageSize") ?? 20),
+        search: searchParams.get("search") ?? "",
+        module: searchParams.get("module") ?? "",
+        action: searchParams.get("action") ?? "",
+        projectCode: searchParams.get("projectCode") ?? "",
+      });
+
+      return NextResponse.json({ status: "success", ...result });
+    }
+
     const data = await getGiaPhuDashboardData({
       organizationId,
       activeProjectCode: readActiveProjectCode(request),
@@ -425,6 +662,7 @@ export async function POST(request: Request) {
     const shouldReturnData = rawPayload.__returnData !== false;
     const payload = { ...sanitizeActionPayload(rawPayload), organizationId: session.orgId };
     const permissionKeys = await getEffectiveErpPermissions(session);
+    let activityRecorded = false;
 
     switch (body.action) {
       case "verifyProjectPin": {
@@ -449,6 +687,15 @@ export async function POST(request: Request) {
           sameSite: "lax",
           path: "/",
           maxAge: PROJECT_PIN_UNLOCK_MAX_AGE,
+        });
+        await recordRequestActivity({
+          request,
+          session,
+          action: body.action,
+          payload,
+          entityId: project.id,
+          projectCode: project.code,
+          summary: `Mở khóa công trình: ${project.code}`,
         });
         return response;
       }
@@ -481,6 +728,13 @@ export async function POST(request: Request) {
           };
           await runGiaPhuMutation(item.action, itemPayload);
         }
+        await recordRequestActivity({
+          request,
+          session,
+          action: body.action,
+          payload: { ...payload, items },
+        });
+        activityRecorded = true;
         break;
       }
       case "saveProject":
@@ -551,6 +805,13 @@ export async function POST(request: Request) {
       case "saveWeeklyAttendance": {
         if (!canUsePermission(session, permissionKeys, mutationPermissions.saveWeeklyAttendance)) return forbidden();
         const rows = await saveWeeklyAttendance(payload);
+        await recordRequestActivity({
+          request,
+          session,
+          action: body.action,
+          payload,
+          summary: `Lưu chấm công: ${rows.length.toLocaleString("vi-VN")} dòng`,
+        });
         return NextResponse.json({ status: "success", patch: { attendanceUpsert: rows } });
       }
       case "saveStaffWeeklyAttendance": {
@@ -559,6 +820,13 @@ export async function POST(request: Request) {
         }
 
         const { savedRows, deletedIds } = await saveStaffWeeklyAttendance(payload);
+        await recordRequestActivity({
+          request,
+          session,
+          action: body.action,
+          payload,
+          summary: `Lưu chấm công nhân sự: ${savedRows.length.toLocaleString("vi-VN")} dòng`,
+        });
         return NextResponse.json({
           status: "success",
           patch: { attendanceUpsert: savedRows, attendanceDeleteIds: deletedIds },
@@ -570,6 +838,14 @@ export async function POST(request: Request) {
         }
 
         const { savedRows, adjustment, deletedAdjustmentIds } = await savePayrollAdjustment(payload);
+        await recordRequestActivity({
+          request,
+          session,
+          action: body.action,
+          payload,
+          entityId: adjustment.id,
+          summary: `Lưu điều chỉnh lương: ${adjustment.staffName}`,
+        });
         return NextResponse.json({
           status: "success",
           patch: {
@@ -581,7 +857,15 @@ export async function POST(request: Request) {
       }
       case "deleteAttendanceRow": {
         if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteAttendanceRow)) return forbidden();
-        const ids = await deleteAttendanceRow(payload);
+        const ids = (await deleteAttendanceRow(payload)) ?? [];
+        await recordRequestActivity({
+          request,
+          session,
+          action: body.action,
+          payload,
+          entityId: ids.join(", "),
+          summary: `Xóa dòng chấm công: ${ids.length.toLocaleString("vi-VN")} dòng`,
+        });
         return NextResponse.json({ status: "success", patch: { attendanceDeleteIds: ids } });
       }
       case "closeAttendance":
@@ -657,6 +941,10 @@ export async function POST(request: Request) {
       }
       default:
         return NextResponse.json({ status: "error", message: "Unknown GiaPhu ERP action." }, { status: 400 });
+    }
+
+    if (!activityRecorded) {
+      await recordRequestActivity({ request, session, action: body.action, payload });
     }
 
     if (!shouldReturnData) {

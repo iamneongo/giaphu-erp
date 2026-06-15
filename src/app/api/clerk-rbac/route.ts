@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 import {
   type ClerkOrganizationRole,
@@ -26,6 +26,7 @@ import {
   ERP_PERMISSIONS,
   type ErpPermissionKey,
 } from "@/lib/clerk/erp-rbac-shared";
+import { createGiaPhuSchema, recordGiaPhuActivity } from "@/lib/giaphu-erp/db";
 
 function formatClerkApiError(error: unknown) {
   const fallback = error instanceof Error ? error.message : String(error);
@@ -88,6 +89,47 @@ function getClerkApiErrorStatus(error: unknown) {
 
 function normalizeEmail(email: string | null | undefined) {
   return email?.trim().toLowerCase() ?? "";
+}
+
+function requestIpAddress(request: Request) {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip")?.trim() || ""
+  );
+}
+
+async function recordWorkspaceActivity({
+  request,
+  session,
+  action,
+  entityId,
+  summary,
+}: {
+  request: Request;
+  session: Awaited<ReturnType<typeof auth>>;
+  action: string;
+  entityId?: string;
+  summary: string;
+}) {
+  if (!session.orgId || !session.userId) return;
+
+  try {
+    await createGiaPhuSchema();
+    const user = await currentUser();
+    await recordGiaPhuActivity({
+      organizationId: session.orgId,
+      userId: session.userId,
+      actorName: user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || "",
+      actorEmail: user?.primaryEmailAddress?.emailAddress ?? "",
+      action,
+      module: "Tổ chức & thành viên",
+      entityId,
+      summary,
+      ipAddress: requestIpAddress(request),
+      userAgent: request.headers.get("user-agent") ?? "",
+    });
+  } catch (error) {
+    console.error("Failed to record workspace activity", error);
+  }
 }
 
 async function canManageRoles(session: Awaited<ReturnType<typeof auth>>) {
@@ -182,6 +224,12 @@ export async function POST(request: Request) {
   try {
     if (action === "syncPermissions") {
       const result = await ensureErpPermissionCatalog();
+      await recordWorkspaceActivity({
+        request,
+        session,
+        action,
+        summary: "Đồng bộ quyền ERP với Clerk",
+      });
       return NextResponse.json({ status: "success", ...result });
     }
 
@@ -195,6 +243,13 @@ export async function POST(request: Request) {
         roleSetKey: roleSet.key,
       });
 
+      await recordWorkspaceActivity({
+        request,
+        session,
+        action,
+        entityId: role.id,
+        summary: `Tạo vai trò: ${role.name}`,
+      });
       return NextResponse.json({ status: "success", role });
     }
 
@@ -214,6 +269,13 @@ export async function POST(request: Request) {
         permissionKeys: Array.isArray(payload.permissionKeys) ? (payload.permissionKeys as ErpPermissionKey[]) : [],
       });
 
+      await recordWorkspaceActivity({
+        request,
+        session,
+        action,
+        entityId: role.id,
+        summary: `Cập nhật quyền vai trò: ${role.name}`,
+      });
       return NextResponse.json({ status: "success", role });
     }
 
@@ -234,6 +296,13 @@ export async function POST(request: Request) {
       }
 
       await deleteOrganizationRole(roleId);
+      await recordWorkspaceActivity({
+        request,
+        session,
+        action,
+        entityId: roleId,
+        summary: `Xóa vai trò: ${role.name}`,
+      });
       return NextResponse.json({ status: "success" });
     }
 
@@ -284,6 +353,13 @@ export async function POST(request: Request) {
         role,
       });
 
+      await recordWorkspaceActivity({
+        request,
+        session,
+        action,
+        entityId: userId,
+        summary: `Cập nhật vai trò thành viên: ${targetMembership.publicUserData.identifier || userId}`,
+      });
       return NextResponse.json({ status: "success", membership });
     }
 
@@ -341,6 +417,13 @@ export async function POST(request: Request) {
         inviterUserId: session.userId,
       });
 
+      await recordWorkspaceActivity({
+        request,
+        session,
+        action,
+        entityId: invitation.id,
+        summary: `Gửi lời mời thành viên: ${emailAddress}`,
+      });
       return NextResponse.json({ status: "success", invitation });
     }
 
@@ -357,6 +440,13 @@ export async function POST(request: Request) {
         requestingUserId: session.userId,
       });
 
+      await recordWorkspaceActivity({
+        request,
+        session,
+        action,
+        entityId: invitationId,
+        summary: `Thu hồi lời mời thành viên: ${invitation.emailAddress}`,
+      });
       return NextResponse.json({ status: "success", invitation });
     }
 
@@ -400,6 +490,13 @@ export async function POST(request: Request) {
         userId,
       });
 
+      await recordWorkspaceActivity({
+        request,
+        session,
+        action,
+        entityId: userId,
+        summary: `Xóa thành viên khỏi tổ chức: ${targetMembership.publicUserData.identifier || userId}`,
+      });
       return NextResponse.json({ status: "success", membership });
     }
 

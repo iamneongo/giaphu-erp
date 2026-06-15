@@ -16,6 +16,22 @@ export type GiaPhuPagedDataset =
   | "subcontractorContracts"
   | "operations";
 
+export interface ActivityLogRow {
+  id: number;
+  organizationId: string;
+  userId: string;
+  actorName: string;
+  actorEmail: string;
+  action: string;
+  module: string;
+  entityId: string;
+  projectCode: string;
+  summary: string;
+  ipAddress: string;
+  userAgent: string;
+  createdAt: string;
+}
+
 export type MonthlyCostPoint = {
   month: string;
   materials: number;

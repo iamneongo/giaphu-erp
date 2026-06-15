@@ -1,4 +1,5 @@
 import type {
+  ActivityLogRow,
   AttendanceRow,
   GiaPhuDashboardData,
   GiaPhuOverviewInsights,
@@ -40,6 +41,13 @@ export interface GiaPhuMaterialDebtSummary {
 
 export interface GiaPhuPagedRowsResult<T> {
   rows: T[];
+  total: number;
+  pageIndex: number;
+  pageSize: number;
+}
+
+export interface GiaPhuActivityLogsResult {
+  rows: ActivityLogRow[];
   total: number;
   pageIndex: number;
   pageSize: number;
@@ -170,6 +178,46 @@ export async function fetchGiaPhuFilterOptions({
     await fetch(`/api/giaphu-erp?${params.toString()}`, { cache: "no-store", signal }),
   );
   return result.filterOptions ?? {};
+}
+
+export async function fetchGiaPhuActivityLogs({
+  pageIndex,
+  pageSize,
+  search,
+  module,
+  action,
+  projectCode,
+  signal,
+}: {
+  pageIndex: number;
+  pageSize: number;
+  search?: string;
+  module?: string;
+  action?: string;
+  projectCode?: string;
+  signal?: AbortSignal;
+}) {
+  const params = new URLSearchParams({
+    view: "activity-logs",
+    pageIndex: String(pageIndex),
+    pageSize: String(pageSize),
+  });
+
+  if (search?.trim()) params.set("search", search.trim());
+  if (module?.trim() && module !== "__all") params.set("module", module.trim());
+  if (action?.trim() && action !== "__all") params.set("action", action.trim());
+  if (projectCode?.trim() && projectCode !== "__all") params.set("projectCode", projectCode.trim());
+
+  const result = await parseResponse(
+    await fetch(`/api/giaphu-erp?${params.toString()}`, { cache: "no-store", signal }),
+  );
+
+  return {
+    rows: (result.rows ?? []) as unknown as ActivityLogRow[],
+    total: Number(result.total ?? 0),
+    pageIndex: Number(result.pageIndex ?? pageIndex),
+    pageSize: Number(result.pageSize ?? pageSize),
+  } satisfies GiaPhuActivityLogsResult;
 }
 
 export async function fetchGiaPhuInsights<T extends GiaPhuOverviewInsights | GiaPhuReportsInsights>({

@@ -2,6 +2,7 @@
 import { buildNextCatalogCode, catalogKinds, normalizeCatalogCode } from "./catalog-codes";
 import { isValidPhoneNumber } from "./phone";
 import type {
+  ActivityLogRow,
   AttendanceLockRow,
   AttendanceRow,
   CatalogItem,
@@ -57,6 +58,34 @@ export type GiaPhuMaterialDebtSummary = {
   rows: number;
   suppliers: number;
 };
+export type GiaPhuActivityLogOptions = {
+  organizationId: string;
+  userId: string;
+  actorName?: string;
+  actorEmail?: string;
+  action: string;
+  module: string;
+  entityId?: string | number;
+  projectCode?: string;
+  summary: string;
+  ipAddress?: string;
+  userAgent?: string;
+};
+export type GiaPhuActivityLogQueryOptions = {
+  organizationId: string;
+  pageIndex?: number;
+  pageSize?: number;
+  search?: string;
+  module?: string;
+  action?: string;
+  projectCode?: string;
+};
+export type GiaPhuActivityLogsResult = {
+  rows: ActivityLogRow[];
+  total: number;
+  pageIndex: number;
+  pageSize: number;
+};
 
 export type GiaPhuPagedRowsResult =
   | { dataset: "projects"; rows: ProjectRow[]; total: number; pageIndex: number; pageSize: number }
@@ -82,6 +111,8 @@ export type GiaPhuPagedRowsResult =
 type GlobalSchemaState = typeof globalThis & {
   __giaPhuSchemaPromise?: Promise<void>;
   __giaPhuSchemaReady?: boolean;
+  __giaPhuActivityLogSchemaPromise?: Promise<void>;
+  __giaPhuActivityLogSchemaReady?: boolean;
   __giaPhuPerformanceIndexesPromise?: Promise<void>;
   __giaPhuPerformanceIndexesReady?: boolean;
 };
@@ -160,6 +191,29 @@ function dateTime(value: unknown) {
   if (!value) return "";
   if (value instanceof Date) return value.toISOString();
   return String(value);
+}
+
+function limitText(value: unknown, maxLength: number) {
+  const normalized = text(value).replace(/\s+/g, " ").trim();
+  return normalized.length > maxLength ? normalized.slice(0, maxLength) : normalized;
+}
+
+function activityLogFromRow(row: Row): ActivityLogRow {
+  return {
+    id: number(row.id),
+    organizationId: text(row.organization_id),
+    userId: text(row.user_id),
+    actorName: text(row.actor_name),
+    actorEmail: text(row.actor_email),
+    action: text(row.action),
+    module: text(row.module),
+    entityId: text(row.entity_id),
+    projectCode: text(row.project_code),
+    summary: text(row.summary),
+    ipAddress: text(row.ip_address),
+    userAgent: text(row.user_agent),
+    createdAt: dateTime(row.created_at),
+  };
 }
 
 async function hashProjectPin(value: unknown) {
@@ -903,14 +957,65 @@ async function createGiaPhuSchemaInternal() {
     updated_at timestamptz not null default now()
   )`;
 
+  await sql`create table if not exists gp_activity_logs (
+    id bigserial primary key,
+    organization_id text not null default '',
+    user_id text not null default '',
+    actor_name text not null default '',
+    actor_email text not null default '',
+    action text not null default '',
+    module text not null default '',
+    entity_id text not null default '',
+    project_code text not null default '',
+    summary text not null default '',
+    ip_address text not null default '',
+    user_agent text not null default '',
+    created_at timestamptz not null default now()
+  )`;
+  await sql`create index if not exists gp_activity_logs_org_created_idx on gp_activity_logs (organization_id, created_at desc, id desc)`;
+  await sql`create index if not exists gp_activity_logs_org_module_idx on gp_activity_logs (organization_id, module, created_at desc)`;
+
   await ensureOrganizationColumns();
 
   await ensureGiaPhuPerformanceIndexes();
 }
 
+async function ensureActivityLogSchema() {
+  const state = globalThis as GlobalSchemaState;
+  if (state.__giaPhuActivityLogSchemaReady) return;
+
+  state.__giaPhuActivityLogSchemaPromise ??= (async () => {
+    const sql = getSql();
+    await sql`create table if not exists gp_activity_logs (
+      id bigserial primary key,
+      organization_id text not null default '',
+      user_id text not null default '',
+      actor_name text not null default '',
+      actor_email text not null default '',
+      action text not null default '',
+      module text not null default '',
+      entity_id text not null default '',
+      project_code text not null default '',
+      summary text not null default '',
+      ip_address text not null default '',
+      user_agent text not null default '',
+      created_at timestamptz not null default now()
+    )`;
+    await sql`create index if not exists gp_activity_logs_org_created_idx on gp_activity_logs (organization_id, created_at desc, id desc)`;
+    await sql`create index if not exists gp_activity_logs_org_module_idx on gp_activity_logs (organization_id, module, created_at desc)`;
+  })().catch((error) => {
+    state.__giaPhuActivityLogSchemaPromise = undefined;
+    throw error;
+  });
+
+  await state.__giaPhuActivityLogSchemaPromise;
+  state.__giaPhuActivityLogSchemaReady = true;
+}
+
 export async function createGiaPhuSchema() {
   const state = globalThis as GlobalSchemaState;
   if (state.__giaPhuSchemaReady) {
+    await ensureActivityLogSchema();
     await ensureGiaPhuPerformanceIndexes();
     return;
   }
@@ -939,9 +1044,126 @@ export async function createGiaPhuSchema() {
   await ensureGiaPhuPerformanceIndexes();
 }
 
+export async function recordGiaPhuActivity(options: GiaPhuActivityLogOptions) {
+  await ensureActivityLogSchema();
+  const organizationId = requireOrganizationId(options.organizationId);
+  const action = limitText(options.action, 120);
+  const module = limitText(options.module, 120);
+  const summary = limitText(options.summary, 600);
+
+  if (!action || !module || !summary) return;
+
+  const sql = getSql();
+  await sql`
+    insert into gp_activity_logs (
+      organization_id,
+      user_id,
+      actor_name,
+      actor_email,
+      action,
+      module,
+      entity_id,
+      project_code,
+      summary,
+      ip_address,
+      user_agent
+    )
+    values (
+      ${organizationId},
+      ${limitText(options.userId, 160)},
+      ${limitText(options.actorName, 160)},
+      ${limitText(options.actorEmail, 220)},
+      ${action},
+      ${module},
+      ${limitText(options.entityId, 160)},
+      ${limitText(options.projectCode, 120)},
+      ${summary},
+      ${limitText(options.ipAddress, 120)},
+      ${limitText(options.userAgent, 500)}
+    )
+  `;
+}
+
+export async function getGiaPhuActivityLogs(options: GiaPhuActivityLogQueryOptions): Promise<GiaPhuActivityLogsResult> {
+  await ensureActivityLogSchema();
+  const sql = getSql();
+  const organizationId = requireOrganizationId(options.organizationId);
+  const pageIndex = normalizePageIndex(options.pageIndex);
+  const pageSize = normalizePageSize(options.pageSize);
+  const offset = pageIndex * pageSize;
+  const search = text(options.search).trim();
+  const moduleFilter = text(options.module).trim();
+  const actionFilter = text(options.action).trim();
+  const projectCodeFilter = text(options.projectCode).trim();
+  const whereSearch = search
+    ? sql`
+        and (
+          summary ilike ${`%${search}%`}
+          or actor_name ilike ${`%${search}%`}
+          or actor_email ilike ${`%${search}%`}
+          or action ilike ${`%${search}%`}
+          or module ilike ${`%${search}%`}
+          or entity_id ilike ${`%${search}%`}
+          or project_code ilike ${`%${search}%`}
+        )
+      `
+    : sql``;
+  const whereModule = moduleFilter ? sql`and module = ${moduleFilter}` : sql``;
+  const whereAction = actionFilter ? sql`and action = ${actionFilter}` : sql``;
+  const whereProjectCode = projectCodeFilter ? sql`and project_code = ${projectCodeFilter}` : sql``;
+
+  const [countRows, rows] = await Promise.all([
+    sql`
+      select count(*)::int as total
+      from gp_activity_logs
+      where organization_id = ${organizationId}
+        ${whereSearch}
+        ${whereModule}
+        ${whereAction}
+        ${whereProjectCode}
+    `,
+    sql`
+      select *
+      from gp_activity_logs
+      where organization_id = ${organizationId}
+        ${whereSearch}
+        ${whereModule}
+        ${whereAction}
+        ${whereProjectCode}
+      order by created_at desc, id desc
+      limit ${pageSize}
+      offset ${offset}
+    `,
+  ]);
+
+  return {
+    rows: (rows as Row[]).map(activityLogFromRow),
+    total: totalFromCountRows(countRows),
+    pageIndex,
+    pageSize,
+  };
+}
+
 async function ensureOrganizationColumns() {
   const sql = getSql();
 
+  await sql`create table if not exists gp_activity_logs (
+    id bigserial primary key,
+    organization_id text not null default '',
+    user_id text not null default '',
+    actor_name text not null default '',
+    actor_email text not null default '',
+    action text not null default '',
+    module text not null default '',
+    entity_id text not null default '',
+    project_code text not null default '',
+    summary text not null default '',
+    ip_address text not null default '',
+    user_agent text not null default '',
+    created_at timestamptz not null default now()
+  )`;
+  await sql`create index if not exists gp_activity_logs_org_created_idx on gp_activity_logs (organization_id, created_at desc, id desc)`;
+  await sql`create index if not exists gp_activity_logs_org_module_idx on gp_activity_logs (organization_id, module, created_at desc)`;
   await sql`create table if not exists gp_payroll_adjustments (
     id text primary key,
     organization_id text not null default '',
