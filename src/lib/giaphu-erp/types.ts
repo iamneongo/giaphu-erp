@@ -282,6 +282,12 @@ export interface PaymentRow {
   date: string;
   amount: number;
   note: string;
+  fileId: string;
+  fileUrl: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  hasFile: boolean;
 }
 
 export interface ContractRow {
@@ -291,6 +297,12 @@ export interface ContractRow {
   value: number;
   signedDate: string;
   note: string;
+  fileId: string;
+  fileUrl: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  hasFile: boolean;
 }
 
 export interface DocumentRow {

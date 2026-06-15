@@ -40,7 +40,7 @@ import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, isoWeekFromDate, todayIso } from "../_lib/date-utils";
 import { catalogOptions, catalogOptionsWithValue, catalogOptionsWithValues, uniqueOptions } from "../_lib/form-options";
-import { formatCount, formatMoney } from "../_lib/formatters";
+import { formatCount, formatDate, formatMoney } from "../_lib/formatters";
 import { fetchGiaPhuFilterOptions, fetchGiaPhuPagedRows, type GiaPhuActionResult } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable, type DataTableColumn } from "./data-table";
@@ -2288,7 +2288,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 accessor: (row) => (row.resigned ? "Đã nghỉ việc" : "Đang làm"),
                 render: (row) =>
                   row.resigned ? (
-                    <Badge variant="secondary">Đã nghỉ việc{row.offDate ? ` · ${row.offDate}` : ""}</Badge>
+                    <Badge variant="secondary">Đã nghỉ việc{row.offDate ? ` · ${formatDate(row.offDate)}` : ""}</Badge>
                   ) : (
                     <Badge variant="outline">Đang làm</Badge>
                   ),
@@ -2463,19 +2463,22 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                 key: "startDate",
                 label: "Bắt đầu",
                 accessor: (row) => row.startDate,
-                render: (row) => row.startDate || "-",
+                exportValue: (row) => formatDate(row.startDate),
+                render: (row) => formatDate(row.startDate),
               },
               {
                 key: "planEndDate",
                 label: "Dự kiến",
                 accessor: (row) => row.planEndDate,
-                render: (row) => row.planEndDate || "-",
+                exportValue: (row) => formatDate(row.planEndDate),
+                render: (row) => formatDate(row.planEndDate),
               },
               {
                 key: "confirmedEndDate",
                 label: "Xác nhận",
                 accessor: (row) => row.confirmedEndDate,
-                render: (row) => row.confirmedEndDate || "-",
+                exportValue: (row) => formatDate(row.confirmedEndDate),
+                render: (row) => formatDate(row.confirmedEndDate),
               },
               {
                 key: "evaluation",

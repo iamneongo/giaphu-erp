@@ -56,7 +56,7 @@ import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, isoWeekFromDate, todayIso } from "../_lib/date-utils";
 import { catalogOptions, materialTypeOptions, uniqueOptions } from "../_lib/form-options";
-import { formatCount, formatMoney } from "../_lib/formatters";
+import { formatCount, formatDate, formatMoney } from "../_lib/formatters";
 import { DataTable, type DataTableColumn } from "./data-table";
 import { ExcelImportDialog } from "./excel-import-dialog";
 import { ModuleHeader } from "./module-header";
@@ -330,7 +330,13 @@ function buildSavedMaterialColumns({
   refresh: () => void;
 }): DataTableColumn<MaterialRow>[] {
   return [
-    { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+    {
+      key: "date",
+      label: "Ngày",
+      accessor: (row) => row.date,
+      exportValue: (row) => formatDate(row.date),
+      render: (row) => formatDate(row.date),
+    },
     { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
     {
       key: "category",

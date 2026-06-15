@@ -14,7 +14,7 @@ import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
 import { decodeProjectRouteSegment, erpPathForProject } from "@/lib/giaphu-erp/project-routes";
 
 import { DashboardLink } from "../../_components/dashboard-link";
-import { formatMoney } from "../_lib/formatters";
+import { formatDate, formatMeasurement, formatMoney } from "../_lib/formatters";
 
 type DetailField = {
   key: string;
@@ -206,7 +206,7 @@ function getDashboardRecord(
           field("owner", "Chủ đầu tư", row.owner),
           field("contact", "Liên hệ", row.contact),
           field("referrer", "Người giới thiệu", row.referrer),
-          field("startDate", "Ngày bắt đầu", row.startDate),
+          field("startDate", "Ngày bắt đầu", formatDate(row.startDate)),
           field("status", "Trạng thái", row.status),
           field("failureReason", "Lý do thất bại", row.failureReason, true),
         ],
@@ -222,11 +222,14 @@ function getDashboardRecord(
         badge: formatMoney(row.value),
         backHref: "/dashboard/giaphu-erp/crm/contracts",
         backLabel: "Quay lại hợp đồng",
+        externalHref: row.hasFile ? `/api/giaphu-erp/documents/${row.fileId}/file` : undefined,
+        externalLabel: "Mở hồ sơ",
         fields: [
           field("projectCode", "Công trình", row.projectCode),
           field("contractNo", "Số hợp đồng", row.contractNo),
           field("value", "Giá trị", formatMoney(row.value)),
-          field("signedDate", "Ngày ký", row.signedDate),
+          field("signedDate", "Ngày ký", formatDate(row.signedDate)),
+          field("fileName", "Hồ sơ đính kèm", row.hasFile ? row.fileName : "-"),
           field("note", "Ghi chú", row.note, true),
         ],
       };
@@ -241,10 +244,13 @@ function getDashboardRecord(
         badge: formatMoney(row.amount),
         backHref: "/dashboard/giaphu-erp/crm/payments",
         backLabel: "Quay lại thu tiền",
+        externalHref: row.hasFile ? `/api/giaphu-erp/documents/${row.fileId}/file` : undefined,
+        externalLabel: "Mở chứng từ",
         fields: [
           field("projectCode", "Công trình", row.projectCode),
-          field("date", "Ngày thu", row.date),
+          field("date", "Ngày thu", formatDate(row.date)),
           field("amount", "Số tiền", formatMoney(row.amount)),
+          field("fileName", "Chứng từ đính kèm", row.hasFile ? row.fileName : "-"),
           field("note", "Ghi chú", row.note, true),
         ],
       };
@@ -265,13 +271,13 @@ function getDashboardRecord(
         backLabel: "Quay lại phân rã Zalo",
         fields: [
           field("projectCode", "Công trình", row.projectCode),
-          field("date", "Ngày", row.date),
+          field("date", "Ngày", formatDate(row.date)),
           field("week", "Tuần", row.week),
           field("shift", "Ca", row.shift),
           field("category", "Hạng mục", row.category),
           field("materialCode", "Mã vật tư", row.materialCode),
           field("materialName", "Tên vật tư", row.materialName),
-          field("quantity", "Khối lượng", row.quantity),
+          field("quantity", "Khối lượng", formatMeasurement(row.quantity, row.unit)),
           field("unit", "Đơn vị", row.unit),
           field("price", "Đơn giá", formatMoney(row.price)),
           field("total", "Thành tiền", formatMoney(row.quantity * row.price)),
@@ -300,7 +306,7 @@ function getDashboardRecord(
           field("position", "Chức vụ", row.position),
           field("salaryDay", "Lương/ngày", formatMoney(row.salaryDay)),
           field("resigned", "Đã nghỉ việc", row.resigned),
-          field("offDate", "Thời gian nghỉ", row.offDate),
+          field("offDate", "Thời gian nghỉ", formatDate(row.offDate)),
         ],
       };
     }
@@ -316,7 +322,7 @@ function getDashboardRecord(
         backLabel: "Quay lại chấm công",
         fields: [
           field("projectCode", "Công trình", row.projectCode),
-          field("date", "Ngày", row.date),
+          field("date", "Ngày", formatDate(row.date)),
           field("week", "Tuần", row.week),
           field("shift", "Ca", row.shift),
           field("category", "Hạng mục", row.category),
@@ -363,11 +369,11 @@ function getDashboardRecord(
         fields: [
           field("projectCode", "Công trình", row.projectCode),
           field("category", "Hạng mục", row.category),
-          field("startDate", "Ngày bắt đầu", row.startDate),
+          field("startDate", "Ngày bắt đầu", formatDate(row.startDate)),
           field("durationDays", "Số ngày", row.durationDays),
           field("workdays", "Số công", row.workdays),
-          field("planEndDate", "Ngày HT dự kiến", row.planEndDate),
-          field("confirmedEndDate", "Ngày HT xác nhận", row.confirmedEndDate),
+          field("planEndDate", "Ngày HT dự kiến", formatDate(row.planEndDate)),
+          field("confirmedEndDate", "Ngày HT xác nhận", formatDate(row.confirmedEndDate)),
           field("evaluation", "Đánh giá", row.evaluation, true),
         ],
       };
@@ -384,7 +390,7 @@ function getDashboardRecord(
         backLabel: "Quay lại tạm ứng",
         fields: [
           field("projectCode", "Công trình", row.projectCode),
-          field("date", "Ngày", row.date),
+          field("date", "Ngày", formatDate(row.date)),
           field("week", "Tuần", row.week),
           field("category", "Hạng mục", row.category),
           field("contractorName", "Thầu phụ", row.contractorName),
@@ -428,7 +434,7 @@ function getDashboardRecord(
         backLabel: "Quay lại vận hành",
         fields: [
           field("projectCode", "Công trình", row.projectCode),
-          field("date", "Ngày", row.date),
+          field("date", "Ngày", formatDate(row.date)),
           field("week", "Tuần", row.week),
           field("description", "Nội dung", row.description, true),
           field("amount", "Số tiền", formatMoney(row.amount)),

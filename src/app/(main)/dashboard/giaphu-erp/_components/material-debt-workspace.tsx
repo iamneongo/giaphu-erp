@@ -14,7 +14,7 @@ import { useCanAccessErpPermission } from "../../_components/effective-permissio
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { uniqueOptions } from "../_lib/form-options";
-import { formatCount, formatMoney } from "../_lib/formatters";
+import { formatCount, formatDate, formatMoney } from "../_lib/formatters";
 import { fetchGiaPhuMaterialDebtSummary, type GiaPhuMaterialDebtSummary } from "../_lib/giaphu-erp-api";
 import { DataTable, type DataTableColumn } from "./data-table";
 import { ModuleHeader } from "./module-header";
@@ -115,7 +115,13 @@ function buildColumns({
   refresh: () => void;
 }): DataTableColumn<MaterialRow>[] {
   return [
-    { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+    {
+      key: "date",
+      label: "Ngày",
+      accessor: (row) => row.date,
+      exportValue: (row) => formatDate(row.date),
+      render: (row) => formatDate(row.date),
+    },
     { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
     {
       key: "materialType",

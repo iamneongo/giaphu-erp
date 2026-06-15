@@ -48,6 +48,8 @@ import { readActiveProjectCode, readActiveProjectRouteId } from "@/lib/giaphu-er
 import { getProjectRouteInfo, projectScopedPath } from "@/lib/giaphu-erp/project-routes";
 import { cn } from "@/lib/utils";
 
+import { formatDate } from "../_lib/formatters";
+
 export interface DataTableColumn<T> {
   key: string;
   label: string;
@@ -104,6 +106,15 @@ function getDefaultAccessor<T>(row: T, key: string) {
   }
 
   return undefined;
+}
+
+function isIsoDateOnly(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function formatExportValue(value: unknown) {
+  if (isIsoDateOnly(value)) return formatDate(value);
+  return value;
 }
 
 function isInteractiveTarget(target: EventTarget | null) {
@@ -755,8 +766,8 @@ export function DataTable<T>({
         column.exportValue
           ? column.exportValue(row)
           : column.accessor
-            ? column.accessor(row)
-            : getDefaultAccessor(row, column.key),
+            ? formatExportValue(column.accessor(row))
+            : formatExportValue(getDefaultAccessor(row, column.key)),
       ),
     );
     const blob = buildXlsxBlob(header, body);

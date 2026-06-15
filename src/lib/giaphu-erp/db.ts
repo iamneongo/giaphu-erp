@@ -489,6 +489,12 @@ function paymentFromRow(row: Row): PaymentRow {
     date: dateOnly(row.payment_date),
     amount: number(row.amount),
     note: text(row.note),
+    fileId: text(row.file_id),
+    fileUrl: text(row.file_url),
+    fileName: text(row.attachment_file_name),
+    mimeType: text(row.attachment_mime_type),
+    fileSize: number(row.attachment_file_size),
+    hasFile: Boolean(row.attachment_has_file),
   };
 }
 
@@ -500,6 +506,12 @@ function contractFromRow(row: Row): ContractRow {
     value: number(row.value),
     signedDate: dateOnly(row.signed_date),
     note: text(row.note),
+    fileId: text(row.file_id),
+    fileUrl: text(row.file_url),
+    fileName: text(row.attachment_file_name),
+    mimeType: text(row.attachment_mime_type),
+    fileSize: number(row.attachment_file_size),
+    hasFile: Boolean(row.attachment_has_file),
   };
 }
 
@@ -697,6 +709,8 @@ async function createGiaPhuSchemaInternal() {
     value numeric not null default 0,
     signed_date date,
     note text not null default '',
+    file_url text not null default '',
+    file_id text not null default '',
     created_at timestamptz not null default now()
   )`;
 
@@ -707,6 +721,8 @@ async function createGiaPhuSchemaInternal() {
     payment_date date,
     amount numeric not null default 0,
     note text not null default '',
+    file_url text not null default '',
+    file_id text not null default '',
     created_at timestamptz not null default now()
   )`;
 
@@ -939,7 +955,11 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_catalog_items add column if not exists archived boolean not null default false`;
   await sql`alter table gp_staff add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_contracts add column if not exists organization_id text not null default ''`;
+  await sql`alter table gp_contracts add column if not exists file_url text not null default ''`;
+  await sql`alter table gp_contracts add column if not exists file_id text not null default ''`;
   await sql`alter table gp_payments add column if not exists organization_id text not null default ''`;
+  await sql`alter table gp_payments add column if not exists file_url text not null default ''`;
+  await sql`alter table gp_payments add column if not exists file_id text not null default ''`;
   await sql`alter table gp_documents add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_materials add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_attendance add column if not exists organization_id text not null default ''`;
@@ -1017,8 +1037,36 @@ async function cleanupOrphanDocumentReferences() {
   `;
 
   await sql`
+    update gp_contracts target
+    set file_url = '',
+        file_id = ''
+    where file_id <> ''
+      and not exists (
+        select 1
+        from gp_documents document
+        where document.organization_id = target.organization_id
+          and document.id::text = target.file_id
+          and document.file_data <> ''
+      )
+  `;
+
+  await sql`
+    update gp_payments target
+    set file_url = '',
+        file_id = ''
+    where file_id <> ''
+      and not exists (
+        select 1
+        from gp_documents document
+        where document.organization_id = target.organization_id
+          and document.id::text = target.file_id
+          and document.file_data <> ''
+      )
+  `;
+
+  await sql`
     delete from gp_documents document
-    where document.doc_type in ('Tạm ứng thầu phụ', 'Chi phí vận hành')
+    where document.doc_type in ('Tạm ứng thầu phụ', 'Chi phí vận hành', 'Hợp đồng công trình', 'Phiếu thu / chứng từ thu tiền')
       and document.preview_text like document.doc_type || ' ·%'
       and not exists (
         select 1 from gp_subcontractors target
@@ -1035,6 +1083,16 @@ async function cleanupOrphanDocumentReferences() {
         where target.organization_id = document.organization_id
           and target.file_id = document.id::text
       )
+      and not exists (
+        select 1 from gp_contracts target
+        where target.organization_id = document.organization_id
+          and target.file_id = document.id::text
+      )
+      and not exists (
+        select 1 from gp_payments target
+        where target.organization_id = document.organization_id
+          and target.file_id = document.id::text
+      )
   `;
 }
 
@@ -1046,7 +1104,7 @@ async function deleteAttachmentDocumentIfUnused(documentId: number, organization
     delete from gp_documents document
     where document.organization_id = ${organizationId}
       and document.id = ${documentId}
-      and document.doc_type in ('Tạm ứng thầu phụ', 'Chi phí vận hành', 'Hợp đồng thầu phụ')
+      and document.doc_type in ('Tạm ứng thầu phụ', 'Chi phí vận hành', 'Hợp đồng thầu phụ', 'Hợp đồng công trình', 'Phiếu thu / chứng từ thu tiền')
       and not exists (
         select 1 from gp_subcontractors target
         where target.organization_id = document.organization_id
@@ -1059,6 +1117,16 @@ async function deleteAttachmentDocumentIfUnused(documentId: number, organization
       )
       and not exists (
         select 1 from gp_operations target
+        where target.organization_id = document.organization_id
+          and target.file_id = document.id::text
+      )
+      and not exists (
+        select 1 from gp_contracts target
+        where target.organization_id = document.organization_id
+          and target.file_id = document.id::text
+      )
+      and not exists (
+        select 1 from gp_payments target
         where target.organization_id = document.organization_id
           and target.file_id = document.id::text
       )
@@ -1089,6 +1157,18 @@ async function syncAttachmentDocumentReference(documentId: number, organizationI
     `,
     sql`
       update gp_operations
+      set file_url = ${fileUrl}
+      where organization_id = ${organizationId}
+        and file_id = ${String(documentId)}
+    `,
+    sql`
+      update gp_contracts
+      set file_url = ${fileUrl}
+      where organization_id = ${organizationId}
+        and file_id = ${String(documentId)}
+    `,
+    sql`
+      update gp_payments
       set file_url = ${fileUrl}
       where organization_id = ${organizationId}
         and file_id = ${String(documentId)}
@@ -1221,10 +1301,38 @@ export async function getGiaPhuDashboardData(options: DashboardDataOptions = {})
       ? sql`select * from gp_progress where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by category asc`
       : sql`select * from gp_progress where false`,
     activeProjectCode
-      ? sql`select * from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by payment_date desc, id desc limit 40`
+      ? sql`
+          select
+            payment.*,
+            coalesce(document.file_name, '') as attachment_file_name,
+            coalesce(document.mime_type, '') as attachment_mime_type,
+            coalesce(document.file_size, 0) as attachment_file_size,
+            coalesce(document.file_data <> '', false) as attachment_has_file
+          from gp_payments payment
+          left join gp_documents document
+            on document.organization_id = payment.organization_id
+           and document.id::text = payment.file_id
+          where payment.organization_id = ${organizationId} and payment.project_code = ${activeProjectCode}
+          order by payment.payment_date desc, payment.id desc
+          limit 40
+        `
       : sql`select * from gp_payments where false`,
     activeProjectCode
-      ? sql`select * from gp_contracts where organization_id = ${organizationId} and project_code = ${activeProjectCode} order by signed_date desc, id desc limit 40`
+      ? sql`
+          select
+            contract.*,
+            coalesce(document.file_name, '') as attachment_file_name,
+            coalesce(document.mime_type, '') as attachment_mime_type,
+            coalesce(document.file_size, 0) as attachment_file_size,
+            coalesce(document.file_data <> '', false) as attachment_has_file
+          from gp_contracts contract
+          left join gp_documents document
+            on document.organization_id = contract.organization_id
+           and document.id::text = contract.file_id
+          where contract.organization_id = ${organizationId} and contract.project_code = ${activeProjectCode}
+          order by contract.signed_date desc, contract.id desc
+          limit 40
+        `
       : sql`select * from gp_contracts where false`,
     activeProjectCode
       ? sql`select * from gp_attendance_locks where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} order by updated_at desc`
@@ -1504,21 +1612,21 @@ function pagedRowsOrderBy(sql: any, dataset: GiaPhuPagedDataset, sorting?: ErpTa
     case "contracts":
       return sql`
         order by
-          case when ${sortId} = 'id' then id end asc nulls last,
-          case when ${sortId} = 'contractNo' then contract_no end asc nulls last,
-          case when ${sortId} = 'value' then value end asc nulls last,
-          case when ${sortId} = 'signedDate' then signed_date end asc nulls last,
-          case when ${sortId} = 'note' then note end asc nulls last,
-          signed_date desc nulls last, id desc
+          case when ${sortId} = 'id' then contract.id end asc nulls last,
+          case when ${sortId} = 'contractNo' then contract.contract_no end asc nulls last,
+          case when ${sortId} = 'value' then contract.value end asc nulls last,
+          case when ${sortId} = 'signedDate' then contract.signed_date end asc nulls last,
+          case when ${sortId} = 'note' then contract.note end asc nulls last,
+          contract.signed_date desc nulls last, contract.id desc
       `;
     case "payments":
       return sql`
         order by
-          case when ${sortId} = 'id' then id end asc nulls last,
-          case when ${sortId} in ('date', 'paymentDate') then payment_date end asc nulls last,
-          case when ${sortId} = 'amount' then amount end asc nulls last,
-          case when ${sortId} = 'note' then note end asc nulls last,
-          payment_date desc nulls last, id desc
+          case when ${sortId} = 'id' then payment.id end asc nulls last,
+          case when ${sortId} in ('date', 'paymentDate') then payment.payment_date end asc nulls last,
+          case when ${sortId} = 'amount' then payment.amount end asc nulls last,
+          case when ${sortId} = 'note' then payment.note end asc nulls last,
+          payment.payment_date desc nulls last, payment.id desc
       `;
     case "documents":
       return sql`
@@ -2607,13 +2715,30 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
   }
 
   if (options.dataset === "contracts") {
-    const whereSearch = search ? sql`and lower(concat_ws(' ', contract_no, note)) like lower(${pattern})` : sql``;
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', contract.contract_no, contract.note, document.file_name)) like lower(${pattern})`
+      : sql``;
     const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_contracts where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch}`,
       sql`
-        select *
-        from gp_contracts
-        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch}
+        select count(*)::int as total
+        from gp_contracts contract
+        left join gp_documents document
+          on document.organization_id = contract.organization_id
+         and document.id::text = contract.file_id
+        where contract.organization_id = ${organizationId} and contract.project_code = ${activeProjectCode} ${whereSearch}
+      `,
+      sql`
+        select
+          contract.*,
+          coalesce(document.file_name, '') as attachment_file_name,
+          coalesce(document.mime_type, '') as attachment_mime_type,
+          coalesce(document.file_size, 0) as attachment_file_size,
+          coalesce(document.file_data <> '', false) as attachment_has_file
+        from gp_contracts contract
+        left join gp_documents document
+          on document.organization_id = contract.organization_id
+         and document.id::text = contract.file_id
+        where contract.organization_id = ${organizationId} and contract.project_code = ${activeProjectCode} ${whereSearch}
         ${pagedRowsOrderBy(sql, "contracts", options.sorting)}
         limit ${pageSize}
         offset ${offset}
@@ -2630,13 +2755,30 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
   }
 
   if (options.dataset === "payments") {
-    const whereSearch = search ? sql`and lower(concat_ws(' ', note)) like lower(${pattern})` : sql``;
+    const whereSearch = search
+      ? sql`and lower(concat_ws(' ', payment.note, document.file_name)) like lower(${pattern})`
+      : sql``;
     const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_payments where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch}`,
       sql`
-        select *
-        from gp_payments
-        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch}
+        select count(*)::int as total
+        from gp_payments payment
+        left join gp_documents document
+          on document.organization_id = payment.organization_id
+         and document.id::text = payment.file_id
+        where payment.organization_id = ${organizationId} and payment.project_code = ${activeProjectCode} ${whereSearch}
+      `,
+      sql`
+        select
+          payment.*,
+          coalesce(document.file_name, '') as attachment_file_name,
+          coalesce(document.mime_type, '') as attachment_mime_type,
+          coalesce(document.file_size, 0) as attachment_file_size,
+          coalesce(document.file_data <> '', false) as attachment_has_file
+        from gp_payments payment
+        left join gp_documents document
+          on document.organization_id = payment.organization_id
+         and document.id::text = payment.file_id
+        where payment.organization_id = ${organizationId} and payment.project_code = ${activeProjectCode} ${whereSearch}
         ${pagedRowsOrderBy(sql, "payments", options.sorting)}
         limit ${pageSize}
         offset ${offset}
@@ -3237,6 +3379,8 @@ export async function saveContract(payload: Record<string, unknown>) {
   const contractNo = text(payload.contractNo).trim();
   const value = requireNonNegativeNumericInput(payload.value, "Giá trị");
   const id = number(payload.id);
+  const fileId = text(payload.fileId).trim();
+  const fileUrl = text(payload.fileUrl).trim() || (number(fileId) ? documentFileUrl(number(fileId)) : "");
 
   if (!projectCode) throw new Error("Thiếu công trình.");
   if (!contractNo) throw new Error("Thiếu số hợp đồng.");
@@ -3266,57 +3410,80 @@ export async function saveContract(payload: Record<string, unknown>) {
   }
 
   if (id > 0) {
+    const [previousRow] =
+      (await sql`select file_id from gp_contracts where organization_id = ${organizationId} and id = ${id}`) as Row[];
     await sql`
       update gp_contracts
       set project_code = ${projectCode},
           contract_no = ${contractNo},
           value = ${value},
           signed_date = ${dateOnly(payload.signedDate) || null},
-          note = ${text(payload.note)}
+          note = ${text(payload.note)},
+          file_url = ${fileUrl},
+          file_id = ${fileId}
       where organization_id = ${organizationId} and id = ${id}
     `;
+    await deleteAttachmentDocumentIfUnused(number(previousRow?.file_id), organizationId);
     return;
   }
 
   await sql`
-    insert into gp_contracts (organization_id, project_code, contract_no, value, signed_date, note)
-    values (${organizationId}, ${projectCode}, ${contractNo}, ${value}, ${dateOnly(payload.signedDate) || null}, ${text(payload.note)})
+    insert into gp_contracts (organization_id, project_code, contract_no, value, signed_date, note, file_url, file_id)
+    values (${organizationId}, ${projectCode}, ${contractNo}, ${value}, ${dateOnly(payload.signedDate) || null}, ${text(payload.note)}, ${fileUrl}, ${fileId})
   `;
 }
 
 export async function deleteContract(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
+  const id = number(payload.id);
+  const [row] =
+    (await sql`select file_id from gp_contracts where organization_id = ${organizationId} and id = ${id}`) as Row[];
   await sql`delete from gp_contracts where organization_id = ${organizationId} and id = ${number(payload.id)}`;
+  await deleteAttachmentDocumentIfUnused(number(row?.file_id), organizationId);
 }
 
 export async function savePayment(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = number(payload.id);
+  const projectCode = text(payload.projectCode).trim();
   const amount = requireNonNegativeNumericInput(payload.amount, "Số tiền");
+  const fileId = text(payload.fileId).trim();
+  const fileUrl = text(payload.fileUrl).trim() || (number(fileId) ? documentFileUrl(number(fileId)) : "");
+  if (!projectCode) throw new Error("Thiếu công trình.");
+
   if (id > 0) {
+    const [previousRow] =
+      (await sql`select file_id from gp_payments where organization_id = ${organizationId} and id = ${id}`) as Row[];
     await sql`
       update gp_payments
-      set project_code = ${text(payload.projectCode)},
+      set project_code = ${projectCode},
           payment_date = ${dateOnly(payload.date) || null},
           amount = ${amount},
-          note = ${text(payload.note)}
+          note = ${text(payload.note)},
+          file_url = ${fileUrl},
+          file_id = ${fileId}
       where organization_id = ${organizationId} and id = ${id}
     `;
+    await deleteAttachmentDocumentIfUnused(number(previousRow?.file_id), organizationId);
     return;
   }
 
   await sql`
-    insert into gp_payments (organization_id, project_code, payment_date, amount, note)
-    values (${organizationId}, ${text(payload.projectCode)}, ${dateOnly(payload.date) || null}, ${amount}, ${text(payload.note)})
+    insert into gp_payments (organization_id, project_code, payment_date, amount, note, file_url, file_id)
+    values (${organizationId}, ${projectCode}, ${dateOnly(payload.date) || null}, ${amount}, ${text(payload.note)}, ${fileUrl}, ${fileId})
   `;
 }
 
 export async function deletePayment(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
-  await sql`delete from gp_payments where organization_id = ${organizationId} and id = ${number(payload.id)}`;
+  const id = number(payload.id);
+  const [row] =
+    (await sql`select file_id from gp_payments where organization_id = ${organizationId} and id = ${id}`) as Row[];
+  await sql`delete from gp_payments where organization_id = ${organizationId} and id = ${id}`;
+  await deleteAttachmentDocumentIfUnused(number(row?.file_id), organizationId);
 }
 
 async function getNextCatalogCode(kind: CatalogItem["kind"], organizationId: string) {

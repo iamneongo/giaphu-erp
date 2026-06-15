@@ -376,7 +376,7 @@ function DocumentEditorDialog({
   );
 }
 
-function DocumentPreviewDialog({
+export function DocumentPreviewDialog({
   document,
   onOpenChange,
 }: {

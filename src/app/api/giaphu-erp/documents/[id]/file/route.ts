@@ -20,7 +20,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
 
     const permissionKeys = await getEffectiveErpPermissions(session);
-    if (!canAccessErpPermission(session, ERP_PERMISSIONS.documentsRead, permissionKeys)) {
+    if (
+      !canAccessErpPermission(session, ERP_PERMISSIONS.documentsRead, permissionKeys) &&
+      !canAccessErpPermission(session, ERP_PERMISSIONS.crmRead, permissionKeys) &&
+      !canAccessErpPermission(session, ERP_PERMISSIONS.subcontractorsRead, permissionKeys)
+    ) {
       return NextResponse.json({ status: "error", message: "Bạn không có quyền xem hồ sơ." }, { status: 403 });
     }
 

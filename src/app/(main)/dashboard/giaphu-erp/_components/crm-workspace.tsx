@@ -2,21 +2,22 @@
 
 import * as React from "react";
 
-import { Banknote, BriefcaseBusiness, FileText, Trash2 } from "lucide-react";
+import { Banknote, BriefcaseBusiness, Eye, FileText, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
-import type { ContractRow, PaymentRow, ProjectRow } from "@/lib/giaphu-erp/types";
+import type { ContractRow, DocumentRow, PaymentRow, ProjectRow } from "@/lib/giaphu-erp/types";
 
 import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { todayIso } from "../_lib/date-utils";
-import { uniqueOptions } from "../_lib/form-options";
-import { formatMoney } from "../_lib/formatters";
+import { formatDate, formatMoney } from "../_lib/formatters";
+import { uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable } from "./data-table";
+import { DocumentPreviewDialog } from "./documents-workspace";
 import { ExcelImportDialog } from "./excel-import-dialog";
 import { ModuleHeader } from "./module-header";
 import { ProjectPinUnlockDialog } from "./project-pin-unlock";
@@ -24,6 +25,34 @@ import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
 
 type CrmSection = "projects" | "contracts" | "payments";
+
+type CrmAttachmentRow = ContractRow | PaymentRow;
+
+const attachmentAccept = ".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.txt,image/*";
+
+function documentFromCrmAttachment(row: CrmAttachmentRow, docType: string): DocumentRow | null {
+  const documentId = Number(row.fileId || 0);
+  if (!documentId || !row.hasFile) return null;
+
+  return {
+    id: documentId,
+    project_code: row.projectCode,
+    doc_type: docType,
+    file_name: row.fileName || "Hồ sơ đính kèm",
+    mime_type: row.mimeType || "application/octet-stream",
+    file_size: row.fileSize || 0,
+    note: row.note,
+    preview_text: "",
+    has_file: true,
+  };
+}
+
+function exportAttachmentUrl(fileUrl: string) {
+  if (!fileUrl) return "";
+  if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
+  if (typeof window === "undefined") return fileUrl;
+  return new URL(fileUrl, window.location.origin).toString();
+}
 
 function validateNonNegativeAmount(value: string, label = "Số tiền") {
   const raw = value.trim();
@@ -37,12 +66,6 @@ function validateNonNegativeAmount(value: string, label = "Số tiền") {
 
 export function CrmWorkspace({ section = "projects" }: { section?: CrmSection }) {
   const { data, activeProjectCode, isSwitchingProject, setActiveProjectCode, runAction, scoped } = useGiaPhuErp();
-  const paginatedProjects = usePaginatedErpRows<ProjectRow>({
-    dataset: "projects",
-    projectCode: "",
-    initialRows: data.projects,
-    enabled: section === "projects",
-  });
   const paginatedContracts = usePaginatedErpRows<ContractRow>({
     dataset: "contracts",
     projectCode: activeProjectCode,
@@ -55,24 +78,81 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
     initialRows: scoped.payments,
     enabled: section === "payments",
   });
-  const projectStatusOptions = uniqueOptions(data.projects.map((project) => project.status));
-  const projectOwnerOptions = uniqueOptions(data.projects.map((project) => project.owner));
+  const activeProjectRows = React.useMemo(
+    () => data.projects.filter((project) => project.code === activeProjectCode),
+    [activeProjectCode, data.projects],
+  );
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.crmManage);
   const canManageProjects = canManage;
   const [pinProject, setPinProject] = React.useState<ProjectRow | null>(null);
+  const [previewDocument, setPreviewDocument] = React.useState<DocumentRow | null>(null);
 
   if (!data.projects.length) {
     return null;
   }
 
+  async function buildPayloadWithAttachment({
+    payload,
+    docType,
+    previewParts,
+  }: {
+    payload: Record<string, unknown>;
+    docType: string;
+    previewParts: Array<unknown>;
+  }) {
+    const attachment = payload.attachment;
+    const nextPayload = { ...payload };
+    delete nextPayload.attachment;
+
+    nextPayload.fileId = String(payload.fileId ?? "");
+    nextPayload.fileUrl = String(payload.fileUrl ?? "");
+
+    if (attachment instanceof File && attachment.size > 0) {
+      const formData = new FormData();
+      const projectCode = String(payload.projectCode || activeProjectCode);
+
+      formData.set("projectCode", projectCode);
+      formData.set("docType", docType);
+      formData.set("fileName", attachment.name);
+      formData.set("note", String(payload.note ?? ""));
+      formData.set("previewText", [docType, ...previewParts].filter(Boolean).join(" · "));
+      formData.set("file", attachment);
+
+      const uploaded = await uploadGiaPhuDocument(formData);
+      const documentId = Number(uploaded.documentId ?? 0);
+      if (documentId > 0) {
+        nextPayload.fileId = String(documentId);
+        nextPayload.fileUrl = `/api/giaphu-erp/documents/${documentId}/file`;
+      }
+    }
+
+    return nextPayload;
+  }
+
   async function runContractAction(action: string, payload: Record<string, unknown>) {
-    const result = await runAction(action, { ...payload, __returnData: false });
+    const nextPayload =
+      action === "saveContract"
+        ? await buildPayloadWithAttachment({
+            payload,
+            docType: "Hợp đồng công trình",
+            previewParts: [payload.contractNo, formatDate(String(payload.signedDate ?? ""))],
+          })
+        : payload;
+    const result = await runAction(action, { ...nextPayload, __returnData: false });
     if (result) paginatedContracts.refresh();
     return result;
   }
 
   async function runPaymentAction(action: string, payload: Record<string, unknown>) {
-    const result = await runAction(action, { ...payload, __returnData: false });
+    const nextPayload =
+      action === "savePayment"
+        ? await buildPayloadWithAttachment({
+            payload,
+            docType: "Phiếu thu / chứng từ thu tiền",
+            previewParts: [formatDate(String(payload.date ?? "")), formatMoney(Number(payload.amount ?? 0))],
+          })
+        : payload;
+    const result = await runAction(action, { ...nextPayload, __returnData: false });
     if (result) paginatedPayments.refresh();
     return result;
   }
@@ -152,7 +232,8 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                 key: "startDate",
                 label: "Ngày bắt đầu",
                 accessor: (project) => project.startDate,
-                render: (project) => project.startDate || "-",
+                exportValue: (project) => formatDate(project.startDate),
+                render: (project) => formatDate(project.startDate),
               },
               {
                 key: "status",
@@ -240,9 +321,8 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                   ]
                 : []),
             ]}
-            rows={paginatedProjects.rows}
+            rows={activeProjectRows}
             getRowId={(project) => project.code}
-            serverSide={paginatedProjects.serverSide}
             detailType="projects"
             selectable
             bulkDeleteAction={
@@ -254,17 +334,12 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                       for (const project of rows) {
                         await runAction("deleteProject", { code: project.code });
                       }
-                      paginatedProjects.refresh();
                     },
                   }
                 : undefined
             }
             exportFileName="crm-cong-trinh"
             searchPlaceholder="Tìm theo mã, tên, chủ đầu tư..."
-            filters={[
-              { key: "status", label: "Trạng thái", options: projectStatusOptions },
-              { key: "owner", label: "Chủ đầu tư", options: projectOwnerOptions },
-            ]}
             initialSorting={[{ id: "startDate", desc: true }]}
           />
         </SectionBlock>
@@ -324,6 +399,13 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
               },
               { name: "signedDate", label: "Ngày ký", type: "date", value: todayIso() },
               { name: "note", label: "Ghi chú", type: "textarea" },
+              {
+                name: "attachment",
+                label: "Hồ sơ đính kèm",
+                type: "file",
+                accept: attachmentAccept,
+                helperText: "Hỗ trợ PDF, Word, Excel, CSV, TXT và hình ảnh.",
+              },
             ]}
           />
         </>
@@ -343,7 +425,8 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                 key: "signedDate",
                 label: "Ngày ký",
                 accessor: (row) => row.signedDate,
-                render: (row) => row.signedDate || "-",
+                exportValue: (row) => formatDate(row.signedDate),
+                render: (row) => formatDate(row.signedDate),
               },
               {
                 key: "value",
@@ -353,6 +436,25 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                 render: (row) => formatMoney(row.value),
               },
               { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" },
+              {
+                key: "fileUrl",
+                label: "Hồ sơ",
+                accessor: (row) => (row.hasFile ? row.fileName || "Có hồ sơ" : "Không"),
+                exportValue: (row) => exportAttachmentUrl(row.fileUrl),
+                sortable: false,
+                render: (row) => {
+                  const document = documentFromCrmAttachment(row, "Hợp đồng công trình");
+
+                  return document ? (
+                    <Button size="sm" variant="outline" onClick={() => setPreviewDocument(document)}>
+                      <Eye />
+                      Xem nhanh
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  );
+                },
+              },
               ...(canManage
                 ? [
                     {
@@ -393,6 +495,17 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                                   value: row.signedDate || todayIso(),
                                 },
                                 { name: "note", label: "Ghi chú", type: "textarea", value: row.note },
+                                { name: "fileId", label: "File ID", type: "hidden", value: row.fileId },
+                                { name: "fileUrl", label: "File URL", type: "hidden", value: row.fileUrl },
+                                {
+                                  name: "attachment",
+                                  label: row.hasFile ? "Hồ sơ đính kèm mới" : "Hồ sơ đính kèm",
+                                  type: "file",
+                                  accept: attachmentAccept,
+                                  helperText: row.hasFile
+                                    ? "Để trống nếu muốn giữ hồ sơ hiện tại."
+                                    : "Hỗ trợ PDF, Word, Excel, CSV, TXT và hình ảnh.",
+                                },
                               ],
                             }}
                             actions={[
@@ -486,6 +599,13 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                 validate: (value) => validateNonNegativeAmount(value),
               },
               { name: "note", label: "Ghi chú", type: "textarea" },
+              {
+                name: "attachment",
+                label: "Chứng từ đính kèm",
+                type: "file",
+                accept: attachmentAccept,
+                helperText: "Hỗ trợ PDF, Word, Excel, CSV, TXT và hình ảnh.",
+              },
             ]}
           />
         </>
@@ -495,7 +615,13 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
           <DataTable
             loading={isSwitchingProject}
             columns={[
-              { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+              {
+                key: "date",
+                label: "Ngày",
+                accessor: (row) => row.date,
+                exportValue: (row) => formatDate(row.date),
+                render: (row) => formatDate(row.date),
+              },
               {
                 key: "amount",
                 label: "Số tiền",
@@ -504,6 +630,25 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                 render: (row) => formatMoney(row.amount),
               },
               { key: "note", label: "Ghi chú", accessor: (row) => row.note, render: (row) => row.note || "-" },
+              {
+                key: "fileUrl",
+                label: "Hồ sơ",
+                accessor: (row) => (row.hasFile ? row.fileName || "Có hồ sơ" : "Không"),
+                exportValue: (row) => exportAttachmentUrl(row.fileUrl),
+                sortable: false,
+                render: (row) => {
+                  const document = documentFromCrmAttachment(row, "Phiếu thu / chứng từ thu tiền");
+
+                  return document ? (
+                    <Button size="sm" variant="outline" onClick={() => setPreviewDocument(document)}>
+                      <Eye />
+                      Xem nhanh
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  );
+                },
+              },
               ...(canManage
                 ? [
                     {
@@ -532,6 +677,17 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                                   validate: (value) => validateNonNegativeAmount(value),
                                 },
                                 { name: "note", label: "Ghi chú", type: "textarea", value: row.note },
+                                { name: "fileId", label: "File ID", type: "hidden", value: row.fileId },
+                                { name: "fileUrl", label: "File URL", type: "hidden", value: row.fileUrl },
+                                {
+                                  name: "attachment",
+                                  label: row.hasFile ? "Chứng từ đính kèm mới" : "Chứng từ đính kèm",
+                                  type: "file",
+                                  accept: attachmentAccept,
+                                  helperText: row.hasFile
+                                    ? "Để trống nếu muốn giữ chứng từ hiện tại."
+                                    : "Hỗ trợ PDF, Word, Excel, CSV, TXT và hình ảnh.",
+                                },
                               ],
                             }}
                             actions={[
@@ -610,6 +766,7 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
           setActiveProjectCode(project.code);
         }}
       />
+      <DocumentPreviewDialog document={previewDocument} onOpenChange={(open) => !open && setPreviewDocument(null)} />
     </div>
   );
 }

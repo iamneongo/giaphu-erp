@@ -20,7 +20,7 @@ import { ReportsContentSkeleton } from "../../_components/loading-skeletons";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { useReportsData } from "../_hooks/use-reports-data";
 import { formatVnd } from "../_lib/dashboard-insights";
-import { formatCount } from "../_lib/formatters";
+import { formatCount, formatDate } from "../_lib/formatters";
 import { DataTable } from "./data-table";
 
 const costChartConfig = {
@@ -359,7 +359,13 @@ export function ReportsWorkspace({ routeProjectId }: { routeProjectId?: string }
             <CardContent>
               <DataTable
                 columns={[
-                  { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+                  {
+                    key: "date",
+                    label: "Ngày",
+                    accessor: (row) => row.date,
+                    exportValue: (row) => formatDate(row.date),
+                    render: (row) => formatDate(row.date),
+                  },
                   { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
                   {
                     key: "category",
@@ -419,7 +425,13 @@ export function ReportsWorkspace({ routeProjectId }: { routeProjectId?: string }
             <CardContent>
               <DataTable
                 columns={[
-                  { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+                  {
+                    key: "date",
+                    label: "Ngày",
+                    accessor: (row) => row.date,
+                    exportValue: (row) => formatDate(row.date),
+                    render: (row) => formatDate(row.date),
+                  },
                   { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
                   {
                     key: "category",
@@ -478,7 +490,13 @@ export function ReportsWorkspace({ routeProjectId }: { routeProjectId?: string }
             <CardContent>
               <DataTable
                 columns={[
-                  { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+                  {
+                    key: "date",
+                    label: "Ngày",
+                    accessor: (row) => row.date,
+                    exportValue: (row) => formatDate(row.date),
+                    render: (row) => formatDate(row.date),
+                  },
                   { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
                   {
                     key: "description",

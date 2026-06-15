@@ -14,7 +14,7 @@ import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { currentIsoWeek, todayIso } from "../_lib/date-utils";
 import { catalogOptions, catalogOptionsWithValue, uniqueOptions } from "../_lib/form-options";
-import { formatMoney } from "../_lib/formatters";
+import { formatDate, formatMoney } from "../_lib/formatters";
 import { runGiaPhuAction, uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable } from "./data-table";
@@ -359,7 +359,13 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
             key={`subcontractors-${activeProjectCode}`}
             loading={isSwitchingProject}
             columns={[
-              { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+              {
+                key: "date",
+                label: "Ngày",
+                accessor: (row) => row.date,
+                exportValue: (row) => formatDate(row.date),
+                render: (row) => formatDate(row.date),
+              },
               { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
               {
                 key: "category",
@@ -645,7 +651,13 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
           <DataTable
             loading={isSwitchingProject}
             columns={[
-              { key: "date", label: "Ngày", accessor: (row) => row.date, render: (row) => row.date || "-" },
+              {
+                key: "date",
+                label: "Ngày",
+                accessor: (row) => row.date,
+                exportValue: (row) => formatDate(row.date),
+                render: (row) => formatDate(row.date),
+              },
               { key: "week", label: "Tuần", accessor: (row) => row.week, render: (row) => row.week || "-" },
               {
                 key: "description",

@@ -29,7 +29,11 @@ export async function POST(request: Request) {
     }
 
     const permissionKeys = await getEffectiveErpPermissions(session);
-    if (!canAccessErpPermission(session, ERP_PERMISSIONS.documentsManage, permissionKeys)) {
+    if (
+      !canAccessErpPermission(session, ERP_PERMISSIONS.documentsManage, permissionKeys) &&
+      !canAccessErpPermission(session, ERP_PERMISSIONS.crmManage, permissionKeys) &&
+      !canAccessErpPermission(session, ERP_PERMISSIONS.subcontractorsManage, permissionKeys)
+    ) {
       return NextResponse.json({ status: "error", message: "Bạn không có quyền quản lý hồ sơ." }, { status: 403 });
     }
 
