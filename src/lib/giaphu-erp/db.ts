@@ -1836,21 +1836,21 @@ function pagedRowsOrderBy(sql: any, dataset: GiaPhuPagedDataset, sorting?: ErpTa
       case "contracts":
         return sql`
           order by
-            case when ${sortId} = 'id' then id end desc nulls last,
-            case when ${sortId} = 'contractNo' then contract_no end desc nulls last,
-            case when ${sortId} = 'value' then value end desc nulls last,
-            case when ${sortId} = 'signedDate' then signed_date end desc nulls last,
-            case when ${sortId} = 'note' then note end desc nulls last,
-            signed_date desc nulls last, id desc
+            case when ${sortId} = 'id' then contract.id end desc nulls last,
+            case when ${sortId} = 'contractNo' then contract.contract_no end desc nulls last,
+            case when ${sortId} = 'value' then contract.value end desc nulls last,
+            case when ${sortId} = 'signedDate' then contract.signed_date end desc nulls last,
+            case when ${sortId} = 'note' then contract.note end desc nulls last,
+            contract.signed_date desc nulls last, contract.id desc
         `;
       case "payments":
         return sql`
           order by
-            case when ${sortId} = 'id' then id end desc nulls last,
-            case when ${sortId} in ('date', 'paymentDate') then payment_date end desc nulls last,
-            case when ${sortId} = 'amount' then amount end desc nulls last,
-            case when ${sortId} = 'note' then note end desc nulls last,
-            payment_date desc nulls last, id desc
+            case when ${sortId} = 'id' then payment.id end desc nulls last,
+            case when ${sortId} in ('date', 'paymentDate') then payment.payment_date end desc nulls last,
+            case when ${sortId} = 'amount' then payment.amount end desc nulls last,
+            case when ${sortId} = 'note' then payment.note end desc nulls last,
+            payment.payment_date desc nulls last, payment.id desc
         `;
       case "documents":
         return sql`
