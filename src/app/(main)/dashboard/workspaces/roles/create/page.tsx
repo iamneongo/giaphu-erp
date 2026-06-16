@@ -12,7 +12,7 @@ export default async function Page() {
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Tạo vai trò</h1>
+        <h1 className="font-semibold text-3xl tracking-tight">Tạo vai trò</h1>
       </div>
       <RoleEditorPage mode="create" />
     </div>

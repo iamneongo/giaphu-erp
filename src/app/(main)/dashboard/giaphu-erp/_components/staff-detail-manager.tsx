@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileThumbnail } from "@/components/ui/file-thumbnail";
+import { FileSystem, type FileSystemItem } from "@/components/ui/file-system";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -171,6 +171,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
   const [uploadingDocs, setUploadingDocs] = React.useState(false);
   const [uploadKey, setUploadKey] = React.useState(0);
+  const [selectedFile, setSelectedFile] = React.useState<FileSystemItem | null>(null);
 
   const [
     { files: avatarFiles, isDragging: isAvatarDragging, errors: avatarErrors },
@@ -335,6 +336,24 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
     }
   }
 
+  const fileItems: FileSystemItem[] = React.useMemo(() => {
+    return profile.profileFiles
+      .split("\n")
+      .map((url) => url.trim())
+      .filter(Boolean)
+      .map((url) => {
+        const fileName = getFileNameFromUrl(url);
+        const mimeType = getFileMimeType(fileName);
+        return {
+          kind: "file" as const,
+          path: fileName,
+          url: url,
+          name: fileName,
+          contentType: mimeType,
+        };
+      });
+  }, [profile.profileFiles]);
+
   return (
     <Tabs defaultValue="profile" className="space-y-4 md:space-y-6">
       <TabsList>
@@ -458,64 +477,43 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                       </div>
                     )}
 
-                    {profile.profileFiles ? (
-                      <div className="mt-3 flex flex-col gap-2">
-                        {profile.profileFiles.split("\n").map((url) => {
-                          const trimmed = url.trim();
-                          if (!trimmed) return null;
-
-                          const fileName = getFileNameFromUrl(trimmed);
-                          const mimeType = getFileMimeType(fileName);
-
-                          return (
-                            <div
-                              key={trimmed}
-                              className="flex items-center gap-3 rounded-xl border bg-muted/30 px-3 py-2.5"
+                    {fileItems.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground text-xs">
+                            {fileItems.length} tài liệu đã tải lên. Nhấp đúp để xem chi tiết.
+                          </span>
+                          {selectedFile && selectedFile.kind === "file" && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => {
+                                const newLinks = profile.profileFiles
+                                  .split("\n")
+                                  .filter((link) => getFileNameFromUrl(link.trim()) !== selectedFile.path)
+                                  .join("\n");
+                                updateProfile("profileFiles", newLinks);
+                                setSelectedFile(null);
+                                toast.success(`Đã xóa tài liệu: ${selectedFile.path}`);
+                              }}
+                              className="flex h-8 items-center gap-1.5"
                             >
-                              <FileThumbnail
-                                file={{
-                                  name: fileName,
-                                  type: mimeType,
-                                }}
-                                previewImageUrl={mimeType.startsWith("image/") ? trimmed : null}
-                                className="size-10 shrink-0 rounded-lg"
-                              />
-                              <div className="min-w-0 flex-1">
-                                <a
-                                  href={trimmed}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="block truncate font-medium text-blue-600 text-sm hover:underline dark:text-blue-400"
-                                >
-                                  {fileName}
-                                </a>
-                                <div className="truncate text-muted-foreground text-xs">
-                                  {mimeType.startsWith("image/")
-                                    ? "Ảnh"
-                                    : mimeType === "application/pdf"
-                                      ? "Tài liệu PDF"
-                                      : "Tài liệu đính kèm"}
-                                </div>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => {
-                                  const newLinks = profile.profileFiles
-                                    .split("\n")
-                                    .filter((link) => link.trim() !== trimmed)
-                                    .join("\n");
-                                  updateProfile("profileFiles", newLinks);
-                                }}
-                              >
-                                <X className="size-4" />
-                              </Button>
-                            </div>
-                          );
-                        })}
+                              <X className="size-4" />
+                              Xóa tài liệu đã chọn
+                            </Button>
+                          )}
+                        </div>
+                        <div className="rounded-xl border bg-background/50 p-2">
+                          <FileSystem
+                            items={fileItems}
+                            defaultView="list"
+                            title="Hồ sơ công nhân"
+                            className="min-h-[300px] border-0 shadow-none"
+                            onSelectionChange={(item) => setSelectedFile(item)}
+                          />
+                        </div>
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               </div>

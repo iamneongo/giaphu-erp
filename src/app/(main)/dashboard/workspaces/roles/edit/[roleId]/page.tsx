@@ -13,7 +13,7 @@ export default async function Page({ params }: { params: Promise<{ roleId: strin
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Sửa vai trò</h1>
+        <h1 className="font-semibold text-3xl tracking-tight">Sửa vai trò</h1>
       </div>
       <RoleEditorPage mode="edit" roleId={roleId} />
     </div>

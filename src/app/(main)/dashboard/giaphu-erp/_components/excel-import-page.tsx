@@ -386,7 +386,7 @@ export function ExcelImportPage({
       <div className="flex min-h-[48vh] flex-col items-center justify-center gap-4 text-center">
         <FileSpreadsheet className="size-8 text-muted-foreground" />
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold">Không tìm thấy loại import</h1>
+          <h1 className="font-semibold text-2xl">Không tìm thấy loại import</h1>
           <p className="text-muted-foreground text-sm">Trang import này không tồn tại hoặc đã được di chuyển.</p>
         </div>
         <Button asChild>

@@ -2,18 +2,17 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { auth } from "@clerk/nextjs/server";
-import { ArrowLeft, CalendarDays, ExternalLink, FileText, type WalletCards } from "lucide-react";
+import { ArrowLeft, ExternalLink, type WalletCards } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ERP_PERMISSIONS, enforceErpRoutePermission } from "@/lib/clerk/erp-rbac";
 import { getDocumentDetail, getGiaPhuDashboardData, getStaffDetailData } from "@/lib/giaphu-erp/db";
 import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
 import { decodeProjectRouteSegment, erpPathForProject } from "@/lib/giaphu-erp/project-routes";
-import type { AttendanceRow, PayrollAdjustmentRow, StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
+import type { AttendanceRow, StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
 
 import { DashboardLink } from "../../_components/dashboard-link";
 import { formatDate, formatMeasurement, formatMoney } from "../_lib/formatters";
@@ -315,7 +314,7 @@ function buildStaffDetailInsights(detailData: StaffDetailData, projectName: stri
 }
 
 function StaffDetailSections({ insights }: { insights: StaffDetailInsights }) {
-  const recentAttendance = insights.attendanceRows.slice(0, 20);
+  const _recentAttendance = insights.attendanceRows.slice(0, 20);
 
   return (
     <>
@@ -456,7 +455,7 @@ function StaffDetailSections({ insights }: { insights: StaffDetailInsights }) {
   );
 }
 
-function StaffMetricCard({
+function _StaffMetricCard({
   title,
   value,
   detail,
