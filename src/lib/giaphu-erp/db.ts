@@ -4506,6 +4506,16 @@ export async function deleteStaff(payload: Record<string, unknown>) {
   if (!rows.length) throw new Error("Không tìm thấy nhân sự cần lưu trữ.");
 }
 
+export async function destroyStaff(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const organizationId = requireOrganizationId(payload.organizationId);
+  const id = text(payload.id).trim();
+  await sql`
+    delete from gp_staff
+    where organization_id = ${organizationId} and id = ${id}
+  `;
+}
+
 export async function saveMaterial(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);

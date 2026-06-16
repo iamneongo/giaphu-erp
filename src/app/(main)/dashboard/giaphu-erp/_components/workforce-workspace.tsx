@@ -2396,6 +2396,20 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                                   return runAction("deleteStaff", { id: row.id });
                                 },
                               },
+                              {
+                                label: "Xóa",
+                                icon: Trash2,
+                                destructive: true,
+                                onSelect: () => {
+                                  if (
+                                    window.confirm(
+                                      `Xóa vĩnh viễn "${row.name}"? Hành động này không thể hoàn tác và sẽ xóa sạch mọi thông tin chấm công liên quan của nhân sự này.`,
+                                    )
+                                  ) {
+                                    return runAction("destroyStaff", { id: row.id });
+                                  }
+                                },
+                              },
                             ]}
                           />
                         </div>

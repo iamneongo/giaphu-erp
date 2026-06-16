@@ -28,6 +28,7 @@ import {
   deleteSubcontractor,
   deleteSubcontractorContract,
   destroyCatalog,
+  destroyStaff,
   getGiaPhuActivityLogs,
   getGiaPhuDashboardData,
   getGiaPhuFilterOptions,
@@ -139,6 +140,7 @@ const mutationPermissions = {
   saveStaffProfile: ERP_PERMISSIONS.workforceManage,
   saveStaffSkillEvaluation: ERP_PERMISSIONS.workforceManage,
   deleteStaff: ERP_PERMISSIONS.workforceManage,
+  destroyStaff: ERP_PERMISSIONS.workforceManage,
   saveMaterial: ERP_PERMISSIONS.materialsManage,
   saveZaloMaterialBreakdown: ERP_PERMISSIONS.materialsManage,
   deleteMaterial: ERP_PERMISSIONS.materialsManage,
@@ -236,6 +238,7 @@ function activityModuleForAction(action: string | undefined) {
     case "saveStaffProfile":
     case "saveStaffSkillEvaluation":
     case "deleteStaff":
+    case "destroyStaff":
     case "saveWeeklyAttendance":
     case "saveStaffWeeklyAttendance":
     case "savePayrollAdjustment":
@@ -303,6 +306,8 @@ function activityLabelForAction(action: string | undefined) {
       return "Lưu đánh giá tay nghề";
     case "deleteStaff":
       return "Lưu trữ nhân sự";
+    case "destroyStaff":
+      return "Xóa nhân sự";
     case "saveMaterial":
       return "Lưu vật tư";
     case "saveZaloMaterialBreakdown":
@@ -816,6 +821,10 @@ export async function POST(request: Request) {
       case "deleteStaff":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteStaff)) return forbidden();
         await deleteStaff(payload);
+        break;
+      case "destroyStaff":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.destroyStaff)) return forbidden();
+        await destroyStaff(payload);
         break;
       case "saveMaterial":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.saveMaterial)) return forbidden();
