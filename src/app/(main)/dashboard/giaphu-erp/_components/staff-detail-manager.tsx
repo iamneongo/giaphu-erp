@@ -188,6 +188,10 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
       toast.error("Vui lòng chọn ngày đánh giá.");
       return;
     }
+    if (!evaluator.trim()) {
+      toast.error("Vui lòng nhập người đánh giá.");
+      return;
+    }
     if (newSalary.trim() && Number(newSalary) < 0) {
       toast.error("Mức lương mới không được âm.");
       return;
@@ -522,6 +526,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                 label="Người đánh giá"
                 value={evaluator}
                 placeholder="Ví dụ: Hải / Cai thầu / Chỉ huy"
+                required
                 onChange={setEvaluator}
               />
               <SelectField
