@@ -295,9 +295,8 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
             <div className="grid gap-4 md:grid-cols-[200px_1fr]">
               <div className="flex flex-col items-center gap-4 pt-2">
                 <div className="relative">
-                  <div
-                    role="button"
-                    tabIndex={0}
+                  <button
+                    type="button"
                     className={cn(
                       "group/avatar relative flex h-32 w-32 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed transition-colors",
                       isAvatarDragging
@@ -328,7 +327,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                         <Loader2 className="size-6 animate-spin" />
                       </div>
                     )}
-                  </div>
+                  </button>
 
                   {avatarPreviewUrl && !uploadingAvatar && (
                     <Button
@@ -347,7 +346,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                 </div>
 
                 <div className="space-y-1 text-center">
-                  <p className="text-muted-foreground text-xs">PNG, JPG (Tối đa 5MB)</p>
+                  <p className="text-muted-foreground text-xs">Các định dạng ảnh (Tối đa 5MB)</p>
                 </div>
 
                 {avatarErrors.length > 0 && (
