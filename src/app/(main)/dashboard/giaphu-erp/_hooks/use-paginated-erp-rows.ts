@@ -54,11 +54,17 @@ export function usePaginatedErpRows<T>({
     sorting: [],
     filters: {},
   });
+  const initialRowsRef = React.useRef(initialRows);
   const filterOptionsScopeKey = React.useMemo(
     () => JSON.stringify({ dataset, fixedFilters, projectCode }),
     [dataset, fixedFilters, projectCode],
   );
   const previousFilterOptionsScopeKey = React.useRef(filterOptionsScopeKey);
+  const rowsScopeKey = React.useMemo(
+    () => JSON.stringify({ dataset, enabled, fixedFilters, projectCode }),
+    [dataset, enabled, fixedFilters, projectCode],
+  );
+  const previousRowsScopeKey = React.useRef(rowsScopeKey);
   const filterOptionsLoaded = hasObjectValues(filterOptions);
 
   const clearFilterOptions = React.useCallback(() => {
@@ -66,10 +72,17 @@ export function usePaginatedErpRows<T>({
   }, []);
 
   React.useEffect(() => {
-    setRows((current) => (current === initialRows ? current : initialRows));
-    setTotal((current) => (current === initialRows.length ? current : initialRows.length));
-    setState((current) => (current.pageIndex ? { ...current, pageIndex: 0 } : current));
+    initialRowsRef.current = initialRows;
   }, [initialRows]);
+
+  React.useEffect(() => {
+    if (previousRowsScopeKey.current === rowsScopeKey) return;
+
+    previousRowsScopeKey.current = rowsScopeKey;
+    setRows(initialRows);
+    setTotal(initialRows.length);
+    setState((current) => (current.pageIndex ? { ...current, pageIndex: 0 } : current));
+  }, [initialRows, rowsScopeKey]);
 
   React.useEffect(() => {
     if (previousFilterOptionsScopeKey.current === filterOptionsScopeKey) return;
@@ -143,8 +156,9 @@ export function usePaginatedErpRows<T>({
 
   React.useEffect(() => {
     if (!enabled) {
-      setRows((current) => (current === initialRows ? current : initialRows));
-      setTotal((current) => (current === initialRows.length ? current : initialRows.length));
+      const fallbackRows = initialRowsRef.current;
+      setRows((current) => (current === fallbackRows ? current : fallbackRows));
+      setTotal((current) => (current === fallbackRows.length ? current : fallbackRows.length));
       setLoading((current) => (current ? false : current));
       return;
     }
@@ -189,7 +203,6 @@ export function usePaginatedErpRows<T>({
     dataset,
     enabled,
     fixedFilters,
-    initialRows,
     projectCode,
     refreshToken,
     state.query,
