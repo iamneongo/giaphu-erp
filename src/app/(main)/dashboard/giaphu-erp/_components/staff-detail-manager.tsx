@@ -264,6 +264,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                         formData.append("file", file);
                         formData.append("docType", "Avatar");
                         formData.append("fileName", file.name);
+                        formData.append("projectCode", "GLOBAL");
                         const uploaded = await uploadGiaPhuDocument(formData);
                         if (uploaded?.documentId) {
                           updateProfile("avatarUrl", `/api/giaphu-erp/documents/${uploaded.documentId}/file`);
