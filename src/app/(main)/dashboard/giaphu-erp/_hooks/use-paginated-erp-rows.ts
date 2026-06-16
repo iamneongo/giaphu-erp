@@ -191,8 +191,8 @@ export function usePaginatedErpRows<T>({
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setRows((current) => (current.length ? [] : current));
-        setTotal((current) => (current ? 0 : current));
+        setRows((current) => current);
+        setTotal((current) => current);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading((current) => (current ? false : current));
