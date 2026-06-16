@@ -5405,7 +5405,7 @@ export async function saveDocument(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = number(payload.id);
-  const projectCode = text(payload.projectCode).trim();
+  let projectCode = text(payload.projectCode).trim();
   const docType = text(payload.docType).trim();
   const fileName = text(payload.fileName).trim();
   const fileData = text(payload.fileData);
@@ -5415,6 +5415,15 @@ export async function saveDocument(payload: Record<string, unknown>) {
   const fileId = text(payload.fileId).trim();
   const note = text(payload.note).trim();
   const previewText = text(payload.previewText).trim();
+
+  if (projectCode === "GLOBAL") {
+    projectCode = `GLOBAL_${organizationId}`;
+    await sql`
+      insert into gp_projects (code, organization_id, name)
+      values (${projectCode}, ${organizationId}, 'Hồ sơ dùng chung')
+      on conflict (code) do nothing
+    `;
+  }
 
   if (!projectCode) throw new Error("Thiếu công trình.");
   if (!docType) throw new Error("Thiếu loại hồ sơ.");
