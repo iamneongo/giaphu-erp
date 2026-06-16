@@ -27,6 +27,7 @@ import {
   deleteStaff,
   deleteSubcontractor,
   deleteSubcontractorContract,
+  destroyCatalog,
   getGiaPhuActivityLogs,
   getGiaPhuDashboardData,
   getGiaPhuFilterOptions,
@@ -132,6 +133,7 @@ const mutationPermissions = {
   deletePayment: ERP_PERMISSIONS.crmManage,
   manageCatalog: ERP_PERMISSIONS.catalogsManage,
   deleteCatalog: ERP_PERMISSIONS.catalogsManage,
+  destroyCatalog: ERP_PERMISSIONS.catalogsManage,
   restoreCatalog: ERP_PERMISSIONS.catalogsManage,
   manageStaff: ERP_PERMISSIONS.workforceManage,
   saveStaffProfile: ERP_PERMISSIONS.workforceManage,
@@ -227,6 +229,7 @@ function activityModuleForAction(action: string | undefined) {
       return "CRM công trình";
     case "manageCatalog":
     case "deleteCatalog":
+    case "destroyCatalog":
     case "restoreCatalog":
       return "Danh mục";
     case "manageStaff":
@@ -288,6 +291,8 @@ function activityLabelForAction(action: string | undefined) {
       return "Lưu danh mục";
     case "deleteCatalog":
       return "Lưu trữ danh mục";
+    case "destroyCatalog":
+      return "Xóa danh mục";
     case "restoreCatalog":
       return "Khôi phục danh mục";
     case "manageStaff":
@@ -786,6 +791,10 @@ export async function POST(request: Request) {
       case "deleteCatalog":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteCatalog)) return forbidden();
         await deleteCatalog(payload);
+        break;
+      case "destroyCatalog":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.destroyCatalog)) return forbidden();
+        await destroyCatalog(payload);
         break;
       case "restoreCatalog":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.restoreCatalog)) return forbidden();

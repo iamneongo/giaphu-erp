@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Archive, BookOpen, Plus, RotateCcw } from "lucide-react";
+import { Archive, BookOpen, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -237,6 +237,22 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
                     : `Lưu trữ "${row.name}"? Mục này sẽ ẩn khỏi danh mục chọn nhưng dữ liệu cũ vẫn được giữ lại.`;
                   if (window.confirm(message)) {
                     return runAction(row.archived ? "restoreCatalog" : "deleteCatalog", {
+                      id: row.id,
+                    });
+                  }
+                },
+              },
+              {
+                label: "Xóa",
+                icon: Trash2,
+                destructive: true,
+                onSelect: () => {
+                  if (
+                    window.confirm(
+                      `Xóa vĩnh viễn "${row.name}"? Hành động này không thể hoàn tác và có thể lỗi nếu mục này đang được sử dụng ở các phần khác.`,
+                    )
+                  ) {
+                    return runAction("destroyCatalog", {
                       id: row.id,
                     });
                   }

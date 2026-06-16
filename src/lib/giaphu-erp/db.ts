@@ -4283,6 +4283,16 @@ export async function restoreCatalog(payload: Record<string, unknown>) {
   `;
 }
 
+export async function destroyCatalog(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const organizationId = requireOrganizationId(payload.organizationId);
+  const id = text(payload.id).trim();
+  await sql`
+    delete from gp_catalog_items
+    where organization_id = ${organizationId} and id = ${id}
+  `;
+}
+
 export async function manageStaff(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
