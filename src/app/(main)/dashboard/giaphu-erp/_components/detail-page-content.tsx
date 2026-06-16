@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { auth } from "@clerk/nextjs/server";
-import { ArrowLeft, CalendarDays, ExternalLink, FileText, WalletCards } from "lucide-react";
+import { ArrowLeft, CalendarDays, ExternalLink, FileText, type WalletCards } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -317,6 +317,7 @@ function StaffDetailSections({ insights }: { insights: StaffDetailInsights }) {
 
   return (
     <>
+      {/* Tạm ẩn theo yêu cầu
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StaffMetricCard
           title="Tổng thực nhận"
@@ -343,6 +344,7 @@ function StaffDetailSections({ insights }: { insights: StaffDetailInsights }) {
           icon={CalendarDays}
         />
       </div>
+      */}
 
       {/* Tạm ẩn theo yêu cầu
       <Card>
