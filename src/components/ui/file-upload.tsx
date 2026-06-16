@@ -39,6 +39,7 @@ type FileUploadProps = {
   showBorderBeam?: boolean
   showFileList?: boolean
   title?: string
+  maxSize?: number
   onFilesAccepted?: (files: File[]) => void
   onFilesChange?: (files: FileUploadItem[]) => void
 }
@@ -168,6 +169,7 @@ export function FileUpload({
   showBorderBeam = true,
   showFileList = true,
   title = "Click to upload or drop files",
+  maxSize = 10 * 1024 * 1024,
   onFilesAccepted,
   onFilesChange,
 }: FileUploadProps) {
@@ -181,12 +183,20 @@ export function FileUpload({
 
   const commitFiles = React.useCallback(
     (nextFiles: FileList | File[]) => {
-      const acceptedFiles = Array.from(nextFiles)
+      const allFiles = Array.from(nextFiles)
+
+      const oversizedFiles = allFiles.filter((file) => file.size > maxSize)
+      if (oversizedFiles.length > 0) {
+        setRejectionMessage(`Kích thước tệp vượt quá giới hạn cho phép (${formatBytes(maxSize)}).`)
+        return
+      }
+
+      const acceptedFiles = allFiles
         .filter((file) => matchesAccept(file, accept))
         .slice(0, multiple ? undefined : 1)
 
       if (acceptedFiles.length === 0) {
-        setRejectionMessage("This file type is not supported here.")
+        setRejectionMessage("Định dạng tệp không được hỗ trợ.")
         return
       }
 
@@ -200,7 +210,7 @@ export function FileUpload({
       })
       onFilesChange?.(items)
     },
-    [accept, multiple, onFilesAccepted, onFilesChange]
+    [accept, maxSize, multiple, onFilesAccepted, onFilesChange]
   )
 
   React.useEffect(() => {
