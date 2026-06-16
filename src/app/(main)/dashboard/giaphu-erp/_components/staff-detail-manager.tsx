@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
@@ -218,443 +219,451 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   }
 
   return (
-    <div className="space-y-4 md:space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-            <div>
-              <CardTitle>Hồ sơ công nhân</CardTitle>
-              <p className="mt-1 text-muted-foreground text-sm">
-                Quản lý thông tin nền, tay nghề, hồ sơ và ghi chú nội bộ.
-              </p>
-            </div>
-            <Badge variant="secondary">{staff.resigned ? "Đã nghỉ việc" : "Đang làm"}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-[120px_1fr]">
-            <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-transparent text-center text-muted-foreground text-sm shadow-sm">
-              {profile.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={profile.avatarUrl}
-                  alt={profile.name || "Ảnh công nhân"}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="space-y-1">
-                  <UserRound className="mx-auto size-6" />
-                  <div>Ảnh công nhân</div>
-                </div>
-              )}
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Ảnh đại diện (Avatar)</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    disabled={uploadingAvatar}
-                    className="w-full text-muted-foreground"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      setUploadingAvatar(true);
-                      try {
-                        const formData = new FormData();
-                        formData.append("file", file);
-                        formData.append("docType", "Avatar");
-                        formData.append("fileName", file.name);
-                        formData.append("projectCode", "GLOBAL");
-                        const uploaded = await uploadGiaPhuDocument(formData);
-                        if (uploaded?.documentId) {
-                          updateProfile("avatarUrl", `/api/giaphu-erp/documents/${uploaded.documentId}/file`);
-                          toast.success("Tải ảnh lên thành công.");
-                        } else {
-                          toast.error("Không nhận được ID ảnh.");
-                        }
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : "Lỗi khi tải ảnh.");
-                      } finally {
-                        setUploadingAvatar(false);
-                      }
-                    }}
-                  />
-                  {uploadingAvatar && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
-                </div>
+    <Tabs defaultValue="profile" className="space-y-4 md:space-y-6">
+      <TabsList>
+        <TabsTrigger value="profile">Hồ sơ công nhân</TabsTrigger>
+        <TabsTrigger value="evaluation">Đánh giá & Lịch sử</TabsTrigger>
+      </TabsList>
+      <TabsContent value="profile" className="space-y-4 md:space-y-6">
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+              <div>
+                <CardTitle>Hồ sơ công nhân</CardTitle>
+                <p className="mt-1 text-muted-foreground text-sm">
+                  Quản lý thông tin nền, tay nghề, hồ sơ và ghi chú nội bộ.
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label>Hồ sơ công nhân (Tài liệu)</Label>
-                <div className="flex flex-col gap-2">
+              <Badge variant="secondary">{staff.resigned ? "Đã nghỉ việc" : "Đang làm"}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-[120px_1fr]">
+              <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-transparent text-center text-muted-foreground text-sm shadow-sm">
+                {profile.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.avatarUrl}
+                    alt={profile.name || "Ảnh công nhân"}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="space-y-1">
+                    <UserRound className="mx-auto size-6" />
+                    <div>Ảnh công nhân</div>
+                  </div>
+                )}
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Ảnh đại diện (Avatar)</Label>
                   <div className="flex items-center gap-2">
                     <Input
                       type="file"
-                      multiple
-                      disabled={uploadingDocs}
+                      accept="image/*"
+                      disabled={uploadingAvatar}
                       className="w-full text-muted-foreground"
                       onChange={async (e) => {
-                        const files = Array.from(e.target.files || []);
-                        if (!files.length) return;
-                        setUploadingDocs(true);
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingAvatar(true);
                         try {
-                          let newUrls = "";
-                          for (const file of files) {
-                            const formData = new FormData();
-                            formData.append("file", file);
-                            formData.append("docType", "Hồ sơ công nhân");
-                            formData.append("fileName", file.name);
-                            formData.append("projectCode", "GLOBAL");
-                            const uploaded = await uploadGiaPhuDocument(formData);
-                            if (uploaded?.documentId) {
-                              const url = `/api/giaphu-erp/documents/${uploaded.documentId}/file`;
-                              newUrls += (newUrls ? "\n" : "") + url;
-                            }
-                          }
-                          if (newUrls) {
-                            const existing = profile.profileFiles.trim();
-                            updateProfile("profileFiles", existing ? existing + "\n" + newUrls : newUrls);
-                            toast.success(`Đã tải lên ${files.length} tệp hồ sơ.`);
+                          const formData = new FormData();
+                          formData.append("file", file);
+                          formData.append("docType", "Avatar");
+                          formData.append("fileName", file.name);
+                          formData.append("projectCode", "GLOBAL");
+                          const uploaded = await uploadGiaPhuDocument(formData);
+                          if (uploaded?.documentId) {
+                            updateProfile("avatarUrl", `/api/giaphu-erp/documents/${uploaded.documentId}/file`);
+                            toast.success("Tải ảnh lên thành công.");
+                          } else {
+                            toast.error("Không nhận được ID ảnh.");
                           }
                         } catch (err) {
-                          toast.error("Lỗi khi tải hồ sơ.");
+                          toast.error(err instanceof Error ? err.message : "Lỗi khi tải ảnh.");
                         } finally {
-                          setUploadingDocs(false);
-                          // Reset input
-                          e.target.value = "";
+                          setUploadingAvatar(false);
                         }
                       }}
                     />
-                    {uploadingDocs && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
+                    {uploadingAvatar && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
                   </div>
-                  {profile.profileFiles ? (
-                    <div className="mt-2 flex flex-col gap-2">
-                      {profile.profileFiles.split("\n").map((url, i) => {
-                        const trimmed = url.trim();
-                        if (!trimmed) return null;
-                        return (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between gap-2 rounded-md border bg-muted/50 p-2 text-sm"
-                          >
-                            <a
-                              href={trimmed}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="truncate text-blue-600 hover:underline dark:text-blue-400"
-                            >
-                              {trimmed.split("/").pop() || "Tài liệu đính kèm"}
-                            </a>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
-                              onClick={() => {
-                                const newLinks = profile.profileFiles
-                                  .split("\n")
-                                  .filter((_, index) => index !== i)
-                                  .join("\n");
-                                updateProfile("profileFiles", newLinks);
-                              }}
-                            >
-                              <X className="size-4" />
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : null}
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <TextField label="Mã NS" value={profile.id} disabled onChange={() => undefined} />
-            <TextField
-              required
-              label="Họ tên"
-              value={profile.name}
-              placeholder="Ví dụ: Nguyễn Văn A"
-              onChange={(value) => updateProfile("name", value)}
-            />
-            <TextField
-              label="Chức vụ"
-              value={profile.position}
-              placeholder="Ví dụ: Thợ chính, Phụ hồ"
-              onChange={(value) => updateProfile("position", value)}
-            />
-            <TextField
-              label="Năm sinh"
-              value={profile.birthYear}
-              placeholder="Ví dụ: 1988"
-              onChange={(value) => updateProfile("birthYear", value)}
-            />
-            <TextField
-              label="Số điện thoại"
-              value={profile.phone}
-              placeholder="Ví dụ: 09xx..."
-              onChange={(value) => updateProfile("phone", value)}
-            />
-            <TextField
-              label="CCCD"
-              value={profile.citizenId}
-              placeholder="Số căn cước nếu có"
-              onChange={(value) => updateProfile("citizenId", value)}
-            />
-            <TextField
-              label="Quê quán"
-              value={profile.hometown}
-              placeholder="Tỉnh / huyện"
-              onChange={(value) => updateProfile("hometown", value)}
-            />
-            <TextField
-              label="Địa chỉ hiện tại"
-              value={profile.currentAddress}
-              placeholder="Nơi ở hiện tại"
-              onChange={(value) => updateProfile("currentAddress", value)}
-            />
-            <TextField
-              label="Nhóm thợ"
-              value={profile.team}
-              placeholder="Chọn hoặc nhập nhóm"
-              onChange={(value) => updateProfile("team", value)}
-            />
-            <TextField
-              label="Tay nghề chính"
-              value={profile.mainSkill}
-              placeholder="Ví dụ: Xây tô / Ốp lát"
-              onChange={(value) => updateProfile("mainSkill", value)}
-            />
-            <SelectField
-              label="Bậc thợ nội bộ"
-              value={profile.internalLevel}
-              options={internalLevels}
-              onChange={(value) => updateProfile("internalLevel", value)}
-            />
-            <TextField
-              label="Lương/ngày (Đơn giá)"
-              type="number"
-              value={profile.salaryDay}
-              placeholder="Ví dụ: 450000"
-              onChange={(value) => updateProfile("salaryDay", value)}
-            />
-            <TextField
-              label="Người giới thiệu"
-              value={profile.referrer}
-              placeholder="Cai thầu / tổ trưởng / nguồn giới thiệu"
-              onChange={(value) => updateProfile("referrer", value)}
-            />
-            <SelectField
-              label="Tính ổn định dự kiến"
-              value={profile.expectedStability}
-              options={stabilityOptions}
-              placeholder="Chọn"
-              onChange={(value) => updateProfile("expectedStability", value)}
-            />
-            <SelectField
-              label="Xếp đội"
-              value={profile.ranking}
-              options={rankOptions}
-              placeholder="Chọn"
-              onChange={(value) => updateProfile("ranking", value)}
-            />
-            <TextField
-              label="Ngày vào làm"
-              type="date"
-              value={profile.startDate}
-              helper="Dùng để tính thâm niên, lọc công nhân lâu năm và xét chính sách hỗ trợ."
-              onChange={(value) => updateProfile("startDate", value)}
-            />
-            <SelectField
-              label="Trạng thái"
-              value={profile.resigned}
-              options={[
-                { label: "Đang làm", value: "false" },
-                { label: "Đã nghỉ việc", value: "true" },
-              ]}
-              onChange={(value) => updateProfile("resigned", value)}
-            />
-            {profile.resigned === "true" ? (
-              <TextField
-                label="Thời gian nghỉ"
-                type="date"
-                value={profile.offDate}
-                onChange={(value) => updateProfile("offDate", value)}
-              />
-            ) : null}
-          </div>
-
-          <div className="space-y-2">
-            <Label>Ghi chú</Label>
-            <Textarea
-              value={profile.note}
-              onChange={(event) => updateProfile("note", event.target.value)}
-              placeholder="Điểm mạnh, điểm yếu, lưu ý khi giao việc..."
-              className="min-h-24"
-            />
-          </div>
-
-          <Button onClick={saveProfile} disabled={savingProfile}>
-            <Save className="size-4" />
-            {savingProfile ? "Đang lưu..." : "Lưu hồ sơ"}
-          </Button>
-
-          <Separator className="my-8" />
-
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Đánh giá tay nghề & nhận xét thực chiến</h3>
-            <div className="space-y-5">
-              <div className="grid gap-4 md:grid-cols-3">
-                <TextField label="Ngày đánh giá" type="date" value={evaluationDate} onChange={setEvaluationDate} />
-                <TextField label="Chọn công nhân" value={staff.name} disabled onChange={() => undefined} />
-                <TextField
-                  label="Người đánh giá"
-                  value={evaluator}
-                  placeholder="Ví dụ: Hải / Cai thầu / Chỉ huy"
-                  onChange={setEvaluator}
-                />
-                <SelectField
-                  label="Có đi làm xa không?"
-                  value={travelReady}
-                  options={travelOptions}
-                  onChange={setTravelReady}
-                />
-                <SelectField
-                  label="Trạng thái sau đánh giá"
-                  value={statusAfterReview}
-                  options={statusOptions}
-                  onChange={setStatusAfterReview}
-                />
-                <TextField
-                  label="Thời gian nghỉ / ngày nghỉ việc"
-                  type="date"
-                  value={leaveDate}
-                  helper="Chỉ nhập khi công nhân tạm nghỉ, nghỉ việc hoặc không gọi lại."
-                  onChange={setLeaveDate}
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {criteria.map((item) => {
-                  const draft = criteriaDraft[item.key] ?? { score: 0, note: "" };
-                  return (
-                    <div key={item.key} className="rounded-2xl border p-4">
-                      <div className="font-semibold text-sm">{item.title}</div>
-                      <p className="mt-1 min-h-9 text-muted-foreground text-xs">{item.description}</p>
-                      <div className="mt-4 flex items-center gap-1">
-                        {[1, 2, 3, 4, 5].map((score) => (
-                          <button
-                            key={score}
-                            type="button"
-                            className="text-muted-foreground transition hover:text-amber-500"
-                            onClick={() => updateCriterionScore(item.key, score)}
-                            aria-label={`${item.title} ${score} sao`}
-                          >
-                            <Star className={cn("size-5", score <= draft.score && "fill-amber-500 text-amber-500")} />
-                          </button>
-                        ))}
-                        <span className="ml-2 font-medium text-xs">{draft.score}/5</span>
-                      </div>
-                      <Textarea
-                        value={draft.note}
-                        onChange={(event) => updateCriterionNote(item.key, event.target.value)}
-                        placeholder="Nhập nhận xét sau khi chấm sao..."
-                        className="mt-3 min-h-20"
+                <div className="space-y-2">
+                  <Label>Hồ sơ công nhân (Tài liệu)</Label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="file"
+                        multiple
+                        disabled={uploadingDocs}
+                        className="w-full text-muted-foreground"
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (!files.length) return;
+                          setUploadingDocs(true);
+                          try {
+                            let newUrls = "";
+                            for (const file of files) {
+                              const formData = new FormData();
+                              formData.append("file", file);
+                              formData.append("docType", "Hồ sơ công nhân");
+                              formData.append("fileName", file.name);
+                              formData.append("projectCode", "GLOBAL");
+                              const uploaded = await uploadGiaPhuDocument(formData);
+                              if (uploaded?.documentId) {
+                                const url = `/api/giaphu-erp/documents/${uploaded.documentId}/file`;
+                                newUrls += (newUrls ? "\n" : "") + url;
+                              }
+                            }
+                            if (newUrls) {
+                              const existing = profile.profileFiles.trim();
+                              updateProfile("profileFiles", existing ? existing + "\n" + newUrls : newUrls);
+                              toast.success(`Đã tải lên ${files.length} tệp hồ sơ.`);
+                            }
+                          } catch (err) {
+                            toast.error("Lỗi khi tải hồ sơ.");
+                          } finally {
+                            setUploadingDocs(false);
+                            // Reset input
+                            e.target.value = "";
+                          }
+                        }}
                       />
+                      {uploadingDocs && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
                     </div>
-                  );
-                })}
+                    {profile.profileFiles ? (
+                      <div className="mt-2 flex flex-col gap-2">
+                        {profile.profileFiles.split("\n").map((url, i) => {
+                          const trimmed = url.trim();
+                          if (!trimmed) return null;
+                          return (
+                            <div
+                              key={i}
+                              className="flex items-center justify-between gap-2 rounded-md border bg-muted/50 p-2 text-sm"
+                            >
+                              <a
+                                href={trimmed}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="truncate text-blue-600 hover:underline dark:text-blue-400"
+                              >
+                                {trimmed.split("/").pop() || "Tài liệu đính kèm"}
+                              </a>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => {
+                                  const newLinks = profile.profileFiles
+                                    .split("\n")
+                                    .filter((_, index) => index !== i)
+                                    .join("\n");
+                                  updateProfile("profileFiles", newLinks);
+                                }}
+                              >
+                                <X className="size-4" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label>Ghi chú đánh giá tổng hợp</Label>
-                <Textarea
-                  value={summaryNote}
-                  onChange={(event) => setSummaryNote(event.target.value)}
-                  placeholder="Kết luận ngắn: nên giao việc gì, điểm mạnh/yếu, lưu ý khi gọi đi công trình..."
-                  className="min-h-20"
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
+              <TextField label="Mã NS" value={profile.id} disabled onChange={() => undefined} />
+              <TextField
+                required
+                label="Họ tên"
+                value={profile.name}
+                placeholder="Ví dụ: Nguyễn Văn A"
+                onChange={(value) => updateProfile("name", value)}
+              />
+              <TextField
+                label="Chức vụ"
+                value={profile.position}
+                placeholder="Ví dụ: Thợ chính, Phụ hồ"
+                onChange={(value) => updateProfile("position", value)}
+              />
+              <TextField
+                label="Năm sinh"
+                value={profile.birthYear}
+                placeholder="Ví dụ: 1988"
+                onChange={(value) => updateProfile("birthYear", value)}
+              />
+              <TextField
+                label="Số điện thoại"
+                value={profile.phone}
+                placeholder="Ví dụ: 09xx..."
+                onChange={(value) => updateProfile("phone", value)}
+              />
+              <TextField
+                label="CCCD"
+                value={profile.citizenId}
+                placeholder="Số căn cước nếu có"
+                onChange={(value) => updateProfile("citizenId", value)}
+              />
+              <TextField
+                label="Quê quán"
+                value={profile.hometown}
+                placeholder="Tỉnh / huyện"
+                onChange={(value) => updateProfile("hometown", value)}
+              />
+              <TextField
+                label="Địa chỉ hiện tại"
+                value={profile.currentAddress}
+                placeholder="Nơi ở hiện tại"
+                onChange={(value) => updateProfile("currentAddress", value)}
+              />
+              <TextField
+                label="Nhóm thợ"
+                value={profile.team}
+                placeholder="Chọn hoặc nhập nhóm"
+                onChange={(value) => updateProfile("team", value)}
+              />
+              <TextField
+                label="Tay nghề chính"
+                value={profile.mainSkill}
+                placeholder="Ví dụ: Xây tô / Ốp lát"
+                onChange={(value) => updateProfile("mainSkill", value)}
+              />
+              <SelectField
+                label="Bậc thợ nội bộ"
+                value={profile.internalLevel}
+                options={internalLevels}
+                onChange={(value) => updateProfile("internalLevel", value)}
+              />
+              <TextField
+                label="Lương/ngày (Đơn giá)"
+                type="number"
+                value={profile.salaryDay}
+                placeholder="Ví dụ: 450000"
+                onChange={(value) => updateProfile("salaryDay", value)}
+              />
+              <TextField
+                label="Người giới thiệu"
+                value={profile.referrer}
+                placeholder="Cai thầu / tổ trưởng / nguồn giới thiệu"
+                onChange={(value) => updateProfile("referrer", value)}
+              />
+              <SelectField
+                label="Tính ổn định dự kiến"
+                value={profile.expectedStability}
+                options={stabilityOptions}
+                placeholder="Chọn"
+                onChange={(value) => updateProfile("expectedStability", value)}
+              />
+              <SelectField
+                label="Xếp đội"
+                value={profile.ranking}
+                options={rankOptions}
+                placeholder="Chọn"
+                onChange={(value) => updateProfile("ranking", value)}
+              />
+              <TextField
+                label="Ngày vào làm"
+                type="date"
+                value={profile.startDate}
+                helper="Dùng để tính thâm niên, lọc công nhân lâu năm và xét chính sách hỗ trợ."
+                onChange={(value) => updateProfile("startDate", value)}
+              />
+              <SelectField
+                label="Trạng thái"
+                value={profile.resigned}
+                options={[
+                  { label: "Đang làm", value: "false" },
+                  { label: "Đã nghỉ việc", value: "true" },
+                ]}
+                onChange={(value) => updateProfile("resigned", value)}
+              />
+              {profile.resigned === "true" ? (
                 <TextField
-                  label="Mức lương mới"
-                  type="number"
-                  value={newSalary}
-                  placeholder="Ví dụ: 450000"
-                  helper="Nhập khi cần cập nhật đơn giá sau đánh giá."
-                  onChange={setNewSalary}
+                  label="Thời gian nghỉ"
+                  type="date"
+                  value={profile.offDate}
+                  onChange={(value) => updateProfile("offDate", value)}
                 />
-                <div className="rounded-2xl border border-dashed p-4 text-sm">
-                  <div className="font-semibold">Luồng lương</div>
-                  <p className="mt-2 text-muted-foreground">
-                    Nếu nhập mức lương mới, hệ thống sẽ cập nhật Đơn giá ngày trong hồ sơ công nhân.
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-dashed p-4 text-sm">
-                <span className="font-semibold">
-                  Điểm dự kiến: {totalScore}/{maxScore} · {rank}
-                </span>
-                <div className="mt-1 text-muted-foreground">
-                  Đã chấm {scoredCount}/{criteria.length} nhóm năng lực. Ô nhận xét dưới sao là cơ sở để giao việc đúng
-                  người.
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={saveEvaluation} disabled={savingEvaluation}>
-                  <Save className="size-4" />
-                  {savingEvaluation ? "Đang lưu..." : "Lưu đánh giá"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setCriteriaDraft(initialCriteria())}
-                  disabled={savingEvaluation}
-                >
-                  Làm mới đánh giá
-                </Button>
-              </div>
+              ) : null}
             </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Lịch sử đánh giá tay nghề</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {skillEvaluations.length ? (
-            <div className="grid gap-3">
-              {skillEvaluations.slice(0, 8).map((row) => (
-                <div key={row.id} className="rounded-xl border p-4 text-sm">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div className="font-semibold">
-                      {formatDate(row.date)} · {row.rank || "Chưa xếp hạng"}
+            <div className="space-y-2">
+              <Label>Ghi chú</Label>
+              <Textarea
+                value={profile.note}
+                onChange={(event) => updateProfile("note", event.target.value)}
+                placeholder="Điểm mạnh, điểm yếu, lưu ý khi giao việc..."
+                className="min-h-24"
+              />
+            </div>
+
+            <Button onClick={saveProfile} disabled={savingProfile}>
+              <Save className="size-4" />
+              {savingProfile ? "Đang lưu..." : "Lưu hồ sơ"}
+            </Button>
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="evaluation" className="space-y-4 md:space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Đánh giá tay nghề & nhận xét thực chiến</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-3">
+              <TextField label="Ngày đánh giá" type="date" value={evaluationDate} onChange={setEvaluationDate} />
+              <TextField label="Chọn công nhân" value={staff.name} disabled onChange={() => undefined} />
+              <TextField
+                label="Người đánh giá"
+                value={evaluator}
+                placeholder="Ví dụ: Hải / Cai thầu / Chỉ huy"
+                onChange={setEvaluator}
+              />
+              <SelectField
+                label="Có đi làm xa không?"
+                value={travelReady}
+                options={travelOptions}
+                onChange={setTravelReady}
+              />
+              <SelectField
+                label="Trạng thái sau đánh giá"
+                value={statusAfterReview}
+                options={statusOptions}
+                onChange={setStatusAfterReview}
+              />
+              <TextField
+                label="Thời gian nghỉ / ngày nghỉ việc"
+                type="date"
+                value={leaveDate}
+                helper="Chỉ nhập khi công nhân tạm nghỉ, nghỉ việc hoặc không gọi lại."
+                onChange={setLeaveDate}
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {criteria.map((item) => {
+                const draft = criteriaDraft[item.key] ?? { score: 0, note: "" };
+                return (
+                  <div key={item.key} className="rounded-2xl border p-4">
+                    <div className="font-semibold text-sm">{item.title}</div>
+                    <p className="mt-1 min-h-9 text-muted-foreground text-xs">{item.description}</p>
+                    <div className="mt-4 flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((score) => (
+                        <button
+                          key={score}
+                          type="button"
+                          className="text-muted-foreground transition hover:text-amber-500"
+                          onClick={() => updateCriterionScore(item.key, score)}
+                          aria-label={`${item.title} ${score} sao`}
+                        >
+                          <Star className={cn("size-5", score <= draft.score && "fill-amber-500 text-amber-500")} />
+                        </button>
+                      ))}
+                      <span className="ml-2 font-medium text-xs">{draft.score}/5</span>
                     </div>
-                    <Badge variant="outline">{row.totalScore}/60 điểm</Badge>
+                    <Textarea
+                      value={draft.note}
+                      onChange={(event) => updateCriterionNote(item.key, event.target.value)}
+                      placeholder="Nhập nhận xét sau khi chấm sao..."
+                      className="mt-3 min-h-20"
+                    />
                   </div>
-                  <div className="mt-2 grid gap-2 text-muted-foreground md:grid-cols-3">
-                    <div>Người đánh giá: {row.evaluator || "-"}</div>
-                    <div>Trạng thái: {row.statusAfterReview || "-"}</div>
-                    <div>Lương mới: {row.newSalary ? formatMoney(row.newSalary) : "-"}</div>
+                );
+              })}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Ghi chú đánh giá tổng hợp</Label>
+              <Textarea
+                value={summaryNote}
+                onChange={(event) => setSummaryNote(event.target.value)}
+                placeholder="Kết luận ngắn: nên giao việc gì, điểm mạnh/yếu, lưu ý khi gọi đi công trình..."
+                className="min-h-20"
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <TextField
+                label="Mức lương mới"
+                type="number"
+                value={newSalary}
+                placeholder="Ví dụ: 450000"
+                helper="Nhập khi cần cập nhật đơn giá sau đánh giá."
+                onChange={setNewSalary}
+              />
+              <div className="rounded-2xl border border-dashed p-4 text-sm">
+                <div className="font-semibold">Luồng lương</div>
+                <p className="mt-2 text-muted-foreground">
+                  Nếu nhập mức lương mới, hệ thống sẽ cập nhật Đơn giá ngày trong hồ sơ công nhân.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-dashed p-4 text-sm">
+              <span className="font-semibold">
+                Điểm dự kiến: {totalScore}/{maxScore} · {rank}
+              </span>
+              <div className="mt-1 text-muted-foreground">
+                Đã chấm {scoredCount}/{criteria.length} nhóm năng lực. Ô nhận xét dưới sao là cơ sở để giao việc đúng
+                người.
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={saveEvaluation} disabled={savingEvaluation}>
+                <Save className="size-4" />
+                {savingEvaluation ? "Đang lưu..." : "Lưu đánh giá"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setCriteriaDraft(initialCriteria())}
+                disabled={savingEvaluation}
+              >
+                Làm mới đánh giá
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Lịch sử đánh giá tay nghề</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {skillEvaluations.length ? (
+              <div className="grid gap-3">
+                {skillEvaluations.slice(0, 8).map((row) => (
+                  <div key={row.id} className="rounded-xl border p-4 text-sm">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div className="font-semibold">
+                        {formatDate(row.date)} · {row.rank || "Chưa xếp hạng"}
+                      </div>
+                      <Badge variant="outline">{row.totalScore}/60 điểm</Badge>
+                    </div>
+                    <div className="mt-2 grid gap-2 text-muted-foreground md:grid-cols-3">
+                      <div>Người đánh giá: {row.evaluator || "-"}</div>
+                      <div>Trạng thái: {row.statusAfterReview || "-"}</div>
+                      <div>Lương mới: {row.newSalary ? formatMoney(row.newSalary) : "-"}</div>
+                    </div>
+                    {row.summaryNote ? <p className="mt-2 text-muted-foreground">{row.summaryNote}</p> : null}
                   </div>
-                  {row.summaryNote ? <p className="mt-2 text-muted-foreground">{row.summaryNote}</p> : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground text-sm">
-              Chưa có đánh giá tay nghề cho công nhân này.
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground text-sm">
+                Chưa có đánh giá tay nghề cho công nhân này.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }
 
