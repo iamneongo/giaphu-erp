@@ -291,12 +291,19 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
+            <TextField label="Mã NS" value={profile.id} disabled onChange={() => undefined} />
             <TextField
               required
               label="Họ tên"
               value={profile.name}
               placeholder="Ví dụ: Nguyễn Văn A"
               onChange={(value) => updateProfile("name", value)}
+            />
+            <TextField
+              label="Chức vụ"
+              value={profile.position}
+              placeholder="Ví dụ: Thợ chính, Phụ hồ"
+              onChange={(value) => updateProfile("position", value)}
             />
             <TextField
               label="Năm sinh"
@@ -347,7 +354,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
               onChange={(value) => updateProfile("internalLevel", value)}
             />
             <TextField
-              label="Đơn giá ngày"
+              label="Lương/ngày (Đơn giá)"
               type="number"
               value={profile.salaryDay}
               placeholder="Ví dụ: 450000"
