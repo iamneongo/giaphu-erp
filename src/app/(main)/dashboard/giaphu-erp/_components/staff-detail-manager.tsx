@@ -133,6 +133,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   const [summaryNote, setSummaryNote] = React.useState("");
   const [newSalary, setNewSalary] = React.useState("");
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
+  const [uploadingDocs, setUploadingDocs] = React.useState(false);
 
   React.useEffect(() => {
     setProfile(initialProfile(staff));
@@ -231,7 +232,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-4 md:grid-cols-[120px_1fr]">
-            <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border bg-muted text-center text-muted-foreground text-sm">
+            <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-transparent text-center text-muted-foreground text-sm shadow-sm">
               {profile.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -282,12 +283,57 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                   {uploadingAvatar && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
                 </div>
               </div>
-              <TextField
-                label="Hồ sơ công nhân"
-                value={profile.profileFiles}
-                placeholder="Dán link/tên hồ sơ, mỗi dòng một file"
-                onChange={(value) => updateProfile("profileFiles", value)}
-              />
+              <div className="space-y-2">
+                <Label>Hồ sơ công nhân (Tài liệu)</Label>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="file"
+                      multiple
+                      disabled={uploadingDocs}
+                      className="w-full text-muted-foreground"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (!files.length) return;
+                        setUploadingDocs(true);
+                        try {
+                          let newUrls = "";
+                          for (const file of files) {
+                            const formData = new FormData();
+                            formData.append("file", file);
+                            formData.append("docType", "Hồ sơ công nhân");
+                            formData.append("fileName", file.name);
+                            formData.append("projectCode", "GLOBAL");
+                            const uploaded = await uploadGiaPhuDocument(formData);
+                            if (uploaded?.documentId) {
+                              const url = `/api/giaphu-erp/documents/${uploaded.documentId}/file`;
+                              newUrls += (newUrls ? "\n" : "") + url;
+                            }
+                          }
+                          if (newUrls) {
+                            const existing = profile.profileFiles.trim();
+                            updateProfile("profileFiles", existing ? existing + "\n" + newUrls : newUrls);
+                            toast.success(`Đã tải lên ${files.length} tệp hồ sơ.`);
+                          }
+                        } catch (err) {
+                          toast.error("Lỗi khi tải hồ sơ.");
+                        } finally {
+                          setUploadingDocs(false);
+                          // Reset input
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                    {uploadingDocs && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
+                  </div>
+                  <Textarea
+                    value={profile.profileFiles}
+                    placeholder="Danh sách link hồ sơ (mỗi dòng một link)"
+                    onChange={(e) => updateProfile("profileFiles", e.target.value)}
+                    className="min-h-[80px]"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
