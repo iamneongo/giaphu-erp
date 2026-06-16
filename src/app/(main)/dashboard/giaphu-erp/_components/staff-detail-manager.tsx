@@ -4,9 +4,10 @@ import * as React from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Loader2, Save, Star, Upload, UserRound, X } from "lucide-react";
+import { CircleAlertIcon, Loader2, Save, Star, Upload, UserIcon, UserRound, X, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { formatBytes, useFileUpload } from "@/hooks/use-file-upload";
 import type { StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
@@ -137,6 +139,53 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
   const [uploadingDocs, setUploadingDocs] = React.useState(false);
 
+  const [
+    { files: avatarFiles, isDragging: isAvatarDragging, errors: avatarErrors },
+    {
+      removeFile: removeAvatarFile,
+      handleDragEnter: handleAvatarDragEnter,
+      handleDragLeave: handleAvatarDragLeave,
+      handleDragOver: handleAvatarDragOver,
+      handleDrop: handleAvatarDrop,
+      openFileDialog: openAvatarFileDialog,
+      getInputProps: getAvatarInputProps,
+    },
+  ] = useFileUpload({
+    maxFiles: 1,
+    maxSize: 5 * 1024 * 1024,
+    accept: "image/*",
+    multiple: false,
+    onFilesChange: async (files) => {
+      const fileWrap = files[0];
+      if (!fileWrap) {
+        updateProfile("avatarUrl", "");
+        return;
+      }
+      setUploadingAvatar(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", fileWrap.file);
+        formData.append("docType", "Avatar");
+        formData.append("fileName", fileWrap.file.name);
+        formData.append("projectCode", "GLOBAL");
+        const uploaded = await uploadGiaPhuDocument(formData);
+        if (uploaded?.documentId) {
+          updateProfile("avatarUrl", `/api/giaphu-erp/documents/${uploaded.documentId}/file`);
+          toast.success("Tải ảnh lên thành công.");
+        } else {
+          toast.error("Không nhận được ID ảnh.");
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Lỗi khi tải ảnh.");
+      } finally {
+        setUploadingAvatar(false);
+      }
+    },
+  });
+
+  const currentAvatarFile = avatarFiles[0];
+  const avatarPreviewUrl = profile.avatarUrl || currentAvatarFile?.preview;
+
   React.useEffect(() => {
     setProfile(initialProfile(staff));
   }, [staff]);
@@ -242,59 +291,79 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-[120px_1fr]">
-              <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-transparent text-center text-muted-foreground text-sm shadow-sm">
-                {profile.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={profile.avatarUrl}
-                    alt={profile.name || "Ảnh công nhân"}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="space-y-1">
-                    <UserRound className="mx-auto size-6" />
-                    <div>Ảnh công nhân</div>
+            <div className="grid gap-4 md:grid-cols-[200px_1fr]">
+              <div className="flex flex-col items-center gap-4 pt-2">
+                <div className="relative">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className={cn(
+                      "group/avatar relative flex h-32 w-32 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed transition-colors",
+                      isAvatarDragging
+                        ? "border-primary bg-primary/5"
+                        : "border-muted-foreground/25 hover:border-muted-foreground/50",
+                      avatarPreviewUrl && "border-solid",
+                      uploadingAvatar && "opacity-50 pointer-events-none",
+                    )}
+                    onDragEnter={handleAvatarDragEnter}
+                    onDragLeave={handleAvatarDragLeave}
+                    onDragOver={handleAvatarDragOver}
+                    onDrop={handleAvatarDrop}
+                    onClick={openAvatarFileDialog}
+                  >
+                    <input {...getAvatarInputProps()} className="sr-only" />
+
+                    {avatarPreviewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={avatarPreviewUrl} alt="Avatar" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                        <UserIcon className="size-8" />
+                        <span className="text-[10px] uppercase font-semibold">Tải ảnh lên</span>
+                      </div>
+                    )}
+                    {uploadingAvatar && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/50">
+                        <Loader2 className="size-6 animate-spin" />
+                      </div>
+                    )}
                   </div>
+
+                  {avatarPreviewUrl && !uploadingAvatar && (
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => {
+                        if (currentAvatarFile) removeAvatarFile(currentAvatarFile.id);
+                        updateProfile("avatarUrl", "");
+                      }}
+                      className="absolute end-1 top-1 z-10 size-7 rounded-full shadow-sm hover:bg-destructive hover:text-destructive-foreground"
+                      aria-label="Remove avatar"
+                    >
+                      <XIcon className="size-4" />
+                    </Button>
+                  )}
+                </div>
+
+                <div className="space-y-1 text-center">
+                  <p className="text-muted-foreground text-xs">PNG, JPG (Tối đa 5MB)</p>
+                </div>
+
+                {avatarErrors.length > 0 && (
+                  <Alert variant="destructive" className="py-2 px-3 text-xs w-full">
+                    <CircleAlertIcon className="size-3" />
+                    <AlertTitle className="text-xs ml-5 mb-1">Lỗi tải ảnh</AlertTitle>
+                    <AlertDescription className="ml-5">
+                      {avatarErrors.map((error, index) => (
+                        <p key={index}>{error}</p>
+                      ))}
+                    </AlertDescription>
+                  </Alert>
                 )}
               </div>
+
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Ảnh đại diện (Avatar)</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      disabled={uploadingAvatar}
-                      className="w-full text-muted-foreground"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        setUploadingAvatar(true);
-                        try {
-                          const formData = new FormData();
-                          formData.append("file", file);
-                          formData.append("docType", "Avatar");
-                          formData.append("fileName", file.name);
-                          formData.append("projectCode", "GLOBAL");
-                          const uploaded = await uploadGiaPhuDocument(formData);
-                          if (uploaded?.documentId) {
-                            updateProfile("avatarUrl", `/api/giaphu-erp/documents/${uploaded.documentId}/file`);
-                            toast.success("Tải ảnh lên thành công.");
-                          } else {
-                            toast.error("Không nhận được ID ảnh.");
-                          }
-                        } catch (err) {
-                          toast.error(err instanceof Error ? err.message : "Lỗi khi tải ảnh.");
-                        } finally {
-                          setUploadingAvatar(false);
-                        }
-                      }}
-                    />
-                    {uploadingAvatar && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
-                  </div>
-                </div>
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <Label>Hồ sơ công nhân (Tài liệu)</Label>
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center gap-2">
