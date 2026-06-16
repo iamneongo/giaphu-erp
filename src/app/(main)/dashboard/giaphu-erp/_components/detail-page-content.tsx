@@ -344,6 +344,7 @@ function StaffDetailSections({ insights }: { insights: StaffDetailInsights }) {
         />
       </div>
 
+      {/* Tạm ẩn theo yêu cầu
       <Card>
         <CardHeader>
           <CardTitle>Bảng lương theo tuần và hạng mục</CardTitle>
@@ -446,6 +447,7 @@ function StaffDetailSections({ insights }: { insights: StaffDetailInsights }) {
           )}
         </CardContent>
       </Card>
+      */}
     </>
   );
 }
