@@ -133,14 +133,14 @@ function UploadIconCluster({
   return (
     <div className="relative h-14 w-36">
       {acceptedFileTypes.map((item, index) => (
-        <Card
+        <div
           key={item.label}
           className={cn(
-            "absolute top-1/2 left-1/2 grid size-12 place-items-center rounded-xl bg-background text-muted-foreground transition-[transform,color,background-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] before:rounded-[calc(var(--radius-xl)-1px)]",
+            "absolute top-1/2 left-1/2 grid size-12 place-items-center rounded-xl bg-background border text-muted-foreground transition-[transform,color,background-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] shadow-sm",
             "motion-reduce:transition-none",
             index === 1 && "z-10",
             isDragging &&
-              "bg-popover text-foreground shadow-md shadow-black/10 not-dark:bg-clip-border dark:shadow-black/25"
+              "bg-popover text-foreground shadow-md shadow-black/10 dark:shadow-black/25"
           )}
           style={{
             transform: singleIcon
@@ -150,8 +150,8 @@ function UploadIconCluster({
                 : ICON_TRANSFORMS[index]?.idle,
           }}
         >
-          <HugeiconsIcon icon={item.icon} className="size-5" />
-        </Card>
+          <HugeiconsIcon icon={item.icon} size={20} className="size-5" />
+        </div>
       ))}
     </div>
   )
@@ -273,7 +273,7 @@ export function FileUpload({
         ) : null}
       </div>
       <div className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground">
-        <HugeiconsIcon icon={Upload01Icon} className="size-3.5" />
+        <HugeiconsIcon icon={Upload01Icon} size={14} className="size-3.5" />
         <span>{isDragging ? draggingLabel : browseLabel}</span>
       </div>
       <input
