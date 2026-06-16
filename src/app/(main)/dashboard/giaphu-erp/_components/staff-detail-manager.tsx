@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type { StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
@@ -498,126 +499,126 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
             <Save className="size-4" />
             {savingProfile ? "Đang lưu..." : "Lưu hồ sơ"}
           </Button>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Đánh giá tay nghề & nhận xét thực chiến</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-3">
-            <TextField label="Ngày đánh giá" type="date" value={evaluationDate} onChange={setEvaluationDate} />
-            <TextField label="Chọn công nhân" value={staff.name} disabled onChange={() => undefined} />
-            <TextField
-              label="Người đánh giá"
-              value={evaluator}
-              placeholder="Ví dụ: Hải / Cai thầu / Chỉ huy"
-              onChange={setEvaluator}
-            />
-            <SelectField
-              label="Có đi làm xa không?"
-              value={travelReady}
-              options={travelOptions}
-              onChange={setTravelReady}
-            />
-            <SelectField
-              label="Trạng thái sau đánh giá"
-              value={statusAfterReview}
-              options={statusOptions}
-              onChange={setStatusAfterReview}
-            />
-            <TextField
-              label="Thời gian nghỉ / ngày nghỉ việc"
-              type="date"
-              value={leaveDate}
-              helper="Chỉ nhập khi công nhân tạm nghỉ, nghỉ việc hoặc không gọi lại."
-              onChange={setLeaveDate}
-            />
-          </div>
+          <Separator className="my-8" />
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {criteria.map((item) => {
-              const draft = criteriaDraft[item.key] ?? { score: 0, note: "" };
-              return (
-                <div key={item.key} className="rounded-2xl border p-4">
-                  <div className="font-semibold text-sm">{item.title}</div>
-                  <p className="mt-1 min-h-9 text-muted-foreground text-xs">{item.description}</p>
-                  <div className="mt-4 flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((score) => (
-                      <button
-                        key={score}
-                        type="button"
-                        className="text-muted-foreground transition hover:text-amber-500"
-                        onClick={() => updateCriterionScore(item.key, score)}
-                        aria-label={`${item.title} ${score} sao`}
-                      >
-                        <Star className={cn("size-5", score <= draft.score && "fill-amber-500 text-amber-500")} />
-                      </button>
-                    ))}
-                    <span className="ml-2 font-medium text-xs">{draft.score}/5</span>
-                  </div>
-                  <Textarea
-                    value={draft.note}
-                    onChange={(event) => updateCriterionNote(item.key, event.target.value)}
-                    placeholder="Nhập nhận xét sau khi chấm sao..."
-                    className="mt-3 min-h-20"
-                  />
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg">Đánh giá tay nghề & nhận xét thực chiến</h3>
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-3">
+                <TextField label="Ngày đánh giá" type="date" value={evaluationDate} onChange={setEvaluationDate} />
+                <TextField label="Chọn công nhân" value={staff.name} disabled onChange={() => undefined} />
+                <TextField
+                  label="Người đánh giá"
+                  value={evaluator}
+                  placeholder="Ví dụ: Hải / Cai thầu / Chỉ huy"
+                  onChange={setEvaluator}
+                />
+                <SelectField
+                  label="Có đi làm xa không?"
+                  value={travelReady}
+                  options={travelOptions}
+                  onChange={setTravelReady}
+                />
+                <SelectField
+                  label="Trạng thái sau đánh giá"
+                  value={statusAfterReview}
+                  options={statusOptions}
+                  onChange={setStatusAfterReview}
+                />
+                <TextField
+                  label="Thời gian nghỉ / ngày nghỉ việc"
+                  type="date"
+                  value={leaveDate}
+                  helper="Chỉ nhập khi công nhân tạm nghỉ, nghỉ việc hoặc không gọi lại."
+                  onChange={setLeaveDate}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {criteria.map((item) => {
+                  const draft = criteriaDraft[item.key] ?? { score: 0, note: "" };
+                  return (
+                    <div key={item.key} className="rounded-2xl border p-4">
+                      <div className="font-semibold text-sm">{item.title}</div>
+                      <p className="mt-1 min-h-9 text-muted-foreground text-xs">{item.description}</p>
+                      <div className="mt-4 flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((score) => (
+                          <button
+                            key={score}
+                            type="button"
+                            className="text-muted-foreground transition hover:text-amber-500"
+                            onClick={() => updateCriterionScore(item.key, score)}
+                            aria-label={`${item.title} ${score} sao`}
+                          >
+                            <Star className={cn("size-5", score <= draft.score && "fill-amber-500 text-amber-500")} />
+                          </button>
+                        ))}
+                        <span className="ml-2 font-medium text-xs">{draft.score}/5</span>
+                      </div>
+                      <Textarea
+                        value={draft.note}
+                        onChange={(event) => updateCriterionNote(item.key, event.target.value)}
+                        placeholder="Nhập nhận xét sau khi chấm sao..."
+                        className="mt-3 min-h-20"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Ghi chú đánh giá tổng hợp</Label>
+                <Textarea
+                  value={summaryNote}
+                  onChange={(event) => setSummaryNote(event.target.value)}
+                  placeholder="Kết luận ngắn: nên giao việc gì, điểm mạnh/yếu, lưu ý khi gọi đi công trình..."
+                  className="min-h-20"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextField
+                  label="Mức lương mới"
+                  type="number"
+                  value={newSalary}
+                  placeholder="Ví dụ: 450000"
+                  helper="Nhập khi cần cập nhật đơn giá sau đánh giá."
+                  onChange={setNewSalary}
+                />
+                <div className="rounded-2xl border border-dashed p-4 text-sm">
+                  <div className="font-semibold">Luồng lương</div>
+                  <p className="mt-2 text-muted-foreground">
+                    Nếu nhập mức lương mới, hệ thống sẽ cập nhật Đơn giá ngày trong hồ sơ công nhân.
+                  </p>
                 </div>
-              );
-            })}
-          </div>
+              </div>
 
-          <div className="space-y-2">
-            <Label>Ghi chú đánh giá tổng hợp</Label>
-            <Textarea
-              value={summaryNote}
-              onChange={(event) => setSummaryNote(event.target.value)}
-              placeholder="Kết luận ngắn: nên giao việc gì, điểm mạnh/yếu, lưu ý khi gọi đi công trình..."
-              className="min-h-20"
-            />
-          </div>
+              <div className="rounded-2xl border border-dashed p-4 text-sm">
+                <span className="font-semibold">
+                  Điểm dự kiến: {totalScore}/{maxScore} · {rank}
+                </span>
+                <div className="mt-1 text-muted-foreground">
+                  Đã chấm {scoredCount}/{criteria.length} nhóm năng lực. Ô nhận xét dưới sao là cơ sở để giao việc đúng
+                  người.
+                </div>
+              </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <TextField
-              label="Mức lương mới"
-              type="number"
-              value={newSalary}
-              placeholder="Ví dụ: 450000"
-              helper="Nhập khi cần cập nhật đơn giá sau đánh giá."
-              onChange={setNewSalary}
-            />
-            <div className="rounded-2xl border border-dashed p-4 text-sm">
-              <div className="font-semibold">Luồng lương</div>
-              <p className="mt-2 text-muted-foreground">
-                Nếu nhập mức lương mới, hệ thống sẽ cập nhật Đơn giá ngày trong hồ sơ công nhân.
-              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={saveEvaluation} disabled={savingEvaluation}>
+                  <Save className="size-4" />
+                  {savingEvaluation ? "Đang lưu..." : "Lưu đánh giá"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setCriteriaDraft(initialCriteria())}
+                  disabled={savingEvaluation}
+                >
+                  Làm mới đánh giá
+                </Button>
+              </div>
             </div>
-          </div>
-
-          <div className="rounded-2xl border border-dashed p-4 text-sm">
-            <span className="font-semibold">
-              Điểm dự kiến: {totalScore}/{maxScore} · {rank}
-            </span>
-            <div className="mt-1 text-muted-foreground">
-              Đã chấm {scoredCount}/{criteria.length} nhóm năng lực. Ô nhận xét dưới sao là cơ sở để giao việc đúng
-              người.
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={saveEvaluation} disabled={savingEvaluation}>
-              <Save className="size-4" />
-              {savingEvaluation ? "Đang lưu..." : "Lưu đánh giá"}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setCriteriaDraft(initialCriteria())}
-              disabled={savingEvaluation}
-            >
-              Làm mới đánh giá
-            </Button>
           </div>
         </CardContent>
       </Card>
