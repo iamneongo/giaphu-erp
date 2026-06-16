@@ -1,4 +1,4 @@
-﻿import { getSql } from "../db/neon";
+import { getSql } from "../db/neon";
 import { buildNextCatalogCode, catalogKinds, normalizeCatalogCode } from "./catalog-codes";
 import { isValidPhoneNumber } from "./phone";
 import type {
@@ -4375,7 +4375,7 @@ export async function saveStaffProfile(payload: Record<string, unknown>) {
     set name = ${name},
         team = ${text(payload.team).trim()},
         position = ${text(payload.position).trim()},
-        salary_day = ${requireNonNegativeNumericInput(payload.salaryDay, "Đơn giá ngày")},
+        salary_day = ${number(payload.salaryDay)},
         resigned = ${resigned},
         off_date = ${offDate || null},
         avatar_url = ${text(payload.avatarUrl).trim()},
