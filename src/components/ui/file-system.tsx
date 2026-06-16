@@ -2263,8 +2263,9 @@ export function FileSystem({
       >
         {openedFile ? (
           <DialogContent
+            size="auto"
             className={cn(
-              "overflow-hidden p-0",
+              "flex flex-col gap-0 overflow-hidden p-0",
               VIEWER_DIALOG_CLASSNAMES[openedFile.kind]
             )}
             showCloseButton={openedFile.kind === "image"}
@@ -3074,7 +3075,7 @@ function FileSystemDateRangeDialog({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="w-[30rem] max-w-[calc(100vw-2rem)]">
+      <DialogContent size="auto" className="w-[min(30rem,calc(100vw-2rem))]">
         <DialogHeader>
           <DialogTitle>Custom date range</DialogTitle>
         </DialogHeader>

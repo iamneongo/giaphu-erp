@@ -186,7 +186,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
     },
   ] = useFileUpload({
     maxFiles: 1,
-    maxSize: 5 * 1024 * 1024,
+    maxSize: Number.POSITIVE_INFINITY,
     accept: "image/*",
     multiple: false,
     onFilesChange: async (files) => {
@@ -459,7 +459,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                       showFileList={false}
                       multiple={true}
                       title="Nhấp để tải lên hoặc kéo thả tệp"
-                      description="PDF, Word, Excel, CSV, PNG hoặc JPG (Tối đa 10MB)"
+                      description="PDF, Word, Excel, CSV, PNG, JPG hoặc các định dạng khác (không giới hạn dung lượng)"
                       browseLabel="Duyệt tệp"
                       draggingLabel="Thả vào đây"
                       onFilesAccepted={handleDocsAccepted}
