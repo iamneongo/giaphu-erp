@@ -164,9 +164,10 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
       setUploadingAvatar(true);
       try {
         const formData = new FormData();
-        formData.append("file", fileWrap.file);
+        const actualFile = fileWrap.file as File;
+        formData.append("file", actualFile);
         formData.append("docType", "Avatar");
-        formData.append("fileName", fileWrap.file.name);
+        formData.append("fileName", actualFile.name);
         formData.append("projectCode", "GLOBAL");
         const uploaded = await uploadGiaPhuDocument(formData);
         if (uploaded?.documentId) {
