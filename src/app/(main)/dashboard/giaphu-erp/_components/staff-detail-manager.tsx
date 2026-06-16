@@ -2,22 +2,24 @@
 
 import * as React from "react";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
-import { CircleAlertIcon, Loader2, Save, Star, Upload, UserIcon, UserRound, X, XIcon } from "lucide-react";
+import { CircleAlertIcon, Loader2, Save, Star, UserIcon, X, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileThumbnail } from "@/components/ui/file-thumbnail";
+import { FileUpload } from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { formatBytes, useFileUpload } from "@/hooks/use-file-upload";
+import { useFileUpload } from "@/hooks/use-file-upload";
 import type { StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
@@ -123,6 +125,36 @@ function scoreRank(totalScore: number, maxScore: number) {
   return "Cần kèm";
 }
 
+function getFileNameFromUrl(url: string) {
+  try {
+    const parsed = new URL(url, typeof window !== "undefined" ? window.location.origin : undefined);
+    const fileName = parsed.searchParams.get("fileName");
+    if (fileName) return fileName;
+  } catch (_e) {
+    // ignore URL parse error
+  }
+
+  const lastSegment = url.split("/").pop() || "";
+  if (lastSegment === "file") {
+    const segments = url.split("/");
+    const id = segments[segments.length - 2];
+    return `Tài liệu #${id}`;
+  }
+  return lastSegment || "Tài liệu";
+}
+
+function getFileMimeType(fileName: string) {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  if (!ext) return "application/octet-stream";
+  if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext)) {
+    return `image/${ext === "jpg" ? "jpeg" : ext}`;
+  }
+  if (ext === "pdf") return "application/pdf";
+  if (["xls", "xlsx"].includes(ext)) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (["doc", "docx"].includes(ext)) return "application/msword";
+  return "application/octet-stream";
+}
+
 export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManagerProps) {
   const router = useRouter();
   const [profile, setProfile] = React.useState<StaffProfileDraft>(() => initialProfile(staff));
@@ -138,6 +170,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   const [newSalary, setNewSalary] = React.useState("");
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
   const [uploadingDocs, setUploadingDocs] = React.useState(false);
+  const [uploadKey, setUploadKey] = React.useState(0);
 
   const [
     { files: avatarFiles, isDragging: isAvatarDragging, errors: avatarErrors },
@@ -202,6 +235,36 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   function updateProfile(key: keyof StaffProfileDraft, value: string) {
     setProfile((current) => ({ ...current, [key]: value }));
   }
+
+  const handleDocsAccepted = async (acceptedFiles: File[]) => {
+    if (!acceptedFiles.length) return;
+    setUploadingDocs(true);
+    try {
+      let newUrls = "";
+      for (const file of acceptedFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("docType", "Hồ sơ công nhân");
+        formData.append("fileName", file.name);
+        formData.append("projectCode", "GLOBAL");
+        const uploaded = await uploadGiaPhuDocument(formData);
+        if (uploaded?.documentId) {
+          const url = `/api/giaphu-erp/documents/${uploaded.documentId}/file?fileName=${encodeURIComponent(file.name)}`;
+          newUrls += (newUrls ? "\n" : "") + url;
+        }
+      }
+      if (newUrls) {
+        const existing = profile.profileFiles.trim();
+        updateProfile("profileFiles", existing ? `${existing}\n${newUrls}` : newUrls);
+        toast.success(`Đã tải lên ${acceptedFiles.length} tệp hồ sơ.`);
+      }
+    } catch (_err) {
+      toast.error("Lỗi khi tải hồ sơ.");
+    } finally {
+      setUploadingDocs(false);
+      setUploadKey((prev) => prev + 1);
+    }
+  };
 
   function updateCriterionScore(key: string, score: number) {
     setCriteriaDraft((current) => ({ ...current, [key]: { ...(current[key] ?? { note: "" }), score } }));
@@ -303,7 +366,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                         ? "border-primary bg-primary/5"
                         : "border-muted-foreground/25 hover:border-muted-foreground/50",
                       avatarPreviewUrl && "border-solid",
-                      uploadingAvatar && "opacity-50 pointer-events-none",
+                      uploadingAvatar && "pointer-events-none opacity-50",
                     )}
                     onDragEnter={handleAvatarDragEnter}
                     onDragLeave={handleAvatarDragLeave}
@@ -314,12 +377,18 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                     <input {...getAvatarInputProps()} className="sr-only" />
 
                     {avatarPreviewUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={avatarPreviewUrl} alt="Avatar" className="h-full w-full object-cover" />
+                      <Image
+                        src={avatarPreviewUrl}
+                        alt="Avatar"
+                        width={128}
+                        height={128}
+                        unoptimized
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
                       <div className="flex flex-col items-center gap-1 text-muted-foreground">
                         <UserIcon className="size-8" />
-                        <span className="text-[10px] uppercase font-semibold">Tải ảnh lên</span>
+                        <span className="font-semibold text-[10px] uppercase">Tải ảnh lên</span>
                       </div>
                     )}
                     {uploadingAvatar && (
@@ -350,12 +419,12 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                 </div>
 
                 {avatarErrors.length > 0 && (
-                  <Alert variant="destructive" className="py-2 px-3 text-xs w-full">
+                  <Alert variant="destructive" className="w-full px-3 py-2 text-xs">
                     <CircleAlertIcon className="size-3" />
-                    <AlertTitle className="text-xs ml-5 mb-1">Lỗi tải ảnh</AlertTitle>
+                    <AlertTitle className="mb-1 ml-5 text-xs">Lỗi tải ảnh</AlertTitle>
                     <AlertDescription className="ml-5">
-                      {avatarErrors.map((error, index) => (
-                        <p key={index}>{error}</p>
+                      {avatarErrors.map((error) => (
+                        <p key={error}>{error}</p>
                       ))}
                     </AlertDescription>
                   </Alert>
@@ -366,72 +435,76 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                 <div className="space-y-2 md:col-span-2">
                   <Label>Hồ sơ công nhân (Tài liệu)</Label>
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="file"
-                        multiple
-                        disabled={uploadingDocs}
-                        className="w-full text-muted-foreground"
-                        onChange={async (e) => {
-                          const files = Array.from(e.target.files || []);
-                          if (!files.length) return;
-                          setUploadingDocs(true);
-                          try {
-                            let newUrls = "";
-                            for (const file of files) {
-                              const formData = new FormData();
-                              formData.append("file", file);
-                              formData.append("docType", "Hồ sơ công nhân");
-                              formData.append("fileName", file.name);
-                              formData.append("projectCode", "GLOBAL");
-                              const uploaded = await uploadGiaPhuDocument(formData);
-                              if (uploaded?.documentId) {
-                                const url = `/api/giaphu-erp/documents/${uploaded.documentId}/file`;
-                                newUrls += (newUrls ? "\n" : "") + url;
-                              }
-                            }
-                            if (newUrls) {
-                              const existing = profile.profileFiles.trim();
-                              updateProfile("profileFiles", existing ? existing + "\n" + newUrls : newUrls);
-                              toast.success(`Đã tải lên ${files.length} tệp hồ sơ.`);
-                            }
-                          } catch (err) {
-                            toast.error("Lỗi khi tải hồ sơ.");
-                          } finally {
-                            setUploadingDocs(false);
-                            // Reset input
-                            e.target.value = "";
-                          }
-                        }}
-                      />
-                      {uploadingDocs && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
-                    </div>
+                    <FileUpload
+                      key={uploadKey}
+                      showFileList={false}
+                      multiple={true}
+                      title="Nhấp để tải lên hoặc kéo thả tệp"
+                      description="PDF, Word, Excel, CSV, PNG hoặc JPG (Tối đa 10MB)"
+                      browseLabel="Duyệt tệp"
+                      draggingLabel="Thả vào đây"
+                      onFilesAccepted={handleDocsAccepted}
+                    />
+
+                    {uploadingDocs && (
+                      <div className="mt-2 flex animate-pulse items-center gap-3 rounded-xl border bg-muted/30 px-3 py-2.5">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 h-4 w-1/3 rounded bg-muted" />
+                          <div className="h-3 w-1/4 rounded bg-muted" />
+                        </div>
+                      </div>
+                    )}
+
                     {profile.profileFiles ? (
-                      <div className="mt-2 flex flex-col gap-2">
-                        {profile.profileFiles.split("\n").map((url, i) => {
+                      <div className="mt-3 flex flex-col gap-2">
+                        {profile.profileFiles.split("\n").map((url) => {
                           const trimmed = url.trim();
                           if (!trimmed) return null;
+
+                          const fileName = getFileNameFromUrl(trimmed);
+                          const mimeType = getFileMimeType(fileName);
+
                           return (
                             <div
-                              key={i}
-                              className="flex items-center justify-between gap-2 rounded-md border bg-muted/50 p-2 text-sm"
+                              key={trimmed}
+                              className="flex items-center gap-3 rounded-xl border bg-muted/30 px-3 py-2.5"
                             >
-                              <a
-                                href={trimmed}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="truncate text-blue-600 hover:underline dark:text-blue-400"
-                              >
-                                {trimmed.split("/").pop() || "Tài liệu đính kèm"}
-                              </a>
+                              <FileThumbnail
+                                file={{
+                                  name: fileName,
+                                  type: mimeType,
+                                }}
+                                previewImageUrl={mimeType.startsWith("image/") ? trimmed : null}
+                                className="size-10 shrink-0 rounded-lg"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <a
+                                  href={trimmed}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block truncate font-medium text-blue-600 text-sm hover:underline dark:text-blue-400"
+                                >
+                                  {fileName}
+                                </a>
+                                <div className="truncate text-muted-foreground text-xs">
+                                  {mimeType.startsWith("image/")
+                                    ? "Ảnh"
+                                    : mimeType === "application/pdf"
+                                      ? "Tài liệu PDF"
+                                      : "Tài liệu đính kèm"}
+                                </div>
+                              </div>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                                 onClick={() => {
                                   const newLinks = profile.profileFiles
                                     .split("\n")
-                                    .filter((_, index) => index !== i)
+                                    .filter((link) => link.trim() !== trimmed)
                                     .join("\n");
                                   updateProfile("profileFiles", newLinks);
                                 }}
