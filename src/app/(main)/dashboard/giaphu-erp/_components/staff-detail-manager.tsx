@@ -23,6 +23,7 @@ import { useFileUpload } from "@/hooks/use-file-upload";
 import type { StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
+import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { formatDate, formatMoney } from "../_lib/formatters";
 import { runGiaPhuAction, uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 
@@ -157,6 +158,7 @@ function getFileMimeType(fileName: string) {
 
 export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManagerProps) {
   const router = useRouter();
+  const { activeProjectCode } = useGiaPhuErp();
   const [profile, setProfile] = React.useState<StaffProfileDraft>(() => initialProfile(staff));
   const [savingProfile, setSavingProfile] = React.useState(false);
   const [savingEvaluation, setSavingEvaluation] = React.useState(false);
@@ -199,10 +201,14 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
       try {
         const formData = new FormData();
         const actualFile = fileWrap.file as File;
+        const projectCode = activeProjectCode;
+        if (!projectCode) {
+          throw new Error("Thiếu công trình để tải hồ sơ.");
+        }
         formData.append("file", actualFile);
         formData.append("docType", "Avatar");
         formData.append("fileName", actualFile.name);
-        formData.append("projectCode", "GLOBAL");
+        formData.append("projectCode", projectCode);
         const uploaded = await uploadGiaPhuDocument(formData);
         if (uploaded?.documentId) {
           updateProfile("avatarUrl", `/api/giaphu-erp/documents/${uploaded.documentId}/file`);
@@ -244,10 +250,14 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
       let newUrls = "";
       for (const file of acceptedFiles) {
         const formData = new FormData();
+        const projectCode = activeProjectCode;
+        if (!projectCode) {
+          throw new Error("Thiếu công trình để tải hồ sơ.");
+        }
         formData.append("file", file);
         formData.append("docType", "Hồ sơ công nhân");
         formData.append("fileName", file.name);
-        formData.append("projectCode", "GLOBAL");
+        formData.append("projectCode", projectCode);
         const uploaded = await uploadGiaPhuDocument(formData);
         if (uploaded?.documentId) {
           const url = `/api/giaphu-erp/documents/${uploaded.documentId}/file?fileName=${encodeURIComponent(file.name)}`;

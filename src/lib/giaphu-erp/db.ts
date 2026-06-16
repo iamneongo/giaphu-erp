@@ -1622,6 +1622,7 @@ export async function getGiaPhuProjectList(options: { organizationId?: string } 
     select *
     from gp_projects
     where organization_id = ${organizationId}
+      and code not like 'GLOBAL\\_%' escape '\\'
     order by updated_at desc, code asc
   `;
   return (projectRows as Row[]).map(projectFromRow);
@@ -5425,7 +5426,7 @@ export async function saveDocument(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
   const id = number(payload.id);
-  let projectCode = text(payload.projectCode).trim();
+  const projectCode = text(payload.projectCode).trim();
   const docType = text(payload.docType).trim();
   const fileName = text(payload.fileName).trim();
   const fileData = text(payload.fileData);
@@ -5435,15 +5436,6 @@ export async function saveDocument(payload: Record<string, unknown>) {
   const fileId = text(payload.fileId).trim();
   const note = text(payload.note).trim();
   const previewText = text(payload.previewText).trim();
-
-  if (projectCode === "GLOBAL") {
-    projectCode = `GLOBAL_${organizationId}`;
-    await sql`
-      insert into gp_projects (code, organization_id, name)
-      values (${projectCode}, ${organizationId}, 'Hồ sơ dùng chung')
-      on conflict (code) do nothing
-    `;
-  }
 
   if (!projectCode) throw new Error("Thiếu công trình.");
   if (!docType) throw new Error("Thiếu loại hồ sơ.");
