@@ -182,24 +182,26 @@ export async function DetailPageContent({
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Thông tin chi tiết</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            {record.fields.map((item) => (
-              <div key={item.key} className={item.wide ? "md:col-span-2" : undefined}>
-                <div className="text-muted-foreground text-xs">{item.label}</div>
-                <div className="mt-1 whitespace-pre-wrap break-words font-medium text-sm">
-                  {formatDetailValue(item.value)}
+      {type !== "staff" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Thông tin chi tiết</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2">
+              {record.fields.map((item) => (
+                <div key={item.key} className={item.wide ? "md:col-span-2" : undefined}>
+                  <div className="text-muted-foreground text-xs">{item.label}</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words font-medium text-sm">
+                    {formatDetailValue(item.value)}
+                  </div>
+                  <Separator className="mt-3" />
                 </div>
-                <Separator className="mt-3" />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {staffInsights ? (
         <>

@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Save, Star, UserRound } from "lucide-react";
+import { Loader2, Save, Star, Upload, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,7 @@ import type { StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
 import { formatDate, formatMoney } from "../_lib/formatters";
-import { runGiaPhuAction } from "../_lib/giaphu-erp-api";
+import { runGiaPhuAction, uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 
 type StaffProfileDraft = {
   id: string;
@@ -132,6 +132,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   const [criteriaDraft, setCriteriaDraft] = React.useState<CriterionDraft>(() => initialCriteria());
   const [summaryNote, setSummaryNote] = React.useState("");
   const [newSalary, setNewSalary] = React.useState("");
+  const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
 
   React.useEffect(() => {
     setProfile(initialProfile(staff));
@@ -246,14 +247,42 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
               )}
             </div>
             <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Ảnh đại diện (Avatar)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingAvatar}
+                    className="w-full text-muted-foreground"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingAvatar(true);
+                      try {
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        formData.append("docType", "Avatar");
+                        formData.append("fileName", file.name);
+                        const uploaded = await uploadGiaPhuDocument(formData);
+                        if (uploaded?.documentId) {
+                          updateProfile("avatarUrl", `/api/giaphu-erp/documents/${uploaded.documentId}/file`);
+                          toast.success("Tải ảnh lên thành công.");
+                        } else {
+                          toast.error("Không nhận được ID ảnh.");
+                        }
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Lỗi khi tải ảnh.");
+                      } finally {
+                        setUploadingAvatar(false);
+                      }
+                    }}
+                  />
+                  {uploadingAvatar && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
+                </div>
+              </div>
               <TextField
-                label="Avatar công nhân"
-                value={profile.avatarUrl}
-                placeholder="Dán link ảnh hoặc tên file"
-                onChange={(value) => updateProfile("avatarUrl", value)}
-              />
-              <TextField
-                label="Upload hồ sơ vào root folder"
+                label="Hồ sơ công nhân"
                 value={profile.profileFiles}
                 placeholder="Dán link/tên hồ sơ, mỗi dòng một file"
                 onChange={(value) => updateProfile("profileFiles", value)}
