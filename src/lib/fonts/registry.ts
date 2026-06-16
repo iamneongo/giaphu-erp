@@ -1,4 +1,5 @@
 import { Arimo } from "next/font/google";
+
 import { GeistMono } from "geist/font/mono";
 import { GeistPixelSquare } from "geist/font/pixel";
 import { GeistSans } from "geist/font/sans";
@@ -10,6 +11,4 @@ const arimo = Arimo({
   variable: "--font-arimo",
 });
 
-export const fontVars = [arimo.variable, GeistSans.variable, GeistMono.variable, GeistPixelSquare.variable].join(
-  " ",
-);
+export const fontVars = [arimo.variable, GeistSans.variable, GeistMono.variable, GeistPixelSquare.variable].join(" ");

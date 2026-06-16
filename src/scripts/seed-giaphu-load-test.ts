@@ -1,8 +1,7 @@
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-
 import { getSql } from "../lib/db/neon";
 import { createGiaPhuSchema } from "../lib/giaphu-erp/db";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 
 const PROJECT_PREFIX = "LOAD26-";
 const CATALOG_PREFIX = "L26";
@@ -453,7 +452,9 @@ function buildProjectData(projects: ProjectSeed[], staff: StaffSeed[], catalogs:
     const rng = createRng(projectIndex + 1001);
     const projectStart = new Date(`${project.startDate}T00:00:00Z`);
     const contractorCount = volume.subcontractorContracts;
-    const projectContractors = range(contractorCount).map((index) => pick(catalogs.contractors, projectIndex * 7 + index));
+    const projectContractors = range(contractorCount).map((index) =>
+      pick(catalogs.contractors, projectIndex * 7 + index),
+    );
     const projectCategories = range(18).map((index) => pick(catalogs.categories, projectIndex * 5 + index));
 
     for (const rowIndex of range(volume.contracts)) {
@@ -629,7 +630,8 @@ function buildProjectData(projects: ProjectSeed[], staff: StaffSeed[], catalogs:
         durationDays,
         workdays: Number((3 + rng() * 26).toFixed(1)),
         planEndDate,
-        confirmedEndDate: rowIndex % 4 === 0 ? isoDate(addDays(new Date(`${planEndDate}T00:00:00Z`), rowIndex % 3)) : null,
+        confirmedEndDate:
+          rowIndex % 4 === 0 ? isoDate(addDays(new Date(`${planEndDate}T00:00:00Z`), rowIndex % 3)) : null,
         evaluation: rowIndex % 5 === 0 ? "Cần bổ sung nhân lực" : "Đạt tiến độ",
       });
     }

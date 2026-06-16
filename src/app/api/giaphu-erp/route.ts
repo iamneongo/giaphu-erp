@@ -51,6 +51,8 @@ import {
   savePayrollAdjustment,
   saveProgress,
   saveProject,
+  saveStaffProfile,
+  saveStaffSkillEvaluation,
   saveStaffWeeklyAttendance,
   saveSubcontractor,
   saveSubcontractorContract,
@@ -132,6 +134,8 @@ const mutationPermissions = {
   deleteCatalog: ERP_PERMISSIONS.catalogsManage,
   restoreCatalog: ERP_PERMISSIONS.catalogsManage,
   manageStaff: ERP_PERMISSIONS.workforceManage,
+  saveStaffProfile: ERP_PERMISSIONS.workforceManage,
+  saveStaffSkillEvaluation: ERP_PERMISSIONS.workforceManage,
   deleteStaff: ERP_PERMISSIONS.workforceManage,
   saveMaterial: ERP_PERMISSIONS.materialsManage,
   saveZaloMaterialBreakdown: ERP_PERMISSIONS.materialsManage,
@@ -226,6 +230,8 @@ function activityModuleForAction(action: string | undefined) {
     case "restoreCatalog":
       return "Danh mục";
     case "manageStaff":
+    case "saveStaffProfile":
+    case "saveStaffSkillEvaluation":
     case "deleteStaff":
     case "saveWeeklyAttendance":
     case "saveStaffWeeklyAttendance":
@@ -286,6 +292,10 @@ function activityLabelForAction(action: string | undefined) {
       return "Khôi phục danh mục";
     case "manageStaff":
       return "Lưu nhân sự";
+    case "saveStaffProfile":
+      return "Lưu hồ sơ công nhân";
+    case "saveStaffSkillEvaluation":
+      return "Lưu đánh giá tay nghề";
     case "deleteStaff":
       return "Lưu trữ nhân sự";
     case "saveMaterial":
@@ -349,6 +359,7 @@ function activityEntityId(action: string | undefined, payload: Record<string, un
   if (payload.code != null) return String(payload.code);
   if (payload.contractNo != null) return String(payload.contractNo);
   if (payload.name != null) return String(payload.name);
+  if (payload.staffId != null) return String(payload.staffId);
   if (payload.staffName != null) return String(payload.staffName);
   if (payload.materialName != null) return String(payload.materialName);
   if (payload.contractorName != null) return String(payload.contractorName);
@@ -362,6 +373,7 @@ function activitySummary(action: string | undefined, payload: Record<string, unk
     payload.name ??
     payload.code ??
     payload.contractNo ??
+    payload.staffId ??
     payload.staffName ??
     payload.materialName ??
     payload.contractorName ??
@@ -439,6 +451,12 @@ async function runGiaPhuMutation(action: string | undefined, payload: Record<str
       return;
     case "manageStaff":
       await manageStaff(payload);
+      return;
+    case "saveStaffProfile":
+      await saveStaffProfile(payload);
+      return;
+    case "saveStaffSkillEvaluation":
+      await saveStaffSkillEvaluation(payload);
       return;
     case "saveMaterial":
       await saveMaterial(payload);
@@ -776,6 +794,15 @@ export async function POST(request: Request) {
       case "manageStaff":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.manageStaff)) return forbidden();
         await manageStaff(payload);
+        break;
+      case "saveStaffProfile":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveStaffProfile)) return forbidden();
+        await saveStaffProfile(payload);
+        break;
+      case "saveStaffSkillEvaluation":
+        if (!canUsePermission(session, permissionKeys, mutationPermissions.saveStaffSkillEvaluation))
+          return forbidden();
+        await saveStaffSkillEvaluation(payload);
         break;
       case "deleteStaff":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteStaff)) return forbidden();

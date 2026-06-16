@@ -181,6 +181,37 @@ export interface StaffRow {
   salaryDay: number;
   resigned: boolean;
   offDate: string;
+  avatarUrl: string;
+  profileFiles: string;
+  birthYear: string;
+  phone: string;
+  citizenId: string;
+  hometown: string;
+  currentAddress: string;
+  mainSkill: string;
+  internalLevel: string;
+  referrer: string;
+  expectedStability: string;
+  ranking: string;
+  startDate: string;
+  note: string;
+}
+
+export interface StaffSkillEvaluationRow {
+  id: number;
+  staffId: string;
+  staffName: string;
+  date: string;
+  evaluator: string;
+  travelReady: string;
+  statusAfterReview: string;
+  leaveDate: string;
+  criteria: Record<string, { score: number; note: string }>;
+  summaryNote: string;
+  newSalary: number;
+  totalScore: number;
+  rank: string;
+  createdAt: string;
 }
 
 export interface MaterialRow {

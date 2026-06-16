@@ -6,11 +6,7 @@ export const metadata = {
   title: "Sửa vai trò | Gia Phú ERP",
 };
 
-export default async function Page({
-  params,
-}: {
-  params: Promise<{ roleId: string }>;
-}) {
+export default async function Page({ params }: { params: Promise<{ roleId: string }> }) {
   await enforceOrganizationRoleManagement();
   const { roleId } = await params;
 

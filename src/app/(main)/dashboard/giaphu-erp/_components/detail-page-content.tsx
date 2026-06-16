@@ -2,19 +2,22 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { auth } from "@clerk/nextjs/server";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, CalendarDays, ExternalLink, FileText, WalletCards } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ERP_PERMISSIONS, enforceErpRoutePermission } from "@/lib/clerk/erp-rbac";
-import { getDocumentDetail, getGiaPhuDashboardData } from "@/lib/giaphu-erp/db";
+import { getDocumentDetail, getGiaPhuDashboardData, getStaffDetailData } from "@/lib/giaphu-erp/db";
 import { ACTIVE_PROJECT_COOKIE_NAME } from "@/lib/giaphu-erp/project-context";
 import { decodeProjectRouteSegment, erpPathForProject } from "@/lib/giaphu-erp/project-routes";
+import type { AttendanceRow, PayrollAdjustmentRow, StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
 
 import { DashboardLink } from "../../_components/dashboard-link";
 import { formatDate, formatMeasurement, formatMoney } from "../_lib/formatters";
+import { StaffDetailManager } from "./staff-detail-manager";
 
 type DetailField = {
   key: string;
@@ -33,6 +36,42 @@ type DetailRecord = {
   externalHref?: string;
   externalLabel?: string;
 };
+
+type StaffPayrollLine = {
+  key: string;
+  week: string;
+  category: string;
+  rows: number;
+  workdays: number;
+  baseSalary: number;
+  allowance: number;
+  overtimeHours: number;
+  overtimeAmount: number;
+  adjustment: number;
+  total: number;
+};
+
+type StaffDetailInsights = {
+  staff: StaffRow;
+  projectName: string;
+  attendanceRows: AttendanceRow[];
+  payrollLines: StaffPayrollLine[];
+  totals: {
+    workdays: number;
+    rows: number;
+    baseSalary: number;
+    allowance: number;
+    overtimeHours: number;
+    overtimeAmount: number;
+    adjustment: number;
+    total: number;
+  };
+  categoryCount: number;
+  weekCount: number;
+  skillEvaluations: StaffSkillEvaluationRow[];
+};
+
+type StaffDetailData = NonNullable<Awaited<ReturnType<typeof getStaffDetailData>>>;
 
 const detailPermissions = {
   projects: ERP_PERMISSIONS.crmRead,
@@ -97,6 +136,7 @@ export async function DetailPageContent({
     (project) =>
       project.id === activeProjectCode || project.code === activeProjectCode || project.name === activeProjectCode,
   );
+  const effectiveProjectCode = activeProject?.code ?? data.projects[0]?.code ?? activeProjectCode;
   const record =
     type === "documents"
       ? await getDocumentRecord(decodedId, organizationId)
@@ -105,6 +145,14 @@ export async function DetailPageContent({
   if (!record) notFound();
 
   const backHref = activeProject ? erpPathForProject(activeProject.id, record.backHref) : record.backHref;
+  const staffDetailData =
+    type === "staff"
+      ? await getStaffDetailData({ activeProjectCode: effectiveProjectCode, organizationId, staffId: decodedId })
+      : null;
+  const staffInsights =
+    staffDetailData && type === "staff"
+      ? buildStaffDetailInsights(staffDetailData, activeProject?.name || activeProject?.code || effectiveProjectCode)
+      : null;
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
@@ -152,7 +200,280 @@ export async function DetailPageContent({
           </div>
         </CardContent>
       </Card>
+
+      {staffInsights ? (
+        <>
+          <StaffDetailManager staff={staffInsights.staff} skillEvaluations={staffInsights.skillEvaluations} />
+          <StaffDetailSections insights={staffInsights} />
+        </>
+      ) : null}
     </div>
+  );
+}
+
+function payrollKey(week: string, category: string, staffName: string) {
+  return [week, category, staffName].join("::");
+}
+
+function buildStaffDetailInsights(detailData: StaffDetailData, projectName: string): StaffDetailInsights | null {
+  const staff = detailData.staff;
+
+  const attendanceRows = detailData.attendance
+    .filter((row) => row.staffName === staff.name)
+    .sort((first, second) => {
+      const dateCompare = second.date.localeCompare(first.date);
+      if (dateCompare !== 0) return dateCompare;
+      return second.id - first.id;
+    });
+  const adjustmentMap = new Map(
+    detailData.payrollAdjustments
+      .filter((row) => row.staffName === staff.name)
+      .map((row) => [payrollKey(row.week, row.category, row.staffName), row]),
+  );
+  const payrollMap = new Map<string, StaffPayrollLine>();
+
+  for (const row of attendanceRows) {
+    const key = payrollKey(row.week, row.category, row.staffName);
+    const current = payrollMap.get(key) ?? {
+      key,
+      week: row.week,
+      category: row.category,
+      rows: 0,
+      workdays: 0,
+      baseSalary: 0,
+      allowance: 0,
+      overtimeHours: 0,
+      overtimeAmount: 0,
+      adjustment: 0,
+      total: 0,
+    };
+    const baseSalary = Math.max(
+      0,
+      Number(row.total || 0) - Number(row.allowance || 0) - Number(row.overtimeAmount || 0),
+    );
+
+    current.rows += 1;
+    current.workdays += Number(row.coefficient || 0);
+    current.baseSalary += baseSalary;
+    current.allowance += Number(row.allowance || 0);
+    current.overtimeHours += Number(row.overtimeHours || 0);
+    current.overtimeAmount += Number(row.overtimeAmount || 0);
+    current.total += Number(row.total || 0);
+    payrollMap.set(key, current);
+  }
+
+  const payrollLines = Array.from(payrollMap.values())
+    .map((line) => {
+      const adjustment = adjustmentMap.get(payrollKey(line.week, line.category, staff.name))?.adjustment ?? 0;
+
+      return {
+        ...line,
+        adjustment,
+        total: line.total + adjustment,
+      };
+    })
+    .sort((first, second) => {
+      const weekCompare = second.week.localeCompare(first.week, "vi");
+      if (weekCompare !== 0) return weekCompare;
+      return first.category.localeCompare(second.category, "vi");
+    });
+  const totals = payrollLines.reduce(
+    (sum, line) => ({
+      workdays: sum.workdays + line.workdays,
+      rows: sum.rows + line.rows,
+      baseSalary: sum.baseSalary + line.baseSalary,
+      allowance: sum.allowance + line.allowance,
+      overtimeHours: sum.overtimeHours + line.overtimeHours,
+      overtimeAmount: sum.overtimeAmount + line.overtimeAmount,
+      adjustment: sum.adjustment + line.adjustment,
+      total: sum.total + line.total,
+    }),
+    {
+      workdays: 0,
+      rows: 0,
+      baseSalary: 0,
+      allowance: 0,
+      overtimeHours: 0,
+      overtimeAmount: 0,
+      adjustment: 0,
+      total: 0,
+    },
+  );
+
+  return {
+    staff,
+    projectName,
+    attendanceRows,
+    payrollLines,
+    totals,
+    categoryCount: new Set(attendanceRows.map((row) => row.category).filter(Boolean)).size,
+    weekCount: new Set(attendanceRows.map((row) => row.week).filter(Boolean)).size,
+    skillEvaluations: detailData.skillEvaluations,
+  };
+}
+
+function StaffDetailSections({ insights }: { insights: StaffDetailInsights }) {
+  const recentAttendance = insights.attendanceRows.slice(0, 20);
+
+  return (
+    <>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StaffMetricCard
+          title="Tổng thực nhận"
+          value={formatMoney(insights.totals.total)}
+          detail={insights.projectName}
+          icon={WalletCards}
+        />
+        <StaffMetricCard
+          title="Tổng công"
+          value={`${formatDetailValue(insights.totals.workdays)} công`}
+          detail={`${insights.totals.rows} dòng chấm công`}
+          icon={CalendarDays}
+        />
+        <StaffMetricCard
+          title="Phụ cấp + OT"
+          value={formatMoney(insights.totals.allowance + insights.totals.overtimeAmount)}
+          detail={`${formatDetailValue(insights.totals.overtimeHours)} giờ OT`}
+          icon={FileText}
+        />
+        <StaffMetricCard
+          title="Tuần / hạng mục"
+          value={`${insights.weekCount} tuần`}
+          detail={`${insights.categoryCount} hạng mục`}
+          icon={CalendarDays}
+        />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Bảng lương theo tuần và hạng mục</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {insights.payrollLines.length ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tuần</TableHead>
+                    <TableHead>Hạng mục</TableHead>
+                    <TableHead className="text-right">Công</TableHead>
+                    <TableHead className="text-right">Lương công</TableHead>
+                    <TableHead className="text-right">Phụ cấp</TableHead>
+                    <TableHead className="text-right">OT</TableHead>
+                    <TableHead className="text-right">Điều chỉnh</TableHead>
+                    <TableHead className="text-right">Thực nhận</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {insights.payrollLines.map((line) => (
+                    <TableRow key={line.key}>
+                      <TableCell className="font-medium">{line.week}</TableCell>
+                      <TableCell className="max-w-md truncate">{line.category || "-"}</TableCell>
+                      <TableCell className="text-right">{formatDetailValue(line.workdays)}</TableCell>
+                      <TableCell className="text-right">{formatMoney(line.baseSalary)}</TableCell>
+                      <TableCell className="text-right">{formatMoney(line.allowance)}</TableCell>
+                      <TableCell className="text-right">{formatMoney(line.overtimeAmount)}</TableCell>
+                      <TableCell className="text-right">{formatMoney(line.adjustment)}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatMoney(line.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow>
+                    <TableCell colSpan={2} className="font-semibold text-right">
+                      Tổng cộng
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatDetailValue(insights.totals.workdays)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatMoney(insights.totals.baseSalary)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">{formatMoney(insights.totals.allowance)}</TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatMoney(insights.totals.overtimeAmount)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatMoney(insights.totals.adjustment)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">{formatMoney(insights.totals.total)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground text-sm">
+              Chưa có dữ liệu chấm công cho nhân sự này trong công trình đang mở.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Lịch sử chấm công gần nhất</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recentAttendance.length ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ngày</TableHead>
+                    <TableHead>Tuần</TableHead>
+                    <TableHead>Ca</TableHead>
+                    <TableHead>Hạng mục</TableHead>
+                    <TableHead className="text-right">Hệ số</TableHead>
+                    <TableHead className="text-right">Thành tiền</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentAttendance.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-medium">{formatDate(row.date)}</TableCell>
+                      <TableCell>{row.week}</TableCell>
+                      <TableCell>{row.shift || row.status || "-"}</TableCell>
+                      <TableCell className="max-w-md truncate">{row.category || "-"}</TableCell>
+                      <TableCell className="text-right">{formatDetailValue(row.coefficient)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatMoney(row.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground text-sm">
+              Chưa có lịch sử chấm công.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+function StaffMetricCard({
+  title,
+  value,
+  detail,
+  icon: Icon,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  icon: typeof WalletCards;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-start justify-between gap-3 p-5">
+        <div>
+          <div className="text-muted-foreground text-sm">{title}</div>
+          <div className="mt-2 font-semibold text-2xl">{value}</div>
+          <div className="mt-1 text-muted-foreground text-xs">{detail}</div>
+        </div>
+        <div className="rounded-full bg-muted p-2 text-muted-foreground">
+          <Icon className="size-5" />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

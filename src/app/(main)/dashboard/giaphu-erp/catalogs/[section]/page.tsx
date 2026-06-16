@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { enforceErpRoutePermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac";
+import { ERP_PERMISSIONS, enforceErpRoutePermission } from "@/lib/clerk/erp-rbac";
 
 import { CatalogsWorkspace } from "../../_components/catalogs-workspace";
 import { getCatalogSectionBySlug } from "../../_lib/catalog-config";

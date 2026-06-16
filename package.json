@@ -16,9 +16,7 @@
     "seed:loadtest": "ts-node -P tsconfig.scripts.json src/scripts/seed-giaphu-load-test.ts"
   },
   "lint-staged": {
-    "*.{js,ts,jsx,tsx}": [
-      "biome check --write --no-errors-on-unmatched"
-    ]
+    "*.{js,ts,jsx,tsx}": ["biome check --write --no-errors-on-unmatched"]
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

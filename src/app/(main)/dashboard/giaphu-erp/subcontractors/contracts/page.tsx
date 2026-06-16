@@ -1,4 +1,4 @@
-import { enforceErpRoutePermission, ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac";
+import { ERP_PERMISSIONS, enforceErpRoutePermission } from "@/lib/clerk/erp-rbac";
 
 import { SubcontractorsWorkspace } from "../../_components/subcontractors-workspace";
 

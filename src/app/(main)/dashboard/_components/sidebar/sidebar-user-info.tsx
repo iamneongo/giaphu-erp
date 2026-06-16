@@ -34,9 +34,6 @@ function ClerkSidebarUserInfo() {
   };
 
   return (
-    <NavUser
-      user={isLoaded ? sidebarUser : rootUser}
-      onSignOut={() => signOut({ redirectUrl: "/auth/sign-in" })}
-    />
+    <NavUser user={isLoaded ? sidebarUser : rootUser} onSignOut={() => signOut({ redirectUrl: "/auth/sign-in" })} />
   );
 }

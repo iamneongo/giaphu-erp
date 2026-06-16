@@ -24,6 +24,7 @@ import type {
   ProjectRow,
   ReportTableState,
   StaffRow,
+  StaffSkillEvaluationRow,
   SubcontractorContractRow,
   SubcontractorRow,
 } from "./types";
@@ -408,6 +409,45 @@ function staffFromRow(row: Row): StaffRow {
     salaryDay: number(row.salary_day),
     resigned: bool(row.resigned),
     offDate: dateOnly(row.off_date),
+    avatarUrl: text(row.avatar_url),
+    profileFiles: text(row.profile_files),
+    birthYear: text(row.birth_year),
+    phone: text(row.phone),
+    citizenId: text(row.citizen_id),
+    hometown: text(row.hometown),
+    currentAddress: text(row.current_address),
+    mainSkill: text(row.main_skill),
+    internalLevel: text(row.internal_level),
+    referrer: text(row.referrer),
+    expectedStability: text(row.expected_stability),
+    ranking: text(row.ranking),
+    startDate: dateOnly(row.start_date),
+    note: text(row.note),
+  };
+}
+
+function staffSkillEvaluationFromRow(row: Row): StaffSkillEvaluationRow {
+  const criteriaValue = row.criteria;
+  const criteria =
+    criteriaValue && typeof criteriaValue === "object" && !Array.isArray(criteriaValue)
+      ? (criteriaValue as Record<string, { score: number; note: string }>)
+      : {};
+
+  return {
+    id: number(row.id),
+    staffId: text(row.staff_id),
+    staffName: text(row.staff_name),
+    date: dateOnly(row.evaluation_date),
+    evaluator: text(row.evaluator),
+    travelReady: text(row.travel_ready),
+    statusAfterReview: text(row.status_after_review),
+    leaveDate: dateOnly(row.leave_date),
+    criteria,
+    summaryNote: text(row.summary_note),
+    newSalary: number(row.new_salary),
+    totalScore: number(row.total_score),
+    rank: text(row.rank),
+    createdAt: dateTime(row.created_at),
   };
 }
 
@@ -762,6 +802,39 @@ async function createGiaPhuSchemaInternal() {
     salary_day numeric not null default 0,
     resigned boolean not null default false,
     off_date date,
+    avatar_url text not null default '',
+    profile_files text not null default '',
+    birth_year text not null default '',
+    phone text not null default '',
+    citizen_id text not null default '',
+    hometown text not null default '',
+    current_address text not null default '',
+    main_skill text not null default '',
+    internal_level text not null default '',
+    referrer text not null default '',
+    expected_stability text not null default '',
+    ranking text not null default '',
+    start_date date,
+    note text not null default '',
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  )`;
+
+  await sql`create table if not exists gp_staff_skill_evaluations (
+    id bigserial primary key,
+    organization_id text not null default '',
+    staff_id text not null default '',
+    staff_name text not null default '',
+    evaluation_date date,
+    evaluator text not null default '',
+    travel_ready text not null default '',
+    status_after_review text not null default '',
+    leave_date date,
+    criteria jsonb not null default '{}'::jsonb,
+    summary_note text not null default '',
+    new_salary numeric not null default 0,
+    total_score numeric not null default 0,
+    rank text not null default '',
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
   )`;
@@ -1188,6 +1261,38 @@ async function ensureOrganizationColumns() {
   await sql`alter table gp_catalog_items add column if not exists sort_order integer not null default 0`;
   await sql`alter table gp_catalog_items add column if not exists archived boolean not null default false`;
   await sql`alter table gp_staff add column if not exists organization_id text not null default ''`;
+  await sql`alter table gp_staff add column if not exists avatar_url text not null default ''`;
+  await sql`alter table gp_staff add column if not exists profile_files text not null default ''`;
+  await sql`alter table gp_staff add column if not exists birth_year text not null default ''`;
+  await sql`alter table gp_staff add column if not exists phone text not null default ''`;
+  await sql`alter table gp_staff add column if not exists citizen_id text not null default ''`;
+  await sql`alter table gp_staff add column if not exists hometown text not null default ''`;
+  await sql`alter table gp_staff add column if not exists current_address text not null default ''`;
+  await sql`alter table gp_staff add column if not exists main_skill text not null default ''`;
+  await sql`alter table gp_staff add column if not exists internal_level text not null default ''`;
+  await sql`alter table gp_staff add column if not exists referrer text not null default ''`;
+  await sql`alter table gp_staff add column if not exists expected_stability text not null default ''`;
+  await sql`alter table gp_staff add column if not exists ranking text not null default ''`;
+  await sql`alter table gp_staff add column if not exists start_date date`;
+  await sql`alter table gp_staff add column if not exists note text not null default ''`;
+  await sql`create table if not exists gp_staff_skill_evaluations (
+    id bigserial primary key,
+    organization_id text not null default '',
+    staff_id text not null default '',
+    staff_name text not null default '',
+    evaluation_date date,
+    evaluator text not null default '',
+    travel_ready text not null default '',
+    status_after_review text not null default '',
+    leave_date date,
+    criteria jsonb not null default '{}'::jsonb,
+    summary_note text not null default '',
+    new_salary numeric not null default 0,
+    total_score numeric not null default 0,
+    rank text not null default '',
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  )`;
   await sql`alter table gp_contracts add column if not exists organization_id text not null default ''`;
   await sql`alter table gp_contracts add column if not exists file_url text not null default ''`;
   await sql`alter table gp_contracts add column if not exists file_id text not null default ''`;
@@ -1472,6 +1577,7 @@ async function ensureGiaPhuPerformanceIndexes() {
     await sql`create index if not exists gp_catalog_items_org_kind_idx on gp_catalog_items (organization_id, kind, project_code, archived, sort_order, code, name)`;
     await sql`create index if not exists gp_catalog_items_org_kind_supplier_idx on gp_catalog_items (organization_id, kind, supplier)`;
     await sql`create index if not exists gp_staff_org_idx on gp_staff (organization_id, id asc, name asc)`;
+    await sql`create index if not exists gp_staff_skill_evaluations_org_staff_idx on gp_staff_skill_evaluations (organization_id, staff_id, evaluation_date desc, id desc)`;
     await sql`create index if not exists gp_materials_project_date_idx on gp_materials (project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_materials_org_project_date_idx on gp_materials (organization_id, project_code, work_date desc, id desc)`;
     await sql`create index if not exists gp_materials_project_filters_idx on gp_materials (project_code, material_type, payment_status, week, category, supplier)`;
@@ -4225,6 +4331,151 @@ export async function manageStaff(payload: Record<string, unknown>) {
   `;
 }
 
+function staffSkillCriteriaFromPayload(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, raw]) => {
+      const item = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+      return [
+        key,
+        {
+          score: Math.min(5, Math.max(0, number(item.score))),
+          note: text(item.note).trim(),
+        },
+      ];
+    }),
+  );
+}
+
+function staffSkillRank(totalScore: number, maxScore: number) {
+  if (maxScore <= 0) return "Chưa đánh giá";
+  const ratio = totalScore / maxScore;
+  if (ratio >= 0.9) return "Hạng A";
+  if (ratio >= 0.75) return "Hạng B";
+  if (ratio >= 0.6) return "Hạng C";
+  return "Cần kèm";
+}
+
+export async function saveStaffProfile(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const organizationId = requireOrganizationId(payload.organizationId);
+  const id = text(payload.id).trim();
+  const name = text(payload.name).trim();
+  const resigned = bool(payload.resigned);
+  const offDate = dateOnly(payload.offDate);
+  const startDate = dateOnly(payload.startDate);
+
+  if (!id) throw new Error("Thiếu mã nhân sự.");
+  if (!name) throw new Error("Thiếu họ tên công nhân.");
+  if (resigned && !offDate) throw new Error("Vui lòng chọn thời gian nghỉ khi đánh dấu công nhân đã nghỉ việc.");
+
+  const rows = (await sql`
+    update gp_staff
+    set name = ${name},
+        team = ${text(payload.team).trim()},
+        position = ${text(payload.position).trim()},
+        salary_day = ${requireNonNegativeNumericInput(payload.salaryDay, "Đơn giá ngày")},
+        resigned = ${resigned},
+        off_date = ${offDate || null},
+        avatar_url = ${text(payload.avatarUrl).trim()},
+        profile_files = ${text(payload.profileFiles).trim()},
+        birth_year = ${text(payload.birthYear).trim()},
+        phone = ${text(payload.phone).trim()},
+        citizen_id = ${text(payload.citizenId).trim()},
+        hometown = ${text(payload.hometown).trim()},
+        current_address = ${text(payload.currentAddress).trim()},
+        main_skill = ${text(payload.mainSkill).trim()},
+        internal_level = ${text(payload.internalLevel).trim()},
+        referrer = ${text(payload.referrer).trim()},
+        expected_stability = ${text(payload.expectedStability).trim()},
+        ranking = ${text(payload.ranking).trim()},
+        start_date = ${startDate || null},
+        note = ${text(payload.note).trim()},
+        updated_at = now()
+    where organization_id = ${organizationId} and id = ${id}
+    returning *
+  `) as Row[];
+
+  if (!rows.length) throw new Error("Không tìm thấy hồ sơ công nhân cần cập nhật.");
+  return staffFromRow(rows[0]);
+}
+
+export async function saveStaffSkillEvaluation(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const organizationId = requireOrganizationId(payload.organizationId);
+  const staffId = text(payload.staffId).trim();
+  const evaluationDate = dateOnly(payload.evaluationDate) || dateOnly(new Date());
+  const criteria = staffSkillCriteriaFromPayload(payload.criteria);
+  const totalScore = Object.values(criteria).reduce((sum, item) => sum + Number(item.score || 0), 0);
+  const maxScore = Object.keys(criteria).length * 5;
+  const rank = staffSkillRank(totalScore, maxScore);
+  const rawNewSalary = text(payload.newSalary).trim();
+  const newSalary = rawNewSalary ? requireNonNegativeNumericInput(rawNewSalary, "Mức lương mới") : 0;
+  const leaveDate = dateOnly(payload.leaveDate);
+
+  if (!staffId) throw new Error("Thiếu công nhân cần đánh giá.");
+  if (!evaluationDate) throw new Error("Thiếu ngày đánh giá.");
+
+  const [staffRow] = (await sql`
+    select *
+    from gp_staff
+    where organization_id = ${organizationId} and id = ${staffId}
+    limit 1
+  `) as Row[];
+  if (!staffRow) throw new Error("Không tìm thấy công nhân cần đánh giá.");
+
+  const staff = staffFromRow(staffRow);
+  const rows = (await sql`
+    insert into gp_staff_skill_evaluations (
+      organization_id,
+      staff_id,
+      staff_name,
+      evaluation_date,
+      evaluator,
+      travel_ready,
+      status_after_review,
+      leave_date,
+      criteria,
+      summary_note,
+      new_salary,
+      total_score,
+      rank,
+      updated_at
+    )
+    values (
+      ${organizationId},
+      ${staffId},
+      ${staff.name},
+      ${evaluationDate},
+      ${text(payload.evaluator).trim()},
+      ${text(payload.travelReady).trim()},
+      ${text(payload.statusAfterReview).trim() || "Còn làm"},
+      ${leaveDate || null},
+      (${JSON.stringify(criteria)}::text)::jsonb,
+      ${text(payload.summaryNote).trim()},
+      ${newSalary},
+      ${totalScore},
+      ${rank},
+      now()
+    )
+    returning *
+  `) as Row[];
+
+  const statusAfterReview = text(payload.statusAfterReview).trim();
+  await sql`
+    update gp_staff
+    set salary_day = case when ${newSalary} > 0 then ${newSalary} else salary_day end,
+        ranking = ${rank},
+        resigned = case when ${statusAfterReview} in ('Nghỉ việc', 'Không gọi lại') then true else resigned end,
+        off_date = case when ${statusAfterReview} in ('Nghỉ việc', 'Không gọi lại') then coalesce(${leaveDate || null}, off_date) else off_date end,
+        updated_at = now()
+    where organization_id = ${organizationId} and id = ${staffId}
+  `;
+
+  return staffSkillEvaluationFromRow(rows[0]);
+}
+
 export async function deleteStaff(payload: Record<string, unknown>) {
   const sql = getSql();
   const organizationId = requireOrganizationId(payload.organizationId);
@@ -5311,6 +5562,63 @@ export async function getDocumentDetail(payload: Record<string, unknown>) {
   `) as Row[];
 
   return rows[0] ?? null;
+}
+
+export async function getStaffDetailData(payload: Record<string, unknown>) {
+  const sql = getSql();
+  const organizationId = requireOrganizationId(payload.organizationId);
+  const activeProjectCode = text(payload.activeProjectCode).trim();
+  const staffId = text(payload.staffId).trim();
+  const [staffRow] = (await sql`
+    select *
+    from gp_staff
+    where organization_id = ${organizationId} and id = ${staffId}
+    limit 1
+  `) as Row[];
+
+  if (!staffRow) return null;
+
+  const staff = staffFromRow(staffRow);
+  const activeCategoryOnly = excludeArchivedCategory(sql, organizationId);
+  const [attendanceRows, payrollAdjustmentRows, evaluationRows] = await Promise.all([
+    activeProjectCode
+      ? sql`
+          select *
+          from gp_attendance
+          where organization_id = ${organizationId}
+            and project_code = ${activeProjectCode}
+            and staff_name = ${staff.name}
+            ${activeCategoryOnly}
+          order by work_date desc nulls last, id desc
+        `
+      : sql`select * from gp_attendance where false`,
+    activeProjectCode
+      ? sql`
+          select *
+          from gp_payroll_adjustments
+          where organization_id = ${organizationId}
+            and project_code = ${activeProjectCode}
+            and staff_name = ${staff.name}
+            ${activeCategoryOnly}
+          order by updated_at desc
+        `
+      : sql`select * from gp_payroll_adjustments where false`,
+    sql`
+      select *
+      from gp_staff_skill_evaluations
+      where organization_id = ${organizationId}
+        and staff_id = ${staff.id}
+      order by evaluation_date desc nulls last, id desc
+      limit 50
+    `,
+  ]);
+
+  return {
+    staff,
+    attendance: (attendanceRows as Row[]).map(attendanceFromRow),
+    payrollAdjustments: (payrollAdjustmentRows as Row[]).map(payrollAdjustmentFromRow),
+    skillEvaluations: (evaluationRows as Row[]).map(staffSkillEvaluationFromRow),
+  };
 }
 
 export async function getDocumentFile(payload: Record<string, unknown>) {
