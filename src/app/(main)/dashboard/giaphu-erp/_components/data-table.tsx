@@ -707,7 +707,7 @@ export function DataTable<T>({
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: isServerSide ? undefined : getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getPaginationRowModel: isServerSide ? undefined : getPaginationRowModel(),
     manualPagination: isServerSide,
     manualSorting: isServerSide,
     rowCount: serverSide?.rowCount,
