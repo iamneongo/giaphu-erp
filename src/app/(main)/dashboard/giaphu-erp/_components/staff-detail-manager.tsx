@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Loader2, Save, Star, Upload, UserRound } from "lucide-react";
+import { Loader2, Save, Star, Upload, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -326,12 +326,43 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                     />
                     {uploadingDocs && <Loader2 className="size-5 animate-spin text-muted-foreground" />}
                   </div>
-                  <Textarea
-                    value={profile.profileFiles}
-                    placeholder="Danh sách link hồ sơ (mỗi dòng một link)"
-                    onChange={(e) => updateProfile("profileFiles", e.target.value)}
-                    className="min-h-[80px]"
-                  />
+                  {profile.profileFiles ? (
+                    <div className="mt-2 flex flex-col gap-2">
+                      {profile.profileFiles.split("\n").map((url, i) => {
+                        const trimmed = url.trim();
+                        if (!trimmed) return null;
+                        return (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between gap-2 rounded-md border bg-muted/50 p-2 text-sm"
+                          >
+                            <a
+                              href={trimmed}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="truncate text-blue-600 hover:underline dark:text-blue-400"
+                            >
+                              {trimmed.split("/").pop() || "Tài liệu đính kèm"}
+                            </a>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => {
+                                const newLinks = profile.profileFiles
+                                  .split("\n")
+                                  .filter((_, index) => index !== i)
+                                  .join("\n");
+                                updateProfile("profileFiles", newLinks);
+                              }}
+                            >
+                              <X className="size-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
