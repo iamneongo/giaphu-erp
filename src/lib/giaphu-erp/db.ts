@@ -4386,7 +4386,7 @@ export async function saveStaffProfile(payload: Record<string, unknown>) {
     set name = ${name},
         team = ${text(payload.team).trim()},
         position = ${text(payload.position).trim()},
-        salary_day = ${number(payload.salaryDay)},
+        salary_day = ${requireNonNegativeNumericInput(payload.salaryDay, "Đơn giá ngày")},
         resigned = ${resigned},
         off_date = ${offDate || null},
         avatar_url = ${text(payload.avatarUrl).trim()},

@@ -3,7 +3,6 @@
 import * as React from "react";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 
 import { CircleAlertIcon, Loader2, Save, Star, UserIcon, X, XIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +11,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FileSystem, type FileSystemItem } from "@/components/ui/file-system";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
@@ -25,7 +31,7 @@ import { cn } from "@/lib/utils";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { formatDate, formatMoney } from "../_lib/formatters";
-import { runGiaPhuAction, uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
+import { uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 
 type StaffProfileDraft = {
   id: string;
@@ -157,8 +163,7 @@ function getFileMimeType(fileName: string) {
 }
 
 export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManagerProps) {
-  const router = useRouter();
-  const { activeProjectCode } = useGiaPhuErp();
+  const { activeProjectCode, runAction } = useGiaPhuErp();
   const [profile, setProfile] = React.useState<StaffProfileDraft>(() => initialProfile(staff));
   const [savingProfile, setSavingProfile] = React.useState(false);
   const [savingEvaluation, setSavingEvaluation] = React.useState(false);
@@ -174,6 +179,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   const [uploadingDocs, setUploadingDocs] = React.useState(false);
   const [uploadKey, setUploadKey] = React.useState(0);
   const [selectedFile, setSelectedFile] = React.useState<FileSystemItem | null>(null);
+  const [selectedEvaluation, setSelectedEvaluation] = React.useState<StaffSkillEvaluationRow | null>(null);
 
   const [
     { files: avatarFiles, isDragging: isAvatarDragging, errors: avatarErrors },
@@ -293,13 +299,12 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
 
     setSavingProfile(true);
     try {
-      await runGiaPhuAction("saveStaffProfile", {
+      await runAction("saveStaffProfile", {
         ...profile,
         salaryDay: profile.salaryDay,
         resigned: profile.resigned === "true",
       });
       toast.success("Đã lưu hồ sơ công nhân.");
-      router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không lưu được hồ sơ công nhân.");
     } finally {
@@ -323,7 +328,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
 
     setSavingEvaluation(true);
     try {
-      await runGiaPhuAction("saveStaffSkillEvaluation", {
+      await runAction("saveStaffSkillEvaluation", {
         staffId: staff.id,
         evaluationDate,
         evaluator,
@@ -338,7 +343,6 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
       setCriteriaDraft(initialCriteria());
       setSummaryNote("");
       setNewSalary("");
-      router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không lưu được đánh giá tay nghề.");
     } finally {
@@ -795,12 +799,16 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
               <div className="grid gap-3">
                 {skillEvaluations.slice(0, 8).map((row) => (
                   <div key={row.id} className="rounded-xl border p-4 text-sm">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <button
+                      type="button"
+                      className="flex w-full flex-col gap-2 text-left md:flex-row md:items-center md:justify-between"
+                      onClick={() => setSelectedEvaluation(row)}
+                    >
                       <div className="font-semibold">
                         {formatDate(row.date)} · {row.rank || "Chưa xếp hạng"}
                       </div>
                       <Badge variant="outline">{row.totalScore}/60 điểm</Badge>
-                    </div>
+                    </button>
                     <div className="mt-2 grid gap-2 text-muted-foreground md:grid-cols-3">
                       <div>Người đánh giá: {row.evaluator || "-"}</div>
                       <div>Trạng thái: {row.statusAfterReview || "-"}</div>
@@ -818,7 +826,58 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
           </CardContent>
         </Card>
       </TabsContent>
+      <Dialog open={Boolean(selectedEvaluation)} onOpenChange={(open) => !open && setSelectedEvaluation(null)}>
+        <DialogContent className="max-h-[85vh] w-[min(100vw-2rem,72rem)] overflow-y-auto" size="auto">
+          {selectedEvaluation ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Chi tiết đánh giá tay nghề</DialogTitle>
+                <DialogDescription>
+                  {selectedEvaluation.staffName} · {formatDate(selectedEvaluation.date)} · {selectedEvaluation.rank || "Chưa xếp hạng"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 md:grid-cols-3">
+                <InfoChip label="Người đánh giá" value={selectedEvaluation.evaluator || "-"} />
+                <InfoChip label="Trạng thái" value={selectedEvaluation.statusAfterReview || "-"} />
+                <InfoChip label="Lương mới" value={selectedEvaluation.newSalary ? formatMoney(selectedEvaluation.newSalary) : "-"} />
+                <InfoChip label="Đi làm xa" value={selectedEvaluation.travelReady || "-"} />
+                <InfoChip label="Ngày nghỉ" value={selectedEvaluation.leaveDate || "-"} />
+                <InfoChip label="Tổng điểm" value={`${selectedEvaluation.totalScore}/60`} />
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {criteria.map((item) => {
+                  const score = selectedEvaluation.criteria?.[item.key]?.score ?? 0;
+                  const note = selectedEvaluation.criteria?.[item.key]?.note ?? "";
+                  return (
+                    <div key={item.key} className="rounded-xl border p-3">
+                      <div className="font-semibold text-sm">{item.title}</div>
+                      <div className="mt-2 text-muted-foreground text-xs">{item.description}</div>
+                      <div className="mt-3 font-medium text-sm">{score}/5</div>
+                      {note ? <p className="mt-2 whitespace-pre-wrap text-muted-foreground text-sm">{note}</p> : null}
+                    </div>
+                  );
+                })}
+              </div>
+              {selectedEvaluation.summaryNote ? (
+                <div className="rounded-xl border p-4">
+                  <div className="font-semibold text-sm">Ghi chú tổng hợp</div>
+                  <p className="mt-2 whitespace-pre-wrap text-muted-foreground text-sm">{selectedEvaluation.summaryNote}</p>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </Tabs>
+  );
+}
+
+function InfoChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border p-3">
+      <div className="text-muted-foreground text-xs">{label}</div>
+      <div className="mt-1 font-medium text-sm">{value}</div>
+    </div>
   );
 }
 

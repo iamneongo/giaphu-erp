@@ -393,10 +393,21 @@ function attendancePositionRank(value: string) {
 function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: StaffRow[], staff: StaffRow[]) {
   const staffOrder = new Map(staff.map((row, index) => [row.name, index]));
   const staffByName = new Map(staff.map((row) => [row.name, row]));
+  const attendanceSalaryByName = new Map<string, number>();
   const staffMap = new Map<string, StaffRow>();
 
+  for (const row of attendance) {
+    const currentSalary = attendanceSalaryByName.get(row.staffName) ?? 0;
+    attendanceSalaryByName.set(row.staffName, Math.max(currentSalary, Number(row.halfDaySalary || 0)));
+  }
+
   for (const row of draftStaff) {
-    staffMap.set(row.name, staffByName.get(row.name) ?? row);
+    const attendanceSalary = attendanceSalaryByName.get(row.name);
+    const nextStaff = staffByName.get(row.name) ?? row;
+    staffMap.set(
+      row.name,
+      attendanceSalary != null ? { ...nextStaff, salaryDay: attendanceSalary } : nextStaff,
+    );
   }
 
   for (const row of attendance) {
@@ -404,7 +415,9 @@ function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: St
       const catalogStaff = staffByName.get(row.staffName);
       staffMap.set(
         row.staffName,
-        catalogStaff ?? {
+        catalogStaff
+          ? { ...catalogStaff, salaryDay: attendanceSalaryByName.get(row.staffName) ?? catalogStaff.salaryDay }
+          : {
           id: row.staffName,
           name: row.staffName,
           team: "",
