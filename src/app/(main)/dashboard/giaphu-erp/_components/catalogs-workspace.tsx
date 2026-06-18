@@ -25,7 +25,7 @@ import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
 
 export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
-  const { activeProjectCode, data, isSwitchingProject, runAction } = useGiaPhuErp();
+  const { activeProjectCode, data, isSwitchingProject, refresh, runAction } = useGiaPhuErp();
   const section = getCatalogSectionByKind(kind);
   const rows = data.catalogs[kind];
   const [archiveTab, setArchiveTab] = React.useState<"active" | "archived">("active");
@@ -47,6 +47,19 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
     initialRows: initialTabRows,
     fixedFilters: catalogFixedFilters,
   });
+  async function runCatalogAction(action: string, payload: Record<string, unknown>) {
+    const result = await runAction(action, payload);
+    if (!result) return result;
+
+    paginatedCatalogs.refresh();
+
+    if (action === "bulkImport" || payload.__returnData === false) {
+      await refresh();
+    }
+
+    return result;
+  }
+
   const requiresPhoneContact = kind === "thauPhu" || kind === "nhaCungCap";
   const contactField: FormFieldDefinition = {
     name: "contact",
@@ -188,7 +201,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
             edit={{
               title: `Sửa ${section.navigationTitle.toLowerCase()}`,
               action: "manageCatalog",
-              onAction: runAction,
+              onAction: runCatalogAction,
               fields: [
                 { name: "originalId", label: "ID", type: "hidden", value: row.id },
                 { name: "archived", label: "Lưu trữ", type: "hidden", value: row.archived ? "true" : "false" },
@@ -236,7 +249,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
                     ? `Khôi phục "${row.name}"? Mục này sẽ hiển thị lại trong danh mục chọn.`
                     : `Lưu trữ "${row.name}"? Mục này sẽ ẩn khỏi danh mục chọn nhưng dữ liệu cũ vẫn được giữ lại.`;
                   if (window.confirm(message)) {
-                    return runAction(row.archived ? "restoreCatalog" : "deleteCatalog", {
+                    return runCatalogAction(row.archived ? "restoreCatalog" : "deleteCatalog", {
                       id: row.id,
                     });
                   }
@@ -252,7 +265,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
                       `Xóa vĩnh viễn "${row.name}"? Hành động này không thể hoàn tác và có thể lỗi nếu mục này đang được sử dụng ở các phần khác.`,
                     )
                   ) {
-                    return runAction("destroyCatalog", {
+                    return runCatalogAction("destroyCatalog", {
                       id: row.id,
                     });
                   }
@@ -277,8 +290,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
               <ExcelImportDialog
                 title={`Import ${section.navigationTitle.toLowerCase()} từ Excel`}
                 action="manageCatalog"
-                onAction={runAction}
-                onImported={paginatedCatalogs.refresh}
+                onAction={runCatalogAction}
                 fields={importFields}
               />
               <ActionDialog
@@ -286,7 +298,7 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
                 button={section.navigationTitle}
                 icon={Plus}
                 action="manageCatalog"
-                onAction={runAction}
+                onAction={runCatalogAction}
                 fields={fields}
               />
             </div>
@@ -319,9 +331,8 @@ export function CatalogsWorkspace({ kind }: { kind: CatalogKind }) {
                     `Lưu trữ ${selectedRows.length.toLocaleString("vi-VN")} mục đã chọn? Dữ liệu cũ vẫn được giữ lại.`,
                   onDelete: async (selectedRows) => {
                     for (const row of selectedRows.filter((item) => !item.archived)) {
-                      await runAction("deleteCatalog", { id: row.id });
+                      await runCatalogAction("deleteCatalog", { id: row.id });
                     }
-                    paginatedCatalogs.refresh();
                   },
                 }
               : undefined
