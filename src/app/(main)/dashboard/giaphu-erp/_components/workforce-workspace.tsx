@@ -404,10 +404,7 @@ function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: St
   for (const row of draftStaff) {
     const attendanceSalary = attendanceSalaryByName.get(row.name);
     const nextStaff = staffByName.get(row.name) ?? row;
-    staffMap.set(
-      row.name,
-      attendanceSalary != null ? { ...nextStaff, salaryDay: attendanceSalary } : nextStaff,
-    );
+    staffMap.set(row.name, attendanceSalary != null ? { ...nextStaff, salaryDay: attendanceSalary } : nextStaff);
   }
 
   for (const row of attendance) {
@@ -418,28 +415,28 @@ function buildAttendanceParticipants(attendance: AttendanceRow[], draftStaff: St
         catalogStaff
           ? { ...catalogStaff, salaryDay: attendanceSalaryByName.get(row.staffName) ?? catalogStaff.salaryDay }
           : {
-          id: row.staffName,
-          name: row.staffName,
-          team: "",
-          position: row.position,
-          salaryDay: row.halfDaySalary,
-          resigned: false,
-          offDate: "",
-          avatarUrl: "",
-          profileFiles: "",
-          birthYear: "",
-          phone: "",
-          citizenId: "",
-          hometown: "",
-          currentAddress: "",
-          mainSkill: "",
-          internalLevel: "",
-          referrer: "",
-          expectedStability: "",
-          ranking: "",
-          startDate: "",
-          note: "",
-        },
+              id: row.staffName,
+              name: row.staffName,
+              team: "",
+              position: row.position,
+              salaryDay: row.halfDaySalary,
+              resigned: false,
+              offDate: "",
+              avatarUrl: "",
+              profileFiles: "",
+              birthYear: "",
+              phone: "",
+              citizenId: "",
+              hometown: "",
+              currentAddress: "",
+              mainSkill: "",
+              internalLevel: "",
+              referrer: "",
+              expectedStability: "",
+              ranking: "",
+              startDate: "",
+              note: "",
+            },
       );
     }
   }
@@ -1750,6 +1747,12 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
     return runAction(action, { ...payload, __returnData: false });
   }
 
+  async function runStaffAction(action: string, payload: Record<string, unknown>) {
+    const result = await runAction(action, payload);
+    if (result) paginatedStaff.refresh();
+    return result;
+  }
+
   const actions = {
     attendance: (
       <>
@@ -1807,7 +1810,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
           button="Nhân sự"
           icon={Users}
           action="manageStaff"
-          onAction={runAction}
+          onAction={runStaffAction}
           fields={[
             { name: "id", label: "Mã NS" },
             { name: "name", label: "Họ tên", required: true },
@@ -2358,7 +2361,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                             edit={{
                               title: "Sửa nhân sự",
                               action: "manageStaff",
-                              onAction: runAction,
+                              onAction: runStaffAction,
                               fields: [
                                 { name: "originalId", label: "Mã gốc", type: "hidden", value: row.id },
                                 { name: "id", label: "Mã NS", value: row.id, readOnly: true },
@@ -2386,7 +2389,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                                 onSelect: () => {
                                   if (row.resigned) {
                                     if (!window.confirm(`Khôi phục "${row.name}" về trạng thái đang làm?`)) return;
-                                    return runAction("manageStaff", {
+                                    return runStaffAction("manageStaff", {
                                       originalId: row.id,
                                       id: row.id,
                                       name: row.name,
@@ -2406,7 +2409,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                                     return;
                                   }
 
-                                  return runAction("deleteStaff", { id: row.id });
+                                  return runStaffAction("deleteStaff", { id: row.id });
                                 },
                               },
                               {
@@ -2419,7 +2422,7 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                                       `Xóa vĩnh viễn "${row.name}"? Hành động này không thể hoàn tác và sẽ xóa sạch mọi thông tin chấm công liên quan của nhân sự này.`,
                                     )
                                   ) {
-                                    return runAction("destroyStaff", { id: row.id });
+                                    return runStaffAction("destroyStaff", { id: row.id });
                                   }
                                 },
                               },
@@ -2443,9 +2446,8 @@ export function WorkforceWorkspace({ section = "attendance" }: { section?: Workf
                       `Lưu trữ ${selectedRows.length.toLocaleString("vi-VN")} nhân sự đã chọn? Hồ sơ và dữ liệu cũ vẫn được giữ lại.`,
                     onDelete: async (selectedRows) => {
                       for (const row of selectedRows.filter((item) => !item.resigned)) {
-                        await runAction("deleteStaff", { id: row.id });
+                        await runStaffAction("deleteStaff", { id: row.id });
                       }
-                      paginatedStaff.refresh();
                     },
                   }
                 : undefined
