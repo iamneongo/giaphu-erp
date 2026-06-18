@@ -1497,9 +1497,28 @@ function DocxViewerContent({
             </div>
           ) : loadError ? (
             <div className="grid h-full min-h-96 place-items-center p-6 text-center">
-              <div className="max-w-md rounded-lg border bg-background p-4 text-sm text-destructive shadow-xs">
-                <div className="font-medium">Unable to display DOCX</div>
-                <div className="mt-1 text-muted-foreground">{loadError}</div>
+              <div className="max-w-md rounded-lg border bg-background p-4 text-sm text-muted-foreground shadow-xs">
+                <div className="font-medium text-foreground">
+                  Không thể xem trước DOCX này
+                </div>
+                <div className="mt-1">
+                  {loadError ||
+                    "File có thể quá nặng hoặc không tương thích với trình xem trước."}
+                </div>
+                {url ? (
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <Button asChild variant="outline" size="sm">
+                      <a href={url} target="_blank" rel="noreferrer">
+                        Mở bằng trình duyệt
+                      </a>
+                    </Button>
+                    <Button asChild size="sm">
+                      <a href={url} download={fileName || "document.docx"}>
+                        Tải xuống
+                      </a>
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : isLoadingDocument ? (

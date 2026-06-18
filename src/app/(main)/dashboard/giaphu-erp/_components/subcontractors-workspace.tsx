@@ -7,6 +7,7 @@ import { Archive, Banknote, Download, FileText, Hammer, ShieldCheck, Trash2 } fr
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { ATTACHMENT_DOCUMENT_PROJECT_CODE } from "@/lib/giaphu-erp/document-scope";
 import type { OperationRow, SubcontractorContractRow, SubcontractorRow } from "@/lib/giaphu-erp/types";
 
 import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
@@ -118,12 +119,11 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
 
     if (attachment) {
       const formData = new FormData();
-      const projectCode = String(payload.projectCode || activeProjectCode);
       const contractorName = String(payload.contractorName ?? "").trim();
       const category = String(payload.category ?? "").trim();
       const date = String(payload.date ?? "").trim();
 
-      formData.set("projectCode", projectCode);
+      formData.set("projectCode", ATTACHMENT_DOCUMENT_PROJECT_CODE);
       formData.set("docType", "Tạm ứng thầu phụ");
       formData.set("fileName", attachment.name);
       formData.set("note", String(payload.note ?? "").trim());
@@ -164,11 +164,10 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
 
     if (attachment) {
       const formData = new FormData();
-      const projectCode = String(payload.projectCode || activeProjectCode);
       const description = String(payload.description ?? "").trim();
       const date = String(payload.date ?? "").trim();
 
-      formData.set("projectCode", projectCode);
+      formData.set("projectCode", ATTACHMENT_DOCUMENT_PROJECT_CODE);
       formData.set("docType", "Chi phí vận hành");
       formData.set("fileName", attachment.name);
       formData.set("note", description);

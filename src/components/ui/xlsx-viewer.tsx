@@ -1309,6 +1309,8 @@ export function XlsxWorkbookSurface({
   showUploadButton = true,
   toolbarActions,
   workbookIdentity,
+  fileName,
+  url,
 }: {
   className?: string
   isDark: boolean
@@ -1324,6 +1326,8 @@ export function XlsxWorkbookSurface({
   showUploadButton?: boolean
   toolbarActions?: React.ReactNode
   workbookIdentity: string
+  fileName?: string
+  url?: string
 }) {
   const { error } = useXlsxViewer()
   const viewportRef = React.useRef<HTMLDivElement | null>(null)
@@ -1387,8 +1391,30 @@ export function XlsxWorkbookSurface({
             loadingState={<ViewerLoadingSurface />}
             renderScroller={renderSearchableScroller}
             errorState={
-              <div className="grid h-full w-full min-w-full place-items-center p-6 text-sm text-destructive">
-                {error?.message ?? "Unable to display workbook."}
+              <div className="grid h-full w-full min-w-full place-items-center p-6 text-sm text-muted-foreground">
+                <div className="max-w-md rounded-lg border bg-background p-4 text-center shadow-xs">
+                  <div className="font-medium text-foreground">
+                    Không thể xem trước workbook này
+                  </div>
+                  <div className="mt-1">
+                    {error?.message ||
+                      "File có thể quá nặng hoặc không tương thích với trình xem trước."}
+                  </div>
+                  {url ? (
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                      <Button asChild variant="outline" size="sm">
+                        <a href={url} target="_blank" rel="noreferrer">
+                          Mở bằng trình duyệt
+                        </a>
+                      </Button>
+                      <Button asChild size="sm">
+                        <a href={url} download={fileName || "workbook.xlsx"}>
+                          Tải xuống
+                        </a>
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             }
             renderTableHeaderMenu={renderTableHeaderMenu}
@@ -1678,6 +1704,7 @@ function XlsxViewerContent({
         toolbarActions={toolbarActions}
         workbookBuffer={activeBuffer}
         workbookIdentity={activeIdentity}
+        url={url}
       />
     </div>
   )
@@ -1698,6 +1725,7 @@ function XlsxWorkbookLoadedViewer({
   toolbarActions,
   workbookBuffer,
   workbookIdentity,
+  url,
 }: {
   className?: string
   fileName: string
@@ -1715,6 +1743,7 @@ function XlsxWorkbookLoadedViewer({
   toolbarActions?: React.ReactNode
   workbookBuffer: ArrayBuffer
   workbookIdentity: string
+  url?: string
 }) {
   const controller = useXlsxViewerController(
     React.useMemo(
@@ -1745,6 +1774,8 @@ function XlsxWorkbookLoadedViewer({
         showUploadButton={showUploadButton}
         toolbarActions={toolbarActions}
         workbookIdentity={workbookIdentity}
+        fileName={fileName}
+        url={url}
       />
     </XlsxViewerProvider>
   )

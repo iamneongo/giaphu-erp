@@ -4,6 +4,9 @@ const nextConfig = {
   compiler: {
     removeConsole: process.env.NODE_ENV === "production",
   },
+  experimental: {
+    proxyClientMaxBodySize: "1gb",
+  },
   webpack: (config) => {
     config.experiments = {
       ...config.experiments,

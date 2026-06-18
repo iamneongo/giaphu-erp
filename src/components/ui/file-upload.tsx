@@ -35,6 +35,7 @@ type FileUploadProps = {
   className?: string
   description?: string
   draggingLabel?: string
+  dropzoneClassName?: string
   multiple?: boolean
   showBorderBeam?: boolean
   showFileList?: boolean
@@ -165,6 +166,7 @@ export function FileUpload({
   className,
   description = "PDF, DOC/DOCX, XLSX, CSV, PNG, JPG và nhiều định dạng khác",
   draggingLabel = "Drop to add",
+  dropzoneClassName,
   multiple = true,
   showBorderBeam = true,
   showFileList = true,
@@ -232,7 +234,8 @@ export function FileUpload({
         "motion-reduce:transition-none",
         isDragging
           ? "border-foreground/40 bg-accent/35"
-          : "border-foreground/20 hover:border-foreground/35 hover:bg-muted/35 dark:border-foreground/25 dark:hover:border-foreground/40"
+          : "border-foreground/20 hover:border-foreground/35 hover:bg-muted/35 dark:border-foreground/25 dark:hover:border-foreground/40",
+        dropzoneClassName
       )}
       onClick={openFileDialog}
       onDragEnter={(event) => {

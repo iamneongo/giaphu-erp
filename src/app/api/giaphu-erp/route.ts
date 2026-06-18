@@ -811,13 +811,24 @@ export async function POST(request: Request) {
         break;
       case "saveStaffProfile":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.saveStaffProfile)) return forbidden();
-        await saveStaffProfile(payload);
-        break;
+        {
+          const staff = await saveStaffProfile(payload);
+          await recordRequestActivity({ request, session, action: body.action, payload });
+          return NextResponse.json({ status: "success", staff, refresh: false });
+        }
       case "saveStaffSkillEvaluation":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.saveStaffSkillEvaluation))
           return forbidden();
-        await saveStaffSkillEvaluation(payload);
-        break;
+        {
+          const result = await saveStaffSkillEvaluation(payload);
+          await recordRequestActivity({ request, session, action: body.action, payload });
+          return NextResponse.json({
+            status: "success",
+            staff: result.staff,
+            skillEvaluation: result.skillEvaluation,
+            refresh: false,
+          });
+        }
       case "deleteStaff":
         if (!canUsePermission(session, permissionKeys, mutationPermissions.deleteStaff)) return forbidden();
         await deleteStaff(payload);

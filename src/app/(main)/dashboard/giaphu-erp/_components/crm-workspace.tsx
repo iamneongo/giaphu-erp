@@ -7,6 +7,7 @@ import { Banknote, BriefcaseBusiness, Eye, FileText, Trash2 } from "lucide-react
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
+import { ATTACHMENT_DOCUMENT_PROJECT_CODE } from "@/lib/giaphu-erp/document-scope";
 import type { ContractRow, DocumentRow, PaymentRow, ProjectRow } from "@/lib/giaphu-erp/types";
 
 import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
@@ -109,9 +110,8 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
 
     if (attachment instanceof File && attachment.size > 0) {
       const formData = new FormData();
-      const projectCode = String(payload.projectCode || activeProjectCode);
 
-      formData.set("projectCode", projectCode);
+      formData.set("projectCode", ATTACHMENT_DOCUMENT_PROJECT_CODE);
       formData.set("docType", docType);
       formData.set("fileName", attachment.name);
       formData.set("note", String(payload.note ?? ""));

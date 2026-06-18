@@ -466,6 +466,8 @@ function PDFViewerLoadingSkeleton({
 // full viewer, with only the upload control usable.
 function PDFViewerFallbackShell({
   className,
+  fileName,
+  src,
   showToolbar,
   showUpload,
   sidebarOpen,
@@ -473,6 +475,8 @@ function PDFViewerFallbackShell({
   onUploadFile,
 }: {
   className?: string
+  fileName?: string
+  src?: string
   showToolbar: boolean
   showUpload: boolean
   sidebarOpen: boolean
@@ -499,8 +503,42 @@ function PDFViewerFallbackShell({
           <PDFViewerLoadingSkeleton sidebarInline sidebarOpen={sidebarOpen} />
         ) : null}
         {state === "error" ? (
-          <div className="absolute inset-0 z-20 grid place-items-center bg-background p-6 text-sm text-muted-foreground">
-            Unable to load the PDF preview.
+          <div className="absolute inset-0 z-20 flex flex-col gap-4 bg-background p-6 text-sm text-muted-foreground">
+            <div className="grid place-items-center text-center">
+              <div className="max-w-sm space-y-3">
+                <div className="font-medium text-foreground">
+                  Không thể xem trước PDF này
+                </div>
+                <div>
+                  File có thể quá nặng hoặc engine xem trước không hỗ trợ định
+                  dạng hiện tại. Bạn vẫn có thể mở bằng trình duyệt hoặc tải
+                  xuống.
+                </div>
+                {src ? (
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    <Button asChild variant="outline" size="sm">
+                      <a href={src} target="_blank" rel="noreferrer">
+                        Mở bằng trình duyệt
+                      </a>
+                    </Button>
+                    <Button asChild size="sm">
+                      <a href={src} download={fileName || "document.pdf"}>
+                        Tải xuống
+                      </a>
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            {src ? (
+              <div className="min-h-0 flex-1 overflow-hidden rounded-lg border bg-muted/20">
+                <iframe
+                  title={fileName || "PDF preview"}
+                  src={src}
+                  className="h-full w-full"
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
         {state === "empty" ? (
@@ -2519,6 +2557,8 @@ function PDFViewerDocumentLoader({
     return (
       <PDFViewerFallbackShell
         className={innerProps.className}
+        fileName={innerProps.fileName}
+        src={pdfFile}
         showToolbar={innerProps.showToolbar}
         showUpload={innerProps.showUpload}
         sidebarOpen={false}
@@ -2634,34 +2674,31 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(
 
     if (engineError) {
       return (
-        <div
-          data-slot="pdf-viewer"
-          className={cn(
-            "grid h-full w-full place-items-center bg-background p-6 text-sm text-muted-foreground",
-            className
-          )}
-        >
-          Unable to load the PDF engine.
-        </div>
+        <PDFViewerFallbackShell
+          className={className}
+          fileName={fileName}
+          src={pdfFile}
+          showToolbar={showToolbar}
+          showUpload={showUpload}
+          sidebarOpen={false}
+          state="error"
+          onUploadFile={handleUploadFile}
+        />
       )
     }
 
     if (!engine) {
       return (
-        <div
-          data-slot="pdf-viewer"
-          className={cn(
-            "relative flex h-full max-h-full min-h-0 w-full flex-col overflow-hidden bg-background",
-            className
-          )}
-        >
-          {showToolbar ? (
-            <div className="min-h-12 border-b bg-background" />
-          ) : null}
-          <div className="relative min-h-0 flex-1">
-            <PDFViewerLoadingSkeleton sidebarInline sidebarOpen={false} />
-          </div>
-        </div>
+        <PDFViewerFallbackShell
+          className={className}
+          fileName={fileName}
+          src={pdfFile}
+          showToolbar={showToolbar}
+          showUpload={showUpload}
+          sidebarOpen={false}
+          state="loading"
+          onUploadFile={handleUploadFile}
+        />
       )
     }
 

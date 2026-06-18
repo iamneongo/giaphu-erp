@@ -3,29 +3,35 @@
 import * as React from "react";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
-import { CircleAlertIcon, Loader2, Save, Star, UserIcon, X, XIcon } from "lucide-react";
+import { CircleAlertIcon, Download, Eye, FileText, Loader2, Save, Star, Trash2, UserIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/reui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { FileSystem, type FileSystemItem } from "@/components/ui/file-system";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import { STAFF_DOCUMENT_PROJECT_CODE } from "@/lib/giaphu-erp/document-scope";
 import type { StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +64,22 @@ type StaffProfileDraft = {
 };
 
 type CriterionDraft = Record<string, { score: number; note: string }>;
+
+type StaffProfileFile = {
+  contentType: string;
+  id: number | null;
+  name: string;
+  url: string;
+};
+
+type UploadProgressItem = {
+  fileName: string;
+  id: string;
+  loaded: number;
+  percent: number;
+  status: "done" | "error" | "uploading" | "waiting";
+  total: number;
+};
 
 type StaffDetailManagerProps = {
   staff: StaffRow;
@@ -162,8 +184,41 @@ function getFileMimeType(fileName: string) {
   return "application/octet-stream";
 }
 
+function getDocumentIdFromUrl(url: string) {
+  const match = url.match(/\/api\/giaphu-erp\/documents\/(\d+)\/file/);
+  return match ? Number(match[1]) : null;
+}
+
+function toProfileFile(url: string): StaffProfileFile {
+  const name = getFileNameFromUrl(url);
+  return {
+    contentType: getFileMimeType(name),
+    id: getDocumentIdFromUrl(url),
+    name,
+    url,
+  };
+}
+
+function isImageFile(file: StaffProfileFile) {
+  return file.contentType.startsWith("image/");
+}
+
+function canEmbedFile(file: StaffProfileFile) {
+  return isImageFile(file) || file.contentType === "application/pdf" || file.contentType.startsWith("text/");
+}
+
+function formatFileSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** unitIndex).toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
 export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManagerProps) {
-  const { activeProjectCode, runAction } = useGiaPhuErp();
+  const router = useRouter();
+  const { runAction } = useGiaPhuErp();
+  const [currentStaff, setCurrentStaff] = React.useState<StaffRow>(staff);
+  const [localSkillEvaluations, setLocalSkillEvaluations] = React.useState<StaffSkillEvaluationRow[]>(skillEvaluations);
   const [profile, setProfile] = React.useState<StaffProfileDraft>(() => initialProfile(staff));
   const [savingProfile, setSavingProfile] = React.useState(false);
   const [savingEvaluation, setSavingEvaluation] = React.useState(false);
@@ -176,10 +231,13 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   const [summaryNote, setSummaryNote] = React.useState("");
   const [newSalary, setNewSalary] = React.useState("");
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
-  const [uploadingDocs, setUploadingDocs] = React.useState(false);
+  const [avatarUploadPercent, setAvatarUploadPercent] = React.useState(0);
+  const [docUploadProgress, setDocUploadProgress] = React.useState<UploadProgressItem[]>([]);
   const [uploadKey, setUploadKey] = React.useState(0);
-  const [selectedFile, setSelectedFile] = React.useState<FileSystemItem | null>(null);
+  const [previewFile, setPreviewFile] = React.useState<StaffProfileFile | null>(null);
+  const [fileToDelete, setFileToDelete] = React.useState<StaffProfileFile | null>(null);
   const [selectedEvaluation, setSelectedEvaluation] = React.useState<StaffSkillEvaluationRow | null>(null);
+  const [isDeletingFile, setIsDeletingFile] = React.useState(false);
 
   const [
     { files: avatarFiles, isDragging: isAvatarDragging, errors: avatarErrors },
@@ -204,20 +262,22 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
         return;
       }
       setUploadingAvatar(true);
+      setAvatarUploadPercent(0);
       try {
         const formData = new FormData();
         const actualFile = fileWrap.file as File;
-        const projectCode = activeProjectCode;
-        if (!projectCode) {
-          throw new Error("Thiếu công trình để tải hồ sơ.");
-        }
         formData.append("file", actualFile);
         formData.append("docType", "Avatar");
         formData.append("fileName", actualFile.name);
-        formData.append("projectCode", projectCode);
-        const uploaded = await uploadGiaPhuDocument(formData);
+        formData.append("projectCode", STAFF_DOCUMENT_PROJECT_CODE);
+        const uploaded = await uploadGiaPhuDocument(formData, {
+          onProgress: (progress) => setAvatarUploadPercent(progress.percent),
+        });
         if (uploaded?.documentId) {
-          updateProfile("avatarUrl", `/api/giaphu-erp/documents/${uploaded.documentId}/file`);
+          const avatarUrl = `/api/giaphu-erp/documents/${uploaded.documentId}/file`;
+          const nextProfile = { ...profile, avatarUrl };
+          setProfile(nextProfile);
+          await saveProfileDraft(nextProfile);
           toast.success("Tải ảnh lên thành công.");
         } else {
           toast.error("Không nhận được ID ảnh.");
@@ -226,6 +286,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
         toast.error(err instanceof Error ? err.message : "Lỗi khi tải ảnh.");
       } finally {
         setUploadingAvatar(false);
+        setAvatarUploadPercent(0);
       }
     },
   });
@@ -234,8 +295,13 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   const avatarPreviewUrl = profile.avatarUrl || currentAvatarFile?.preview;
 
   React.useEffect(() => {
+    setCurrentStaff(staff);
     setProfile(initialProfile(staff));
   }, [staff]);
+
+  React.useEffect(() => {
+    setLocalSkillEvaluations(skillEvaluations);
+  }, [skillEvaluations]);
 
   const totalScore = React.useMemo(
     () => Object.values(criteriaDraft).reduce((sum, item) => sum + Number(item.score || 0), 0),
@@ -249,37 +315,86 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
     setProfile((current) => ({ ...current, [key]: value }));
   }
 
+  async function saveProfileDraft(nextProfile: StaffProfileDraft) {
+    const result = await runAction("saveStaffProfile", {
+      ...nextProfile,
+      salaryDay: nextProfile.salaryDay,
+      resigned: nextProfile.resigned === "true",
+    });
+    if (result && typeof result === "object" && result.staff) {
+      setCurrentStaff(result.staff);
+      setProfile(initialProfile(result.staff));
+    }
+    return result;
+  }
+
   const handleDocsAccepted = async (acceptedFiles: File[]) => {
     if (!acceptedFiles.length) return;
-    setUploadingDocs(true);
+    setDocUploadProgress(
+      acceptedFiles.map((file) => ({
+        fileName: file.name,
+        id: `${file.name}-${file.size}-${file.lastModified}`,
+        loaded: 0,
+        percent: 0,
+        status: "waiting",
+        total: file.size,
+      })),
+    );
     try {
       let newUrls = "";
       for (const file of acceptedFiles) {
+        const uploadId = `${file.name}-${file.size}-${file.lastModified}`;
+        setDocUploadProgress((current) =>
+          current.map((item) => (item.id === uploadId ? { ...item, status: "uploading" } : item)),
+        );
         const formData = new FormData();
-        const projectCode = activeProjectCode;
-        if (!projectCode) {
-          throw new Error("Thiếu công trình để tải hồ sơ.");
-        }
         formData.append("file", file);
         formData.append("docType", "Hồ sơ công nhân");
         formData.append("fileName", file.name);
-        formData.append("projectCode", projectCode);
-        const uploaded = await uploadGiaPhuDocument(formData);
+        formData.append("projectCode", STAFF_DOCUMENT_PROJECT_CODE);
+        const uploaded = await uploadGiaPhuDocument(formData, {
+          onProgress: (progress) => {
+            setDocUploadProgress((current) =>
+              current.map((item) =>
+                item.id === uploadId
+                  ? {
+                      ...item,
+                      loaded: progress.loaded,
+                      percent: progress.percent,
+                      status: "uploading",
+                      total: progress.total,
+                    }
+                  : item,
+              ),
+            );
+          },
+        });
         if (uploaded?.documentId) {
           const url = `/api/giaphu-erp/documents/${uploaded.documentId}/file?fileName=${encodeURIComponent(file.name)}`;
           newUrls += (newUrls ? "\n" : "") + url;
+          setDocUploadProgress((current) =>
+            current.map((item) =>
+              item.id === uploadId ? { ...item, loaded: item.total, percent: 100, status: "done" } : item,
+            ),
+          );
         }
       }
       if (newUrls) {
         const existing = profile.profileFiles.trim();
-        updateProfile("profileFiles", existing ? `${existing}\n${newUrls}` : newUrls);
+        const profileFiles = existing ? `${existing}\n${newUrls}` : newUrls;
+        const nextProfile = { ...profile, profileFiles };
+        setProfile(nextProfile);
+        await saveProfileDraft(nextProfile);
         toast.success(`Đã tải lên ${acceptedFiles.length} tệp hồ sơ.`);
       }
     } catch (_err) {
-      toast.error("Lỗi khi tải hồ sơ.");
+      setDocUploadProgress((current) =>
+        current.map((item) => (item.status === "uploading" ? { ...item, status: "error" } : item)),
+      );
+      toast.error(_err instanceof Error ? _err.message : "Lỗi khi tải hồ sơ.");
     } finally {
-      setUploadingDocs(false);
       setUploadKey((prev) => prev + 1);
+      window.setTimeout(() => setDocUploadProgress([]), 1200);
     }
   };
 
@@ -299,12 +414,17 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
 
     setSavingProfile(true);
     try {
-      await runAction("saveStaffProfile", {
+      const result = await runAction("saveStaffProfile", {
         ...profile,
         salaryDay: profile.salaryDay,
         resigned: profile.resigned === "true",
       });
+      if (result && typeof result === "object" && result.staff) {
+        setCurrentStaff(result.staff);
+        setProfile(initialProfile(result.staff));
+      }
       toast.success("Đã lưu hồ sơ công nhân.");
+      router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không lưu được hồ sơ công nhân.");
     } finally {
@@ -328,7 +448,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
 
     setSavingEvaluation(true);
     try {
-      await runAction("saveStaffSkillEvaluation", {
+      const result = await runAction("saveStaffSkillEvaluation", {
         staffId: staff.id,
         evaluationDate,
         evaluator,
@@ -339,10 +459,23 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
         summaryNote,
         newSalary,
       });
+      if (result && typeof result === "object") {
+        if (result.skillEvaluation) {
+          setLocalSkillEvaluations((current) => [
+            result.skillEvaluation as StaffSkillEvaluationRow,
+            ...current.filter((row) => row.id !== result.skillEvaluation?.id),
+          ]);
+        }
+        if (result.staff) {
+          setCurrentStaff(result.staff);
+          setProfile(initialProfile(result.staff));
+        }
+      }
       toast.success("Đã lưu đánh giá tay nghề.");
       setCriteriaDraft(initialCriteria());
       setSummaryNote("");
       setNewSalary("");
+      router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không lưu được đánh giá tay nghề.");
     } finally {
@@ -350,23 +483,38 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
     }
   }
 
-  const fileItems: FileSystemItem[] = React.useMemo(() => {
+  const fileItems = React.useMemo<StaffProfileFile[]>(() => {
     return profile.profileFiles
       .split("\n")
       .map((url) => url.trim())
       .filter(Boolean)
-      .map((url) => {
-        const fileName = getFileNameFromUrl(url);
-        const mimeType = getFileMimeType(fileName);
-        return {
-          kind: "file" as const,
-          path: fileName,
-          url: url,
-          name: fileName,
-          contentType: mimeType,
-        };
-      });
+      .map(toProfileFile);
   }, [profile.profileFiles]);
+
+  async function handleDeleteProfileFile() {
+    if (!fileToDelete) return;
+
+    setIsDeletingFile(true);
+    try {
+      const profileFiles = profile.profileFiles
+        .split("\n")
+        .map((link) => link.trim())
+        .filter((link) => link && link !== fileToDelete.url)
+        .join("\n");
+      const nextProfile = { ...profile, profileFiles };
+      await saveProfileDraft(nextProfile);
+      if (fileToDelete.id) {
+        await runAction("deleteDocument", { id: fileToDelete.id, __returnData: false }).catch(() => undefined);
+      }
+      setProfile(nextProfile);
+      setFileToDelete(null);
+      toast.success(`Đã xóa tài liệu: ${fileToDelete.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không xóa được tài liệu.");
+    } finally {
+      setIsDeletingFile(false);
+    }
+  }
 
   return (
     <Tabs defaultValue="profile" className="space-y-4 md:space-y-6">
@@ -384,7 +532,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                   Quản lý thông tin nền, tay nghề, hồ sơ và ghi chú nội bộ.
                 </p>
               </div>
-              <Badge variant="secondary">{staff.resigned ? "Đã nghỉ việc" : "Đang làm"}</Badge>
+              <Badge variant="secondary">{currentStaff.resigned ? "Đã nghỉ việc" : "Đang làm"}</Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -425,8 +573,12 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                       </div>
                     )}
                     {uploadingAvatar && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-background/50">
-                        <Loader2 className="size-6 animate-spin" />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/70 px-4">
+                        <Loader2 className="size-5 animate-spin" />
+                        <div className="w-full space-y-1">
+                          <Progress value={avatarUploadPercent} className="h-1.5" />
+                          <div className="text-center font-medium text-[10px]">{avatarUploadPercent}%</div>
+                        </div>
                       </div>
                     )}
                   </button>
@@ -470,61 +622,101 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                   <div className="flex flex-col gap-2">
                     <FileUpload
                       key={uploadKey}
+                      className="rounded-2xl"
+                      dropzoneClassName="min-h-32 gap-3 px-4 py-5"
                       showFileList={false}
+                      showBorderBeam={false}
                       multiple={true}
                       title="Nhấp để tải lên hoặc kéo thả tệp"
-                      description="PDF, Word, Excel, CSV, PNG, JPG hoặc các định dạng khác (không giới hạn dung lượng)"
+                      description="PDF, Word, Excel, CSV, PNG, JPG hoặc định dạng khác"
                       browseLabel="Duyệt tệp"
                       draggingLabel="Thả vào đây"
                       onFilesAccepted={handleDocsAccepted}
                     />
 
-                    {uploadingDocs && (
-                      <div className="mt-2 flex animate-pulse items-center gap-3 rounded-xl border bg-muted/30 px-3 py-2.5">
-                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    {docUploadProgress.length > 0 && (
+                      <div className="mt-2 space-y-2 rounded-2xl border bg-muted/20 p-3">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium">Tiến trình tải hồ sơ</span>
+                          <span className="text-muted-foreground">
+                            {docUploadProgress.filter((item) => item.status === "done").length}/
+                            {docUploadProgress.length} tệp
+                          </span>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="mb-1 h-4 w-1/3 rounded bg-muted" />
-                          <div className="h-3 w-1/4 rounded bg-muted" />
+                        <div className="space-y-2">
+                          {docUploadProgress.map((item) => (
+                            <div key={item.id} className="space-y-1.5 rounded-xl border bg-background px-3 py-2">
+                              <div className="flex items-center justify-between gap-3 text-xs">
+                                <span className="min-w-0 truncate font-medium">{item.fileName}</span>
+                                <span className="shrink-0 text-muted-foreground">
+                                  {item.status === "waiting"
+                                    ? "Đang chờ"
+                                    : item.status === "done"
+                                      ? "Hoàn tất"
+                                      : item.status === "error"
+                                        ? "Lỗi"
+                                        : `${item.percent}%`}
+                                </span>
+                              </div>
+                              <Progress value={item.percent} className="h-1.5" />
+                              <div className="flex justify-between text-[11px] text-muted-foreground">
+                                <span>
+                                  {formatFileSize(item.loaded)} / {formatFileSize(item.total)}
+                                </span>
+                                <span>{item.status === "uploading" ? "Đang tải lên..." : null}</span>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
 
                     {fileItems.length > 0 && (
-                      <div className="mt-2 space-y-2">
+                      <div className="mt-2 space-y-2 rounded-2xl border bg-background p-3">
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground text-xs">
-                            {fileItems.length} tài liệu đã tải lên. Nhấp đúp để xem chi tiết.
+                            {fileItems.length} tài liệu đã tải lên. Có thể xem nhanh hoặc tải xuống.
                           </span>
-                          {selectedFile && selectedFile.kind === "file" && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => {
-                                const newLinks = profile.profileFiles
-                                  .split("\n")
-                                  .filter((link) => getFileNameFromUrl(link.trim()) !== selectedFile.path)
-                                  .join("\n");
-                                updateProfile("profileFiles", newLinks);
-                                setSelectedFile(null);
-                                toast.success(`Đã xóa tài liệu: ${selectedFile.path}`);
-                              }}
-                              className="flex h-8 items-center gap-1.5"
-                            >
-                              <X className="size-4" />
-                              Xóa tài liệu đã chọn
-                            </Button>
-                          )}
                         </div>
-                        <div className="rounded-xl border bg-background/50 p-2">
-                          <FileSystem
-                            items={fileItems}
-                            defaultView="list"
-                            title="Hồ sơ công nhân"
-                            className="min-h-[300px] border-0 shadow-none"
-                            onSelectionChange={(item) => setSelectedFile(item)}
-                          />
+                        <div className="divide-y rounded-xl border">
+                          {fileItems.map((file) => (
+                            <div key={file.url} className="flex items-center gap-3 px-3 py-2.5">
+                              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                <FileText className="size-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate font-medium text-sm">{file.name}</div>
+                                <div className="truncate text-muted-foreground text-xs">{file.contentType}</div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 gap-1.5"
+                                  onClick={() => setPreviewFile(file)}
+                                >
+                                  <Eye className="size-3.5" />
+                                  Xem
+                                </Button>
+                                <Button asChild type="button" variant="ghost" size="icon" className="size-8">
+                                  <a href={file.url} target="_blank" rel="noreferrer" download={file.name}>
+                                    <Download className="size-4" />
+                                  </a>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() => setFileToDelete(file)}
+                                  disabled={isDeletingFile}
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -675,7 +867,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
           <CardContent className="space-y-5">
             <div className="grid gap-4 md:grid-cols-3">
               <TextField label="Ngày đánh giá" type="date" value={evaluationDate} onChange={setEvaluationDate} />
-              <TextField label="Chọn công nhân" value={staff.name} disabled onChange={() => undefined} />
+              <TextField label="Chọn công nhân" value={currentStaff.name} disabled onChange={() => undefined} />
               <TextField
                 label="Người đánh giá"
                 value={evaluator}
@@ -795,9 +987,9 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
             <CardTitle>Lịch sử đánh giá tay nghề</CardTitle>
           </CardHeader>
           <CardContent>
-            {skillEvaluations.length ? (
+            {localSkillEvaluations.length ? (
               <div className="grid gap-3">
-                {skillEvaluations.slice(0, 8).map((row) => (
+                {localSkillEvaluations.slice(0, 8).map((row) => (
                   <div key={row.id} className="rounded-xl border p-4 text-sm">
                     <button
                       type="button"
@@ -826,6 +1018,69 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
           </CardContent>
         </Card>
       </TabsContent>
+      <Dialog open={Boolean(previewFile)} onOpenChange={(open) => !open && setPreviewFile(null)}>
+        <DialogContent className="max-h-[85vh] w-[min(100vw-2rem,72rem)] overflow-hidden" size="auto">
+          {previewFile ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="truncate">{previewFile.name}</DialogTitle>
+                <DialogDescription>{previewFile.contentType}</DialogDescription>
+              </DialogHeader>
+              <div className="min-h-[22rem] overflow-hidden rounded-xl border bg-muted/20">
+                {isImageFile(previewFile) ? (
+                  <div className="relative h-[65vh] min-h-[22rem]">
+                    <Image src={previewFile.url} alt={previewFile.name} fill unoptimized className="object-contain" />
+                  </div>
+                ) : canEmbedFile(previewFile) ? (
+                  <iframe src={previewFile.url} title={previewFile.name} className="h-[65vh] w-full bg-background" />
+                ) : (
+                  <div className="flex min-h-[22rem] flex-col items-center justify-center gap-3 p-6 text-center">
+                    <div className="flex size-14 items-center justify-center rounded-2xl bg-background text-muted-foreground shadow-sm">
+                      <FileText className="size-7" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Không thể xem trực tiếp định dạng này.</div>
+                      <p className="mt-1 text-muted-foreground text-sm">
+                        Hãy mở trong tab mới hoặc tải xuống để kiểm tra nội dung.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button asChild variant="outline">
+                  <a href={previewFile.url} target="_blank" rel="noreferrer">
+                    Mở tab mới
+                  </a>
+                </Button>
+                <Button asChild>
+                  <a href={previewFile.url} download={previewFile.name}>
+                    <Download className="size-4" />
+                    Tải xuống
+                  </a>
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={Boolean(fileToDelete)} onOpenChange={(open) => !open && setFileToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa tài liệu này?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tài liệu “{fileToDelete?.name}” sẽ bị gỡ khỏi hồ sơ công nhân. Thao tác này không ảnh hưởng các thông tin
+              khác của công nhân.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingFile}>Hủy</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteProfileFile} disabled={isDeletingFile} variant="destructive">
+              {isDeletingFile ? "Đang xóa..." : "Xóa"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog open={Boolean(selectedEvaluation)} onOpenChange={(open) => !open && setSelectedEvaluation(null)}>
         <DialogContent className="max-h-[85vh] w-[min(100vw-2rem,72rem)] overflow-y-auto" size="auto">
           {selectedEvaluation ? (
@@ -833,13 +1088,17 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
               <DialogHeader>
                 <DialogTitle>Chi tiết đánh giá tay nghề</DialogTitle>
                 <DialogDescription>
-                  {selectedEvaluation.staffName} · {formatDate(selectedEvaluation.date)} · {selectedEvaluation.rank || "Chưa xếp hạng"}
+                  {selectedEvaluation.staffName} · {formatDate(selectedEvaluation.date)} ·{" "}
+                  {selectedEvaluation.rank || "Chưa xếp hạng"}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 md:grid-cols-3">
                 <InfoChip label="Người đánh giá" value={selectedEvaluation.evaluator || "-"} />
                 <InfoChip label="Trạng thái" value={selectedEvaluation.statusAfterReview || "-"} />
-                <InfoChip label="Lương mới" value={selectedEvaluation.newSalary ? formatMoney(selectedEvaluation.newSalary) : "-"} />
+                <InfoChip
+                  label="Lương mới"
+                  value={selectedEvaluation.newSalary ? formatMoney(selectedEvaluation.newSalary) : "-"}
+                />
                 <InfoChip label="Đi làm xa" value={selectedEvaluation.travelReady || "-"} />
                 <InfoChip label="Ngày nghỉ" value={selectedEvaluation.leaveDate || "-"} />
                 <InfoChip label="Tổng điểm" value={`${selectedEvaluation.totalScore}/60`} />
@@ -861,7 +1120,9 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
               {selectedEvaluation.summaryNote ? (
                 <div className="rounded-xl border p-4">
                   <div className="font-semibold text-sm">Ghi chú tổng hợp</div>
-                  <p className="mt-2 whitespace-pre-wrap text-muted-foreground text-sm">{selectedEvaluation.summaryNote}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-muted-foreground text-sm">
+                    {selectedEvaluation.summaryNote}
+                  </p>
                 </div>
               ) : null}
             </>

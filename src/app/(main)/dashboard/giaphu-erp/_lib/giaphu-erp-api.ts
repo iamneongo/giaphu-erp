@@ -8,6 +8,8 @@ import type {
   GiaPhuReportsInsights,
   ProjectRow,
   ReportTableState,
+  StaffRow,
+  StaffSkillEvaluationRow,
 } from "@/lib/giaphu-erp/types";
 import { normalizeVietnameseMojibake } from "@/lib/text/mojibake";
 
@@ -23,6 +25,8 @@ export interface GiaPhuActionResult {
   };
   rows?: Record<string, unknown>[];
   project?: ProjectRow;
+  staff?: StaffRow;
+  skillEvaluation?: StaffSkillEvaluationRow;
   documentId?: number;
   refresh?: false;
   total?: number;
@@ -53,15 +57,19 @@ export interface GiaPhuActivityLogsResult {
   pageSize: number;
 }
 
-async function parseResponse(response: Response): Promise<GiaPhuActionResult> {
-  const result = (await response.json()) as GiaPhuActionResult;
+function parseActionResult(result: GiaPhuActionResult, ok: boolean, fallbackMessage: string) {
   const message = normalizeVietnameseMojibake(result.message);
 
-  if (!response.ok || result.status !== "success") {
-    throw new Error(message || "Thao tác GiaPhu ERP thất bại.");
+  if (!ok || result.status !== "success") {
+    throw new Error(message || fallbackMessage);
   }
 
   return { ...result, message };
+}
+
+async function parseResponse(response: Response): Promise<GiaPhuActionResult> {
+  const result = (await response.json()) as GiaPhuActionResult;
+  return parseActionResult(result, response.ok, "Thao tác GiaPhu ERP thất bại.");
 }
 
 async function parseReportsResponse(response: Response): Promise<{
@@ -286,13 +294,104 @@ export async function fetchGiaPhuReportsData({
   return result.data as GiaPhuReportsData;
 }
 
-export async function uploadGiaPhuDocument(formData: FormData) {
-  const result = await parseResponse(
-    await fetch("/api/giaphu-erp/documents", {
-      method: "POST",
-      body: formData,
-    }),
-  );
+export type GiaPhuUploadProgress = {
+  fileName: string;
+  lengthComputable: boolean;
+  loaded: number;
+  percent: number;
+  total: number;
+};
 
-  return result;
+type UploadGiaPhuDocumentOptions = {
+  onProgress?: (progress: GiaPhuUploadProgress) => void;
+};
+
+function buildDocumentUploadHeaders(formData: FormData, file: File) {
+  const headers = new Headers();
+  headers.set("x-document-id", String(formData.get("id") ?? "0"));
+  headers.set("x-upload-file-size", String(file.size));
+  headers.set(
+    "x-document-meta",
+    btoa(
+      encodeURIComponent(
+        JSON.stringify({
+          projectCode: String(formData.get("projectCode") ?? ""),
+          docType: String(formData.get("docType") ?? ""),
+          fileName: String(formData.get("fileName") ?? file.name),
+          note: String(formData.get("note") ?? ""),
+          previewText: String(formData.get("previewText") ?? ""),
+        }),
+      ).replace(/%([0-9A-F]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16))),
+    ),
+  );
+  headers.set("content-type", file.type || "application/octet-stream");
+  return headers;
+}
+
+export async function uploadGiaPhuDocument(formData: FormData, options: UploadGiaPhuDocumentOptions = {}) {
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size <= 0) {
+    throw new Error("Vui lòng chọn tệp hồ sơ.");
+  }
+
+  const headers = buildDocumentUploadHeaders(formData, file);
+
+  if (typeof XMLHttpRequest === "undefined") {
+    options.onProgress?.({
+      fileName: file.name,
+      lengthComputable: true,
+      loaded: 0,
+      percent: 0,
+      total: file.size,
+    });
+    const result = await parseResponse(
+      await fetch("/api/giaphu-erp/documents", {
+        method: "POST",
+        headers,
+        body: await file.arrayBuffer(),
+      }),
+    );
+    options.onProgress?.({
+      fileName: file.name,
+      lengthComputable: true,
+      loaded: file.size,
+      percent: 100,
+      total: file.size,
+    });
+    return result;
+  }
+
+  return new Promise<GiaPhuActionResult>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", "/api/giaphu-erp/documents");
+
+    headers.forEach((value, key) => {
+      request.setRequestHeader(key, value);
+    });
+
+    request.upload.onprogress = (event) => {
+      const total = event.lengthComputable && event.total > 0 ? event.total : file.size;
+      const loaded = Math.min(event.loaded, total);
+      options.onProgress?.({
+        fileName: file.name,
+        lengthComputable: event.lengthComputable,
+        loaded,
+        percent: total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0,
+        total,
+      });
+    };
+
+    request.onload = () => {
+      try {
+        const result = JSON.parse(request.responseText || "{}") as GiaPhuActionResult;
+        resolve(parseActionResult(result, request.status >= 200 && request.status < 300, "Tải hồ sơ thất bại."));
+      } catch {
+        reject(new Error("API tải hồ sơ trả về dữ liệu không hợp lệ."));
+      }
+    };
+    request.onerror = () => reject(new Error("Mất kết nối khi tải hồ sơ."));
+    request.onabort = () => reject(new Error("Đã hủy tải hồ sơ."));
+
+    request.send(file);
+  });
 }

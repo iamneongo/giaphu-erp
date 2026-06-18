@@ -1,5 +1,11 @@
 import { getSql } from "../db/neon";
 import { buildNextCatalogCode, catalogKinds, normalizeCatalogCode } from "./catalog-codes";
+import {
+  ATTACHMENT_DOCUMENT_DOC_TYPES,
+  ATTACHMENT_DOCUMENT_PROJECT_CODE,
+  STAFF_DOCUMENT_DOC_TYPES,
+  STAFF_DOCUMENT_PROJECT_CODE,
+} from "./document-scope";
 import { isValidPhoneNumber } from "./phone";
 import type {
   ActivityLogRow,
@@ -116,6 +122,8 @@ type GlobalSchemaState = typeof globalThis & {
   __giaPhuActivityLogSchemaReady?: boolean;
   __giaPhuPerformanceIndexesPromise?: Promise<void>;
   __giaPhuPerformanceIndexesReady?: boolean;
+  __giaPhuStaffDocumentNamespacePromise?: Promise<void>;
+  __giaPhuStaffDocumentNamespaceReady?: boolean;
 };
 
 const emptyCatalogs = () => ({
@@ -1090,6 +1098,7 @@ export async function createGiaPhuSchema() {
   if (state.__giaPhuSchemaReady) {
     await ensureActivityLogSchema();
     await ensureGiaPhuPerformanceIndexes();
+    await ensureStaffDocumentNamespace();
     return;
   }
 
@@ -1105,6 +1114,7 @@ export async function createGiaPhuSchema() {
     state.__giaPhuSchemaReady = true;
     await ensureOrganizationColumns();
     await ensureGiaPhuPerformanceIndexes();
+    await ensureStaffDocumentNamespace();
     return;
   }
 
@@ -1115,6 +1125,7 @@ export async function createGiaPhuSchema() {
   await state.__giaPhuSchemaPromise;
   state.__giaPhuSchemaReady = true;
   await ensureGiaPhuPerformanceIndexes();
+  await ensureStaffDocumentNamespace();
 }
 
 export async function recordGiaPhuActivity(options: GiaPhuActivityLogOptions) {
@@ -3206,6 +3217,17 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
       ${typeFilter ? sql`and doc_type = ${typeFilter}` : sql``}
       ${hasFileFilter ? sql`and (file_data <> '') = ${hasFileFilter === "Đã tải"}` : sql``}
     `;
+    const visibleDocumentsOnly = sql`
+      and doc_type not in (
+        ${STAFF_DOCUMENT_DOC_TYPES[0]},
+        ${STAFF_DOCUMENT_DOC_TYPES[1]},
+        ${ATTACHMENT_DOCUMENT_DOC_TYPES[0]},
+        ${ATTACHMENT_DOCUMENT_DOC_TYPES[1]},
+        ${ATTACHMENT_DOCUMENT_DOC_TYPES[2]},
+        ${ATTACHMENT_DOCUMENT_DOC_TYPES[3]},
+        ${ATTACHMENT_DOCUMENT_DOC_TYPES[4]}
+      )
+    `;
     const selectDocumentFields = sql`
       id,
       project_code,
@@ -3218,11 +3240,11 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
       file_data <> '' as has_file
     `;
     const [countRows, rows] = await Promise.all([
-      sql`select count(*)::int as total from gp_documents where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}`,
+      sql`select count(*)::int as total from gp_documents where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${visibleDocumentsOnly} ${whereSearch} ${whereFilters}`,
       sql`
         select ${selectDocumentFields}
         from gp_documents
-        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
+        where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${visibleDocumentsOnly} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "documents", options.sorting)}
         limit ${pageSize}
         offset ${offset}
@@ -3600,7 +3622,24 @@ export async function getGiaPhuFilterOptions(options: {
   if (options.dataset === "documents") {
     await ensureDocumentFileColumns();
     const [typeRows] = await Promise.all([
-      sql`select distinct doc_type as value from gp_documents where organization_id = ${organizationId} and project_code = ${activeProjectCode} and doc_type <> '' order by doc_type asc limit 300`,
+      sql`
+        select distinct doc_type as value
+        from gp_documents
+        where organization_id = ${organizationId}
+          and project_code = ${activeProjectCode}
+          and doc_type <> ''
+          and doc_type not in (
+            ${STAFF_DOCUMENT_DOC_TYPES[0]},
+            ${STAFF_DOCUMENT_DOC_TYPES[1]},
+            ${ATTACHMENT_DOCUMENT_DOC_TYPES[0]},
+            ${ATTACHMENT_DOCUMENT_DOC_TYPES[1]},
+            ${ATTACHMENT_DOCUMENT_DOC_TYPES[2]},
+            ${ATTACHMENT_DOCUMENT_DOC_TYPES[3]},
+            ${ATTACHMENT_DOCUMENT_DOC_TYPES[4]}
+          )
+        order by doc_type asc
+        limit 300
+      `,
     ]);
 
     return {
@@ -4474,7 +4513,7 @@ export async function saveStaffSkillEvaluation(payload: Record<string, unknown>)
   `) as Row[];
 
   const statusAfterReview = text(payload.statusAfterReview).trim();
-  await sql`
+  const [updatedStaffRow] = (await sql`
     update gp_staff
     set salary_day = case when ${newSalary} > 0 then ${newSalary} else salary_day end,
         ranking = ${rank},
@@ -4482,9 +4521,13 @@ export async function saveStaffSkillEvaluation(payload: Record<string, unknown>)
         off_date = case when ${statusAfterReview} in ('Nghỉ việc', 'Không gọi lại') then coalesce(${leaveDate || null}, off_date) else off_date end,
         updated_at = now()
     where organization_id = ${organizationId} and id = ${staffId}
-  `;
+    returning *
+  `) as Row[];
 
-  return staffSkillEvaluationFromRow(rows[0]);
+  return {
+    skillEvaluation: staffSkillEvaluationFromRow(rows[0]),
+    staff: updatedStaffRow ? staffFromRow(updatedStaffRow) : staff,
+  };
 }
 
 export async function deleteStaff(payload: Record<string, unknown>) {
@@ -5421,6 +5464,53 @@ async function ensureDocumentFileColumns() {
   await sql`alter table gp_documents add column if not exists file_size bigint not null default 0`;
 }
 
+async function ensureStaffDocumentNamespace() {
+  const state = globalThis as GlobalSchemaState;
+  if (state.__giaPhuStaffDocumentNamespaceReady) return;
+
+  state.__giaPhuStaffDocumentNamespacePromise ??= (async () => {
+    const sql = getSql();
+
+    await sql`
+      insert into gp_projects (code, organization_id, name, owner, contact, referrer, status, drive_url, failure_reason, pin_hash)
+      values (${STAFF_DOCUMENT_PROJECT_CODE}, '', 'Hồ sơ nhân sự', '', '', '', 'Đã lưu trữ', '', '', '')
+      on conflict (code) do nothing
+    `;
+
+    await sql`
+      insert into gp_projects (code, organization_id, name, owner, contact, referrer, status, drive_url, failure_reason, pin_hash)
+      values (${ATTACHMENT_DOCUMENT_PROJECT_CODE}, '', 'Hồ sơ nghiệp vụ', '', '', '', 'Đã lưu trữ', '', '', '')
+      on conflict (code) do nothing
+    `;
+
+    await sql`
+      update gp_documents
+      set project_code = ${STAFF_DOCUMENT_PROJECT_CODE}
+      where doc_type in (${STAFF_DOCUMENT_DOC_TYPES[0]}, ${STAFF_DOCUMENT_DOC_TYPES[1]})
+        and project_code <> ${STAFF_DOCUMENT_PROJECT_CODE}
+    `;
+
+    await sql`
+      update gp_documents
+      set project_code = ${ATTACHMENT_DOCUMENT_PROJECT_CODE}
+      where doc_type in (
+          ${ATTACHMENT_DOCUMENT_DOC_TYPES[0]},
+          ${ATTACHMENT_DOCUMENT_DOC_TYPES[1]},
+          ${ATTACHMENT_DOCUMENT_DOC_TYPES[2]},
+          ${ATTACHMENT_DOCUMENT_DOC_TYPES[3]},
+          ${ATTACHMENT_DOCUMENT_DOC_TYPES[4]}
+        )
+        and project_code <> ${ATTACHMENT_DOCUMENT_PROJECT_CODE}
+    `;
+  })().catch((error) => {
+    state.__giaPhuStaffDocumentNamespacePromise = undefined;
+    throw error;
+  });
+
+  await state.__giaPhuStaffDocumentNamespacePromise;
+  state.__giaPhuStaffDocumentNamespaceReady = true;
+}
+
 export async function saveDocument(payload: Record<string, unknown>) {
   await ensureDocumentFileColumns();
   const sql = getSql();
@@ -5553,6 +5643,15 @@ export async function queryDocuments(payload: Record<string, unknown>) {
     from gp_documents
     where organization_id = ${organizationId}
       and project_code = ${text(payload.projectCode)}
+      and doc_type not in (
+        ${STAFF_DOCUMENT_DOC_TYPES[0]},
+        ${STAFF_DOCUMENT_DOC_TYPES[1]},
+        ${ATTACHMENT_DOCUMENT_DOC_TYPES[0]},
+        ${ATTACHMENT_DOCUMENT_DOC_TYPES[1]},
+        ${ATTACHMENT_DOCUMENT_DOC_TYPES[2]},
+        ${ATTACHMENT_DOCUMENT_DOC_TYPES[3]},
+        ${ATTACHMENT_DOCUMENT_DOC_TYPES[4]}
+      )
       and (${text(payload.keyword)} = '' or file_name ilike ${keyword} or doc_type ilike ${keyword} or note ilike ${keyword} or preview_text ilike ${keyword})
     order by created_at desc
     limit 50
