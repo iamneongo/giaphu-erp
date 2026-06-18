@@ -3980,7 +3980,7 @@ async function assertUniqueCatalogItem({
           and archived = false
           and id <> ${originalId}
           and (
-            lower(code) = lower(${code})
+            (lower(code) = lower(${code}) and lower(btrim(supplier)) = lower(btrim(${supplier})))
             or (lower(btrim(name)) = lower(btrim(${name})) and lower(btrim(supplier)) = lower(btrim(${supplier})))
           )
         limit 1
@@ -4012,17 +4012,40 @@ async function assertUniqueCatalogItem({
   if (!duplicate) return;
 
   const labels = catalogFieldLabels[kind];
+  const duplicateSupplier = text(duplicate.supplier).trim();
+
+  if (isMaterialCatalog && duplicateSupplier) {
+    throw new Error(`${labels.name} "${name}" đã tồn tại với NCC "${duplicateSupplier}". Vui lòng chọn NCC khác.`);
+  }
+
   if (text(duplicate.code).toLowerCase() === code.toLowerCase()) {
     throw new Error(`${labels.code} "${code}" đã tồn tại. Vui lòng nhập mã khác.`);
   }
 
-  const duplicateSupplier = text(duplicate.supplier).trim();
+  throw new Error(`${labels.name} "${name}" đã tồn tại. Vui lòng nhập tên khác.`);
+}
 
-  if (isMaterialCatalog && duplicateSupplier) {
-    throw new Error(`${labels.name} "${name}" đã tồn tại với NCC "${duplicateSupplier}". Vui lòng nhập dòng khác.`);
+function catalogItemId({
+  organizationId,
+  projectCode,
+  kind,
+  code,
+  supplier,
+}: {
+  organizationId: string;
+  projectCode: string;
+  kind: CatalogItem["kind"];
+  code: string;
+  supplier: string;
+}) {
+  if (kind === "hangMuc") return `${organizationId}:${projectCode}:hangMuc:${code}`;
+
+  if (kind === "vatTu" || kind === "vatTuPhu") {
+    const supplierKey = encodeURIComponent(text(supplier).trim().toLowerCase());
+    return `${organizationId}:${kind}:${code}:${supplierKey}`;
   }
 
-  throw new Error(`${labels.name} "${name}" đã tồn tại. Vui lòng nhập tên khác.`);
+  return `${organizationId}:${kind}:${code}`;
 }
 
 async function getCatalogUsageLabels(item: CatalogItem, organizationId: string) {
@@ -4198,8 +4221,7 @@ export async function manageCatalog(payload: Record<string, unknown>) {
     if (!isValidPhoneNumber(contact)) throw new Error("Liên hệ phải là số điện thoại hợp lệ.");
   }
 
-  const nextId =
-    kind === "hangMuc" ? `${organizationId}:${projectCode}:hangMuc:${code}` : `${organizationId}:${kind}:${code}`;
+  const nextId = catalogItemId({ organizationId, projectCode, kind, code, supplier });
   const isExcelImport = sortOrder > 0;
   const originalId = text(payload.originalId || payload.id);
   const uniqueCheckOriginalId = originalId || (isExcelImport ? nextId : "");

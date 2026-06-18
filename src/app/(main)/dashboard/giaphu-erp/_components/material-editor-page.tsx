@@ -228,14 +228,17 @@ export function MaterialEditorPage({ materialType, mode, materialId, listHref }:
     () => catalogOptionsWithValue(data.catalogs.hangMuc, editingRow?.category),
     [data.catalogs.hangMuc, editingRow?.category],
   );
-  const materialOptions = React.useMemo(
-    () =>
-      catalogOptionsWithValue(
-        materialType === "VT Chính" ? data.catalogs.vatTu : data.catalogs.vatTuPhu,
-        editingRow?.materialName,
-      ),
-    [data.catalogs.vatTu, data.catalogs.vatTuPhu, editingRow?.materialName, materialType],
-  );
+  const materialOptions = React.useMemo(() => {
+    const catalogItems = materialType === "VT Chính" ? data.catalogs.vatTu : data.catalogs.vatTuPhu;
+    const activeNames = catalogItems.filter((item) => !item.archived).map((item) => item.name);
+    const options = uniqueTextOptions([editingRow?.materialName ?? "", ...activeNames]);
+
+    if (editingRow?.materialName && !options.some((option) => option.value === editingRow.materialName)) {
+      options.push({ label: editingRow.materialName, value: editingRow.materialName });
+    }
+
+    return options;
+  }, [data.catalogs.vatTu, data.catalogs.vatTuPhu, editingRow?.materialName, materialType]);
   const materialCatalogItems = materialType === "VT Chính" ? data.catalogs.vatTu : data.catalogs.vatTuPhu;
   const supplierCatalogOptions = React.useMemo(
     () => catalogOptions(data.catalogs.nhaCungCap),
