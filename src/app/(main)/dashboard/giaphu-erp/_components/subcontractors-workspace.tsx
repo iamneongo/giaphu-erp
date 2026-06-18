@@ -2,13 +2,13 @@
 
 import * as React from "react";
 
-import { Archive, Banknote, Download, FileText, Hammer, ShieldCheck, Trash2 } from "lucide-react";
+import { Archive, Banknote, Eye, FileText, Hammer, ShieldCheck, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import { ATTACHMENT_DOCUMENT_PROJECT_CODE } from "@/lib/giaphu-erp/document-scope";
-import type { OperationRow, SubcontractorContractRow, SubcontractorRow } from "@/lib/giaphu-erp/types";
+import type { DocumentRow, OperationRow, SubcontractorContractRow, SubcontractorRow } from "@/lib/giaphu-erp/types";
 
 import { useCanAccessErpPermission } from "../../_components/effective-permissions-provider";
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
@@ -19,6 +19,7 @@ import { formatDate, formatMoney } from "../_lib/formatters";
 import { runGiaPhuAction, uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable } from "./data-table";
+import { DocumentPreviewDialog } from "./documents-workspace";
 import { ExcelImportDialog } from "./excel-import-dialog";
 import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
@@ -41,6 +42,41 @@ function exportDocumentUrl(fileUrl: string) {
   if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
   if (typeof window === "undefined") return fileUrl;
   return new URL(fileUrl, window.location.origin).toString();
+}
+
+function documentIdFromFileUrl(fileUrl: string) {
+  const match = /\/api\/giaphu-erp\/documents\/(\d+)\/file/.exec(fileUrl);
+  return match ? Number(match[1]) : 0;
+}
+
+function documentFromSubcontractorAttachment({
+  row,
+  docType,
+  note,
+  previewText,
+}: {
+  row: Pick<
+    SubcontractorRow | OperationRow,
+    "fileId" | "fileUrl" | "projectCode" | "fileName" | "mimeType" | "fileSize" | "hasFile"
+  >;
+  docType: string;
+  note?: string;
+  previewText?: string;
+}): DocumentRow | null {
+  const documentId = Number(row.fileId || 0) || documentIdFromFileUrl(row.fileUrl || "");
+  if (!documentId || !row.fileUrl) return null;
+
+  return {
+    id: documentId,
+    project_code: row.projectCode,
+    doc_type: docType,
+    file_name: row.fileName || "Hồ sơ đính kèm",
+    mime_type: row.mimeType || "application/octet-stream",
+    file_size: row.fileSize || 0,
+    note: note ?? "",
+    preview_text: previewText ?? "",
+    has_file: row.hasFile || Boolean(row.fileUrl),
+  };
 }
 
 export function SubcontractorsWorkspace({ section = "advances" }: { section?: SubcontractorsSection }) {
@@ -102,6 +138,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
     [operationWeekOptions],
   );
   const canManage = useCanAccessErpPermission(ERP_PERMISSIONS.subcontractorsManage);
+  const [previewDocument, setPreviewDocument] = React.useState<DocumentRow | null>(null);
 
   async function saveSubcontractorWithAttachment(
     action: string,
@@ -195,6 +232,58 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
   async function runSubcontractorContractAction(action: string, payload: Record<string, unknown>) {
     const result = await runAction(action, { ...payload, __returnData: false });
     if (result) paginatedSubcontractorContracts.refresh();
+    return result;
+  }
+
+  async function removeDocumentIfPossible(fileId: string) {
+    const documentId = Number(fileId || 0);
+    if (documentId > 0) {
+      await runGiaPhuAction("deleteDocument", { id: documentId, __returnData: false }).catch(() => undefined);
+    }
+  }
+
+  async function clearSubcontractorAttachment(row: SubcontractorRow) {
+    const result = await runAction("saveSubcontractor", {
+      id: row.id,
+      projectCode: activeProjectCode,
+      date: row.date,
+      week: row.week,
+      category: row.category,
+      contractorName: row.contractorName,
+      advance: row.advance,
+      note: row.note,
+      status: row.status,
+      fileUrl: "",
+      fileId: "",
+      __returnData: false,
+    });
+
+    if (result) {
+      await removeDocumentIfPossible(row.fileId);
+      paginatedSubcontractors.refresh();
+    }
+
+    return result;
+  }
+
+  async function clearOperationAttachment(row: OperationRow) {
+    const result = await runAction("saveOperation", {
+      id: row.id,
+      projectCode: activeProjectCode,
+      date: row.date,
+      week: row.week,
+      description: row.description,
+      amount: row.amount,
+      fileUrl: "",
+      fileId: "",
+      __returnData: false,
+    });
+
+    if (result) {
+      await removeDocumentIfPossible(row.fileId);
+      paginatedOperations.refresh();
+    }
+
     return result;
   }
 
@@ -403,19 +492,25 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                 accessor: (row) => (row.fileUrl ? "Có hồ sơ" : "Không"),
                 searchable: false,
                 sortable: false,
-                render: (row) =>
-                  row.fileUrl ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => window.open(row.fileUrl, "_blank", "noopener,noreferrer")}
-                    >
-                      <Download />
-                      Xem tệp
+                render: (row) => {
+                  const document = documentFromSubcontractorAttachment({
+                    row,
+                    docType: "Tạm ứng thầu phụ",
+                    note: row.note,
+                    previewText: ["Tạm ứng thầu phụ", row.contractorName, row.category, row.date]
+                      .filter(Boolean)
+                      .join(" · "),
+                  });
+
+                  return document ? (
+                    <Button size="sm" variant="outline" onClick={() => setPreviewDocument(document)}>
+                      <Eye />
+                      Xem nhanh
                     </Button>
                   ) : (
                     <span className="text-muted-foreground">-</span>
-                  ),
+                  );
+                },
               },
               ...(canManage
                 ? [
@@ -471,6 +566,20 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                               ],
                             }}
                             actions={[
+                              ...(row.fileUrl
+                                ? [
+                                    {
+                                      label: "Xóa tệp",
+                                      icon: Trash2,
+                                      destructive: true,
+                                      onSelect: () => {
+                                        if (window.confirm(`Xóa tệp đính kèm tạm ứng của "${row.contractorName}"?`)) {
+                                          return clearSubcontractorAttachment(row);
+                                        }
+                                      },
+                                    },
+                                  ]
+                                : []),
                               {
                                 label: "Lưu trữ",
                                 icon: Archive,
@@ -677,19 +786,23 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                 exportValue: (row) => exportDocumentUrl(row.fileUrl),
                 searchable: false,
                 sortable: false,
-                render: (row) =>
-                  row.fileUrl ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => window.open(row.fileUrl, "_blank", "noopener,noreferrer")}
-                    >
-                      <Download />
-                      Xem tệp
+                render: (row) => {
+                  const document = documentFromSubcontractorAttachment({
+                    row,
+                    docType: "Chi phí vận hành",
+                    note: row.description,
+                    previewText: ["Chi phí vận hành", row.description, row.date].filter(Boolean).join(" · "),
+                  });
+
+                  return document ? (
+                    <Button size="sm" variant="outline" onClick={() => setPreviewDocument(document)}>
+                      <Eye />
+                      Xem nhanh
                     </Button>
                   ) : (
                     <span className="text-muted-foreground">-</span>
-                  ),
+                  );
+                },
               },
               ...(canManage
                 ? [
@@ -729,6 +842,20 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
                               ],
                             }}
                             actions={[
+                              ...(row.fileUrl
+                                ? [
+                                    {
+                                      label: "Xóa tệp",
+                                      icon: Trash2,
+                                      destructive: true,
+                                      onSelect: () => {
+                                        if (window.confirm(`Xóa tệp đính kèm chi phí "${row.description}"?`)) {
+                                          return clearOperationAttachment(row);
+                                        }
+                                      },
+                                    },
+                                  ]
+                                : []),
                               {
                                 label: "Xóa",
                                 icon: Trash2,
@@ -797,6 +924,7 @@ export function SubcontractorsWorkspace({ section = "advances" }: { section?: Su
         actions={canManage ? actions[section] : undefined}
       />
       {currentSection.content}
+      <DocumentPreviewDialog document={previewDocument} onOpenChange={(open) => !open && setPreviewDocument(null)} />
     </div>
   );
 }

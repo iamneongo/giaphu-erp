@@ -528,6 +528,10 @@ function subcontractorFromRow(row: Row): SubcontractorRow {
     advance: number(row.advance),
     fileUrl: text(row.file_url),
     fileId: text(row.file_id),
+    fileName: text(row.attachment_file_name),
+    mimeType: text(row.attachment_mime_type),
+    fileSize: number(row.attachment_file_size),
+    hasFile: Boolean(row.attachment_has_file),
     cumulative: number(row.cumulative),
     status: text(row.status),
   };
@@ -558,6 +562,10 @@ function operationFromRow(row: Row): OperationRow {
     amount: number(row.amount),
     fileUrl: text(row.file_url),
     fileId: text(row.file_id),
+    fileName: text(row.attachment_file_name),
+    mimeType: text(row.attachment_mime_type),
+    fileSize: number(row.attachment_file_size),
+    hasFile: Boolean(row.attachment_has_file),
   };
 }
 
@@ -3429,6 +3437,35 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
               and document.id::text = gp_subcontractors.file_id
               and document.file_data <> ''
           ) then file_id else '' end as file_id
+          ,
+          coalesce((
+            select document.file_name
+            from gp_documents document
+            where document.organization_id = gp_subcontractors.organization_id
+              and document.id::text = gp_subcontractors.file_id
+            limit 1
+          ), '') as attachment_file_name,
+          coalesce((
+            select document.mime_type
+            from gp_documents document
+            where document.organization_id = gp_subcontractors.organization_id
+              and document.id::text = gp_subcontractors.file_id
+            limit 1
+          ), '') as attachment_mime_type,
+          coalesce((
+            select document.file_size
+            from gp_documents document
+            where document.organization_id = gp_subcontractors.organization_id
+              and document.id::text = gp_subcontractors.file_id
+            limit 1
+          ), 0) as attachment_file_size,
+          coalesce((
+            select document.file_data <> ''
+            from gp_documents document
+            where document.organization_id = gp_subcontractors.organization_id
+              and document.id::text = gp_subcontractors.file_id
+            limit 1
+          ), false) as attachment_has_file
         from gp_subcontractors
         where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${activeCategoryOnly} ${whereSearch} ${whereFilters}
         ${pagedRowsOrderBy(sql, "subcontractors", options.sorting)}
@@ -3527,6 +3564,35 @@ export async function getGiaPhuPagedRows(options: GiaPhuPagedRowsOptions): Promi
             and document.id::text = gp_operations.file_id
             and document.file_data <> ''
         ) then file_id else '' end as file_id
+        ,
+        coalesce((
+          select document.file_name
+          from gp_documents document
+          where document.organization_id = gp_operations.organization_id
+            and document.id::text = gp_operations.file_id
+          limit 1
+        ), '') as attachment_file_name,
+        coalesce((
+          select document.mime_type
+          from gp_documents document
+          where document.organization_id = gp_operations.organization_id
+            and document.id::text = gp_operations.file_id
+          limit 1
+        ), '') as attachment_mime_type,
+        coalesce((
+          select document.file_size
+          from gp_documents document
+          where document.organization_id = gp_operations.organization_id
+            and document.id::text = gp_operations.file_id
+          limit 1
+        ), 0) as attachment_file_size,
+        coalesce((
+          select document.file_data <> ''
+          from gp_documents document
+          where document.organization_id = gp_operations.organization_id
+            and document.id::text = gp_operations.file_id
+          limit 1
+        ), false) as attachment_has_file
       from gp_operations
       where organization_id = ${organizationId} and project_code = ${activeProjectCode} ${whereSearch} ${whereFilters}
       ${pagedRowsOrderBy(sql, "operations", options.sorting)}

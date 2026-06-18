@@ -15,7 +15,7 @@ import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { usePaginatedErpRows } from "../_hooks/use-paginated-erp-rows";
 import { todayIso } from "../_lib/date-utils";
 import { formatDate, formatMoney } from "../_lib/formatters";
-import { uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
+import { runGiaPhuAction, uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
 import { ActionDialog } from "./action-dialog";
 import { DataTable } from "./data-table";
 import { DocumentPreviewDialog } from "./documents-workspace";
@@ -154,6 +154,44 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
         : payload;
     const result = await runAction(action, { ...nextPayload, __returnData: false });
     if (result) paginatedPayments.refresh();
+    return result;
+  }
+
+  async function removeDocumentIfPossible(fileId: string) {
+    const documentId = Number(fileId || 0);
+    if (documentId > 0) {
+      await runGiaPhuAction("deleteDocument", { id: documentId, __returnData: false }).catch(() => undefined);
+    }
+  }
+
+  async function clearContractAttachment(row: ContractRow) {
+    const result = await runContractAction("saveContract", {
+      id: row.id,
+      projectCode: activeProjectCode,
+      contractNo: row.contractNo,
+      value: row.value,
+      signedDate: row.signedDate,
+      note: row.note,
+      fileId: "",
+      fileUrl: "",
+    });
+
+    if (result) await removeDocumentIfPossible(row.fileId);
+    return result;
+  }
+
+  async function clearPaymentAttachment(row: PaymentRow) {
+    const result = await runPaymentAction("savePayment", {
+      id: row.id,
+      projectCode: activeProjectCode,
+      date: row.date,
+      amount: row.amount,
+      note: row.note,
+      fileId: "",
+      fileUrl: "",
+    });
+
+    if (result) await removeDocumentIfPossible(row.fileId);
     return result;
   }
 
@@ -509,6 +547,20 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                               ],
                             }}
                             actions={[
+                              ...(row.hasFile
+                                ? [
+                                    {
+                                      label: "Xóa tệp",
+                                      icon: Trash2,
+                                      destructive: true,
+                                      onSelect: () => {
+                                        if (window.confirm(`Xóa tệp đính kèm của hợp đồng "${row.contractNo}"?`)) {
+                                          return clearContractAttachment(row);
+                                        }
+                                      },
+                                    },
+                                  ]
+                                : []),
                               {
                                 label: "Xóa",
                                 icon: Trash2,
@@ -691,6 +743,20 @@ export function CrmWorkspace({ section = "projects" }: { section?: CrmSection })
                               ],
                             }}
                             actions={[
+                              ...(row.hasFile
+                                ? [
+                                    {
+                                      label: "Xóa tệp",
+                                      icon: Trash2,
+                                      destructive: true,
+                                      onSelect: () => {
+                                        if (window.confirm("Xóa chứng từ đính kèm của phiếu thu này?")) {
+                                          return clearPaymentAttachment(row);
+                                        }
+                                      },
+                                    },
+                                  ]
+                                : []),
                               {
                                 label: "Xóa",
                                 icon: Trash2,

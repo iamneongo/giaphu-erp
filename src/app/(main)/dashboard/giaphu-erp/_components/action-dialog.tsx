@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { FileUpload } from "@/components/ui/file-upload";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -301,7 +302,7 @@ export function ActionForm({
   }, [fields]);
 
   const updateFieldValue = React.useCallback(
-    (name: string, value: string | number | boolean) => {
+    (name: string, value: unknown) => {
       setFieldValues((current) => {
         const next = { ...current, [name]: value };
 
@@ -337,6 +338,15 @@ export function ActionForm({
     event.preventDefault();
     const form = event.currentTarget;
     const payload = collectFormPayload(form);
+
+    for (const field of fields) {
+      if (getResolvedFieldType(field) !== "file") continue;
+      const fileValue = fieldValues[field.name];
+      if (fileValue instanceof File) {
+        payload[field.name] = fileValue;
+      }
+    }
+
     const visibleFields = fields.filter((field) => field.visibleWhen?.(payload) ?? true);
     const missingField = visibleFields.find((field) => {
       if (!field.required || field.disabled || field.type === "checkbox" || field.type === "hidden") {
@@ -429,13 +439,18 @@ export function ActionForm({
                   onValueChange={(value) => updateFieldValue(field.name, value)}
                 />
               ) : fieldType === "file" ? (
-                <Input
+                <FileUpload
                   accept={field.accept}
-                  disabled={field.disabled}
-                  id={field.name}
-                  name={field.name}
-                  required={field.required}
-                  type="file"
+                  browseLabel="Duyệt tệp"
+                  className="rounded-2xl"
+                  description={field.placeholder ?? "PDF, Word, Excel, CSV, PNG, JPG hoặc định dạng khác"}
+                  draggingLabel="Thả vào đây"
+                  dropzoneClassName="min-h-32 gap-3 px-4 py-5"
+                  multiple={false}
+                  showBorderBeam={false}
+                  showFileList
+                  title="Nhấp để tải lên hoặc kéo thả tệp"
+                  onFilesAccepted={(files) => updateFieldValue(field.name, files[0] ?? "")}
                 />
               ) : fieldType === "select" ? (
                 <SearchableFormSelect

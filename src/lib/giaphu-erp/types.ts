@@ -276,6 +276,10 @@ export interface SubcontractorRow {
   advance: number;
   fileUrl: string;
   fileId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  hasFile: boolean;
   cumulative: number;
   status: string;
 }
@@ -302,6 +306,10 @@ export interface OperationRow {
   amount: number;
   fileUrl: string;
   fileId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  hasFile: boolean;
 }
 
 export interface LaborNormRow {
