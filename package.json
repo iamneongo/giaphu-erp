@@ -17,7 +17,9 @@
     "seed:loadtest": "ts-node -P tsconfig.scripts.json src/scripts/seed-giaphu-load-test.ts"
   },
   "lint-staged": {
-    "*.{js,ts,jsx,tsx}": ["biome check --write --no-errors-on-unmatched"]
+    "*.{js,ts,jsx,tsx}": [
+      "biome check --write --no-errors-on-unmatched"
+    ]
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -42,9 +44,10 @@
     "@embedpdf/plugin-zoom": "^2.14.4",
     "@extend-ai/react-docx": "^0.7.1",
     "@extend-ai/react-xlsx": "^0.10.2",
+    "@glideapps/glide-data-grid": "^6.0.4-alpha24",
     "@hookform/resolvers": "^5.2.2",
     "@hugeicons/core-free-icons": "^4.2.0",
-    "@hugeicons/react": "^1.1.6",
+    "@hugeicons/react": "^1.1.7",
     "@neondatabase/serverless": "^1.1.0",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.14.3",
@@ -61,6 +64,7 @@
     "lucide-react": "^1.16.0",
     "next": "^16.2.6",
     "next-themes": "^0.4.6",
+    "papaparse": "^5.5.3",
     "pdf-lib": "^1.17.1",
     "postgres": "^3.4.9",
     "radix-ui": "^1.4.3",
@@ -85,6 +89,7 @@
     "@tailwindcss/postcss": "^4.3.0",
     "@types/d3-geo": "^3.1.0",
     "@types/node": "^22.19.19",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@types/topojson-client": "^3.1.5",

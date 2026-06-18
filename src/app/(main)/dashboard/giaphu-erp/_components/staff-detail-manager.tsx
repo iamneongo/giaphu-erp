@@ -32,12 +32,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { STAFF_DOCUMENT_PROJECT_CODE } from "@/lib/giaphu-erp/document-scope";
-import type { StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
+import type { DocumentRow, StaffRow, StaffSkillEvaluationRow } from "@/lib/giaphu-erp/types";
 import { cn } from "@/lib/utils";
 
 import { useGiaPhuErp } from "../_hooks/use-giaphu-erp";
 import { formatDate, formatMoney } from "../_lib/formatters";
 import { uploadGiaPhuDocument } from "../_lib/giaphu-erp-api";
+import { DocumentPreviewDialog } from "./documents-workspace";
 
 type StaffProfileDraft = {
   id: string;
@@ -199,19 +200,27 @@ function toProfileFile(url: string): StaffProfileFile {
   };
 }
 
-function isImageFile(file: StaffProfileFile) {
-  return file.contentType.startsWith("image/");
-}
-
-function canEmbedFile(file: StaffProfileFile) {
-  return isImageFile(file) || file.contentType === "application/pdf" || file.contentType.startsWith("text/");
-}
-
 function formatFileSize(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
   const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   return `${(bytes / 1024 ** unitIndex).toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function toDocumentRow(file: StaffProfileFile): DocumentRow | null {
+  if (!file.id) return null;
+
+  return {
+    id: file.id,
+    project_code: STAFF_DOCUMENT_PROJECT_CODE,
+    doc_type: "Hồ sơ công nhân",
+    file_name: file.name,
+    mime_type: file.contentType,
+    file_size: 0,
+    note: "",
+    preview_text: "",
+    has_file: true,
+  };
 }
 
 export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManagerProps) {
@@ -234,7 +243,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
   const [avatarUploadPercent, setAvatarUploadPercent] = React.useState(0);
   const [docUploadProgress, setDocUploadProgress] = React.useState<UploadProgressItem[]>([]);
   const [uploadKey, setUploadKey] = React.useState(0);
-  const [previewFile, setPreviewFile] = React.useState<StaffProfileFile | null>(null);
+  const [previewDocument, setPreviewDocument] = React.useState<DocumentRow | null>(null);
   const [fileToDelete, setFileToDelete] = React.useState<StaffProfileFile | null>(null);
   const [selectedEvaluation, setSelectedEvaluation] = React.useState<StaffSkillEvaluationRow | null>(null);
   const [isDeletingFile, setIsDeletingFile] = React.useState(false);
@@ -694,7 +703,14 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
                                   variant="outline"
                                   size="sm"
                                   className="h-8 gap-1.5"
-                                  onClick={() => setPreviewFile(file)}
+                                  onClick={() => {
+                                    const document = toDocumentRow(file);
+                                    if (document) {
+                                      setPreviewDocument(document);
+                                      return;
+                                    }
+                                    window.open(file.url, "_blank", "noopener,noreferrer");
+                                  }}
                                 >
                                   <Eye className="size-3.5" />
                                   Xem
@@ -1018,52 +1034,7 @@ export function StaffDetailManager({ staff, skillEvaluations }: StaffDetailManag
           </CardContent>
         </Card>
       </TabsContent>
-      <Dialog open={Boolean(previewFile)} onOpenChange={(open) => !open && setPreviewFile(null)}>
-        <DialogContent className="max-h-[85vh] w-[min(100vw-2rem,72rem)] overflow-hidden" size="auto">
-          {previewFile ? (
-            <>
-              <DialogHeader>
-                <DialogTitle className="truncate">{previewFile.name}</DialogTitle>
-                <DialogDescription>{previewFile.contentType}</DialogDescription>
-              </DialogHeader>
-              <div className="min-h-[22rem] overflow-hidden rounded-xl border bg-muted/20">
-                {isImageFile(previewFile) ? (
-                  <div className="relative h-[65vh] min-h-[22rem]">
-                    <Image src={previewFile.url} alt={previewFile.name} fill unoptimized className="object-contain" />
-                  </div>
-                ) : canEmbedFile(previewFile) ? (
-                  <iframe src={previewFile.url} title={previewFile.name} className="h-[65vh] w-full bg-background" />
-                ) : (
-                  <div className="flex min-h-[22rem] flex-col items-center justify-center gap-3 p-6 text-center">
-                    <div className="flex size-14 items-center justify-center rounded-2xl bg-background text-muted-foreground shadow-sm">
-                      <FileText className="size-7" />
-                    </div>
-                    <div>
-                      <div className="font-medium">Không thể xem trực tiếp định dạng này.</div>
-                      <p className="mt-1 text-muted-foreground text-sm">
-                        Hãy mở trong tab mới hoặc tải xuống để kiểm tra nội dung.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button asChild variant="outline">
-                  <a href={previewFile.url} target="_blank" rel="noreferrer">
-                    Mở tab mới
-                  </a>
-                </Button>
-                <Button asChild>
-                  <a href={previewFile.url} download={previewFile.name}>
-                    <Download className="size-4" />
-                    Tải xuống
-                  </a>
-                </Button>
-              </div>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <DocumentPreviewDialog document={previewDocument} onOpenChange={(open) => !open && setPreviewDocument(null)} />
       <AlertDialog open={Boolean(fileToDelete)} onOpenChange={(open) => !open && setFileToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CsvViewer } from "@/components/ui/csv-viewer";
 import {
   Dialog,
   DialogContent,
@@ -17,12 +18,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DocxViewerPreview } from "@/components/ui/docx-viewer";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PDFViewer } from "@/components/ui/pdf-viewer";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { XlsxViewerPreview } from "@/components/ui/xlsx-viewer";
 import { ERP_PERMISSIONS } from "@/lib/clerk/erp-rbac-shared";
 import type { DocumentRow } from "@/lib/giaphu-erp/types";
 
@@ -36,21 +39,9 @@ import { ModuleHeader } from "./module-header";
 import { SectionBlock } from "./section-block";
 import { TableRowActions } from "./table-row-actions";
 
-type ExcelCell = {
-  id: string;
-  value: string;
-};
-
-type ExcelRow = {
-  id: string;
-  cells: ExcelCell[];
-};
-
 type PreviewState =
   | { status: "idle" | "loading" }
   | { status: "error"; message: string }
-  | { status: "excel"; sheetName: string; columns: ExcelCell[]; rows: ExcelRow[] }
-  | { status: "word"; buffer: ArrayBuffer }
   | { status: "text"; text: string };
 
 function getDocumentFileUrl(row: DocumentRow, download = false) {
@@ -101,18 +92,26 @@ function isImageDocument(row: DocumentRow) {
 
 function isTextDocument(row: DocumentRow) {
   const mimeType = String(row.mime_type ?? "");
-  return mimeType.startsWith("text/") || ["txt", "csv", "log"].includes(getFileExtension(row));
+  return mimeType.startsWith("text/") || ["txt", "csv", "tsv", "log"].includes(getFileExtension(row));
 }
 
-function isExcelDocument(row: DocumentRow) {
+function isCsvDocument(row: DocumentRow) {
+  const mimeType = String(row.mime_type ?? "");
+  return (
+    ["csv", "tsv"].includes(getFileExtension(row)) ||
+    mimeType === "text/csv" ||
+    mimeType === "text/tab-separated-values"
+  );
+}
+
+function isExtendSpreadsheetDocument(row: DocumentRow) {
   const mimeType = String(row.mime_type ?? "");
   const extension = getFileExtension(row);
 
   return (
-    ["xls", "xlsx", "xlsm", "csv"].includes(extension) ||
-    mimeType === "application/vnd.ms-excel" ||
+    ["xlsx", "xlsm"].includes(extension) ||
     mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    mimeType === "text/csv"
+    mimeType === "application/vnd.ms-excel.sheet.macroEnabled.12"
   );
 }
 
@@ -126,105 +125,6 @@ function isWordDocument(row: DocumentRow) {
 function isLegacyWordDocument(row: DocumentRow) {
   const mimeType = String(row.mime_type ?? "");
   return getFileExtension(row) === "doc" || mimeType === "application/msword";
-}
-
-function buildExcelPreview(rows: unknown[][]) {
-  const limitedRows = rows.slice(0, 120).map((row) => row.slice(0, 40).map((cell) => String(cell ?? "")));
-  const headerValues = limitedRows[0] ?? [];
-  const columnCount = Math.max(...limitedRows.map((row) => row.length), 0);
-  const columns = Array.from({ length: columnCount }, (_, columnIndex) => {
-    const value = headerValues[columnIndex] ?? "";
-
-    return {
-      id: `column-${columnIndex}-${value || "empty"}`,
-      value: value || `Cột ${columnIndex + 1}`,
-    };
-  });
-  const bodyRows = limitedRows.slice(1).map((row, rowIndex) => ({
-    id: `row-${rowIndex}-${row.join("|")}`,
-    cells: columns.map((column, columnIndex) => ({
-      id: `${column.id}-${rowIndex}`,
-      value: row[columnIndex] ?? "",
-    })),
-  }));
-
-  return { columns, rows: bodyRows };
-}
-
-function WordDocumentPreview({ buffer }: { buffer: ArrayBuffer }) {
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const [status, setStatus] = React.useState<"loading" | "ready" | "error">("loading");
-  const [message, setMessage] = React.useState("");
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const container = containerRef.current;
-
-    if (!container) return;
-
-    const bodyContainer = container;
-
-    bodyContainer.textContent = "";
-    setStatus("loading");
-    setMessage("");
-
-    async function renderWordDocument() {
-      try {
-        const { renderAsync } = await import("docx-preview");
-
-        await renderAsync(buffer.slice(0), bodyContainer, undefined, {
-          breakPages: false,
-          className: "docx-preview-content",
-          ignoreHeight: true,
-          ignoreWidth: true,
-          inWrapper: false,
-          renderComments: false,
-          renderEndnotes: true,
-          renderFooters: true,
-          renderFootnotes: true,
-          renderHeaders: true,
-        });
-
-        if (!cancelled) setStatus("ready");
-      } catch (error) {
-        if (!cancelled) {
-          setStatus("error");
-          setMessage(error instanceof Error ? error.message : String(error));
-        }
-      }
-    }
-
-    void renderWordDocument();
-
-    return () => {
-      cancelled = true;
-      bodyContainer.textContent = "";
-    };
-  }, [buffer]);
-
-  return (
-    <ScrollArea className="h-[70svh] rounded-md border bg-background">
-      {status === "loading" ? (
-        <div className="flex min-h-40 items-center justify-center gap-2 text-muted-foreground text-sm">
-          <Loader2 className="size-4 animate-spin" />
-          Đang dựng nội dung Word...
-        </div>
-      ) : null}
-      {status === "error" ? (
-        <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center">
-          <AlertCircle className="size-10 text-muted-foreground" />
-          <div>
-            <p className="font-medium">Không dựng được nội dung Word.</p>
-            <p className="text-muted-foreground text-sm">{message}</p>
-          </div>
-        </div>
-      ) : null}
-      <div
-        className="[&_.docx-preview-content]:!p-0 max-w-none p-6 text-sm leading-7 [&_a]:text-primary [&_h1]:font-semibold [&_h1]:text-2xl [&_h2]:font-semibold [&_h2]:text-xl [&_h3]:font-semibold [&_h3]:text-lg [&_li]:ml-5 [&_ol]:list-decimal [&_p]:mb-3 [&_table]:w-full [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:p-2 [&_ul]:list-disc"
-        ref={containerRef}
-      />
-    </ScrollArea>
-  );
 }
 
 function DocumentEditorDialog({
@@ -385,6 +285,7 @@ export function DocumentPreviewDialog({
 }) {
   const open = Boolean(document);
   const fileUrl = document ? getDocumentFileUrl(document) : "";
+  const [isDarkPreview, setIsDarkPreview] = React.useState(false);
   const [previewState, setPreviewState] = React.useState<PreviewState>({ status: "idle" });
 
   React.useEffect(() => {
@@ -396,7 +297,12 @@ export function DocumentPreviewDialog({
         return;
       }
 
-      if (isPdfDocument(document) || isImageDocument(document)) {
+      if (
+        isPdfDocument(document) ||
+        isImageDocument(document) ||
+        isWordDocument(document) ||
+        isExtendSpreadsheetDocument(document)
+      ) {
         setPreviewState({ status: "idle" });
         return;
       }
@@ -410,7 +316,7 @@ export function DocumentPreviewDialog({
         return;
       }
 
-      if (!isExcelDocument(document) && !isWordDocument(document) && !isTextDocument(document)) {
+      if (!isTextDocument(document)) {
         setPreviewState({
           status: "error",
           message: "Định dạng này chưa hỗ trợ xem trực tiếp. Bạn vẫn có thể tải tệp gốc từ hệ thống.",
@@ -426,22 +332,6 @@ export function DocumentPreviewDialog({
         const arrayBuffer = await response.arrayBuffer();
 
         if (cancelled) return;
-
-        if (isExcelDocument(document)) {
-          const xlsx = await import("xlsx");
-          const workbook = xlsx.read(arrayBuffer, { type: "array", cellDates: true });
-          const sheetName = workbook.SheetNames[0] ?? "Sheet 1";
-          const sheet = workbook.Sheets[sheetName];
-          const preview = buildExcelPreview(xlsx.utils.sheet_to_json(sheet, { header: 1, raw: false }) as unknown[][]);
-
-          if (!cancelled) setPreviewState({ status: "excel", sheetName, ...preview });
-          return;
-        }
-
-        if (isWordDocument(document)) {
-          if (!cancelled) setPreviewState({ status: "word", buffer: arrayBuffer });
-          return;
-        }
 
         const text = new TextDecoder("utf-8").decode(arrayBuffer);
         if (!cancelled) setPreviewState({ status: "text", text });
@@ -466,16 +356,35 @@ export function DocumentPreviewDialog({
     };
   }, [document, fileUrl, open]);
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const rootElement = window.document.documentElement;
+    const updateDarkMode = () => setIsDarkPreview(rootElement.classList.contains("dark"));
+
+    updateDarkMode();
+
+    const observer = new MutationObserver(updateDarkMode);
+    observer.observe(rootElement, { attributes: true, attributeFilter: ["class"] });
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-5xl">
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle>{String(document?.file_name ?? "Hồ sơ")}</DialogTitle>
           <DialogDescription>{String(document?.doc_type ?? "Hồ sơ công trình")}</DialogDescription>
         </DialogHeader>
         {document?.has_file ? (
           isPdfDocument(document) ? (
-            <iframe className="h-[70svh] w-full rounded-md border bg-background" src={fileUrl} title="Xem hồ sơ PDF" />
+            <PDFViewer
+              className="h-[70svh] rounded-md border"
+              fileName={String(document.file_name ?? "Hồ sơ.pdf")}
+              showUpload={false}
+              src={fileUrl}
+            />
           ) : isImageDocument(document) ? (
             <div className="relative h-[70svh] overflow-hidden rounded-md border bg-muted/20">
               <Image
@@ -487,40 +396,31 @@ export function DocumentPreviewDialog({
                 unoptimized
               />
             </div>
+          ) : isExtendSpreadsheetDocument(document) ? (
+            <XlsxViewerPreview
+              className="h-[70svh] rounded-md border"
+              fileName={String(document.file_name ?? "Hồ sơ.xlsx")}
+              isDark={isDarkPreview}
+              onIsDarkChange={setIsDarkPreview}
+              showUpload={false}
+              src={fileUrl}
+            />
+          ) : isWordDocument(document) ? (
+            <DocxViewerPreview
+              className="h-[70svh] rounded-md border"
+              fileName={String(document.file_name ?? "Hồ sơ.docx")}
+              isDark={isDarkPreview}
+              onIsDarkChange={setIsDarkPreview}
+              showUpload={false}
+              src={fileUrl}
+            />
           ) : previewState.status === "loading" ? (
             <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-md border bg-muted/30 p-6 text-center">
               <Loader2 className="size-8 animate-spin text-muted-foreground" />
               <p className="text-muted-foreground text-sm">Đang mở nội dung hồ sơ...</p>
             </div>
-          ) : previewState.status === "excel" ? (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Badge variant="secondary">{previewState.sheetName}</Badge>
-                <p className="text-muted-foreground text-xs">Hiển thị tối đa 120 dòng và 40 cột đầu tiên.</p>
-              </div>
-              <ScrollArea className="h-[70svh] rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {previewState.columns.map((column) => (
-                        <TableHead key={column.id}>{column.value}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {previewState.rows.map((row) => (
-                      <TableRow key={row.id}>
-                        {row.cells.map((cell) => (
-                          <TableCell key={cell.id}>{cell.value}</TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </div>
-          ) : previewState.status === "word" ? (
-            <WordDocumentPreview buffer={previewState.buffer} />
+          ) : previewState.status === "text" && isCsvDocument(document) ? (
+            <CsvViewer className="h-[70svh] rounded-md border" data={previewState.text} search />
           ) : previewState.status === "text" ? (
             <ScrollArea className="h-[70svh] rounded-md border bg-muted/20">
               <pre className="whitespace-pre-wrap p-4 text-sm">{previewState.text}</pre>
