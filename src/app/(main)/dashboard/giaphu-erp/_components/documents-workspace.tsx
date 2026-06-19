@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { DocxViewerPreview } from "@/components/ui/docx-viewer";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { FileUpload } from "@/components/ui/file-upload";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { PDFViewer } from "@/components/ui/pdf-viewer";
@@ -145,6 +146,7 @@ function DocumentEditorDialog({
   const [fileName, setFileName] = React.useState("");
   const [note, setNote] = React.useState("");
   const [previewText, setPreviewText] = React.useState("");
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
   const isEditing = Boolean(document?.id);
 
   React.useEffect(() => {
@@ -154,13 +156,13 @@ function DocumentEditorDialog({
     setFileName(String(document?.file_name ?? ""));
     setNote(String(document?.note ?? ""));
     setPreviewText(String(document?.preview_text ?? ""));
+    setSelectedFile(null);
   }, [document, open]);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const file = formData.get("file");
-    const hasFile = file instanceof File && file.size > 0;
+    const hasFile = Boolean(selectedFile && selectedFile.size > 0);
 
     if (!projectCode) {
       toast.error("Thiếu công trình.");
@@ -187,6 +189,10 @@ function DocumentEditorDialog({
     formData.set("fileName", fileName.trim());
     formData.set("note", note.trim());
     formData.set("previewText", previewText.trim());
+
+    if (selectedFile) {
+      formData.set("file", selectedFile);
+    }
 
     if (isEditing) {
       formData.set("id", String(document?.id ?? ""));
@@ -232,13 +238,20 @@ function DocumentEditorDialog({
             </Field>
             <Field className="md:col-span-2">
               <FieldLabel htmlFor="file">{isEditing ? "Tệp thay thế" : "Tệp hồ sơ"}</FieldLabel>
-              <Input
-                id="file"
-                name="file"
+              <FileUpload
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.txt,image/*"
-                type="file"
-                onChange={(event) => {
-                  const nextFile = event.target.files?.[0];
+                browseLabel="Duyệt tệp"
+                className="rounded-2xl"
+                description="PDF, Word, Excel, CSV, PNG, JPG hoặc định dạng khác"
+                draggingLabel="Thả vào đây"
+                dropzoneClassName="min-h-32 gap-3 px-4 py-5"
+                multiple={false}
+                showBorderBeam={false}
+                showFileList
+                title="Nhấp để tải lên hoặc kéo thả tệp"
+                onFilesAccepted={(files) => {
+                  const nextFile = files[0] ?? null;
+                  setSelectedFile(nextFile);
                   if (nextFile && !fileName.trim()) {
                     setFileName(nextFile.name);
                   }
@@ -550,6 +563,22 @@ export function DocumentsWorkspace() {
                 label: "Trích yếu",
                 accessor: (row) => row.preview_text,
                 render: (row) => <TruncatedCell className="w-[360px] max-w-[360px]" value={row.preview_text} />,
+              },
+              {
+                key: "quick_preview",
+                label: "Xem nhanh",
+                accessor: (row) => (row.has_file ? "Xem nhanh" : "Không"),
+                searchable: false,
+                sortable: false,
+                render: (row) =>
+                  row.has_file ? (
+                    <Button size="sm" variant="outline" onClick={() => setPreviewDocument(row)}>
+                      <Eye />
+                      Xem nhanh
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  ),
               },
               ...(canManage
                 ? [
