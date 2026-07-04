@@ -4,19 +4,68 @@ import { useEffect, useState } from "react";
 
 import { formatDistanceToNow } from "date-fns/formatDistanceToNow";
 import { vi } from "date-fns/locale";
+import { Megaphone, User, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
-import { getInitials } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 
 import type { TelegramDialogDto } from "./types";
 
 type DialogListProps = {
   onSelect: (dialog: TelegramDialogDto) => void;
 };
+
+function getDialogAvatarTone(dialog: TelegramDialogDto) {
+  if (dialog.isChannel) {
+    return {
+      shell: "bg-[linear-gradient(145deg,#dff2ff,#c7e7ff)] text-sky-700",
+      badge: "bg-sky-500 text-white",
+    };
+  }
+
+  if (dialog.isGroup) {
+    return {
+      shell: "bg-[linear-gradient(145deg,#e7f7ee,#cfeeda)] text-emerald-700",
+      badge: "bg-emerald-500 text-white",
+    };
+  }
+
+  return {
+    shell: "bg-[linear-gradient(145deg,#dff1ff,#b9dcff)] text-sky-700",
+    badge: "bg-sky-500 text-white",
+  };
+}
+
+function DialogAvatar({ dialog }: { dialog: TelegramDialogDto }) {
+  const tone = getDialogAvatarTone(dialog);
+  const initials = getInitials(dialog.title).slice(0, 2) || "TG";
+  const BadgeIcon = dialog.isChannel ? Megaphone : dialog.isGroup ? Users : User;
+
+  return (
+    <Avatar className="size-10 shrink-0 overflow-visible ring-1 ring-black/6 dark:ring-white/10">
+      <AvatarFallback
+        className={cn(
+          "relative rounded-full border border-white/70 text-[13px] font-semibold tracking-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
+          tone.shell,
+        )}
+      >
+        <span className="truncate px-1 uppercase">{initials}</span>
+        <span
+          className={cn(
+            "absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full border border-white shadow-sm",
+            tone.badge,
+          )}
+        >
+          <BadgeIcon className="size-2.5" strokeWidth={2.4} />
+        </span>
+      </AvatarFallback>
+    </Avatar>
+  );
+}
 
 export function DialogList({ onSelect }: DialogListProps) {
   const [dialogs, setDialogs] = useState<TelegramDialogDto[] | null>(null);
@@ -77,11 +126,7 @@ export function DialogList({ onSelect }: DialogListProps) {
             onClick={() => onSelect(dialog)}
             className="flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
           >
-            <Avatar className="shrink-0">
-              <AvatarFallback className="bg-primary/10 font-medium text-primary">
-                {getInitials(dialog.title)}
-              </AvatarFallback>
-            </Avatar>
+            <DialogAvatar dialog={dialog} />
 
             <div className="min-w-0 flex-1 overflow-hidden">
               <div className="flex min-w-0 items-center justify-between gap-2">
