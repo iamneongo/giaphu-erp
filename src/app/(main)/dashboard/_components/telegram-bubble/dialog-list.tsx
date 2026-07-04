@@ -40,9 +40,32 @@ function getDialogAvatarTone(dialog: TelegramDialogDto) {
   };
 }
 
+function getDialogAvatarLabel(title: string) {
+  const normalized = title.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  const words = normalized
+    .split(/[\s._\-()[\]{}]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const alphanumeric = words
+    .map((part) => part.replace(/[^0-9A-Za-z]/g, ""))
+    .filter(Boolean);
+
+  if (alphanumeric.length >= 2) {
+    return `${alphanumeric[0][0] ?? ""}${alphanumeric[1][0] ?? ""}`.toUpperCase();
+  }
+
+  const compact = normalized.replace(/[^0-9A-Za-z]/g, "");
+  if (compact.length >= 2) {
+    return compact.slice(0, 2).toUpperCase();
+  }
+
+  return (getInitials(title).replace(/[^0-9A-Za-z]/g, "").slice(0, 2) || "TG").toUpperCase();
+}
+
 function DialogAvatar({ dialog }: { dialog: TelegramDialogDto }) {
   const tone = getDialogAvatarTone(dialog);
-  const initials = getInitials(dialog.title).slice(0, 2) || "TG";
+  const initials = getDialogAvatarLabel(dialog.title);
   const BadgeIcon = dialog.isChannel ? Megaphone : dialog.isGroup ? Users : User;
 
   return (
