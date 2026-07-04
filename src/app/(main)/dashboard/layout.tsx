@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { getEffectiveErpPermissions } from "@/lib/clerk/erp-rbac";
 import { createGiaPhuSchema, getGiaPhuProjectList } from "@/lib/giaphu-erp/db";
+import { ensureTelegramSchema } from "@/lib/giaphu-erp/telegram";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
@@ -16,6 +17,7 @@ import { getPreference } from "@/server/server-actions";
 import { DashboardBreadcrumbs } from "./_components/dashboard-breadcrumbs";
 import { EffectivePermissionsProvider } from "./_components/effective-permissions-provider";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
+import { TelegramBubble } from "./_components/telegram-bubble/telegram-bubble";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
@@ -23,6 +25,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   const organizationReady = Boolean(session.orgId);
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
   await createGiaPhuSchema();
+  await ensureTelegramSchema();
   const [variant, collapsible, initialProjects, effectivePermissions] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
@@ -76,6 +79,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           <div className="h-full px-4 pt-2 pb-4 has-data-[content-padding=false]:p-0 md:px-6 md:pt-4 md:pb-6 md:has-data-[content-padding=false]:p-0">
             {children}
           </div>
+          <TelegramBubble />
         </SidebarInset>
       </EffectivePermissionsProvider>
     </SidebarProvider>

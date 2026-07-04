@@ -11,11 +11,12 @@ const isProtectedRoute = createRouteMatcher([
   "/create-project(.*)",
   "/api/giaphu-erp(.*)",
   "/api/clerk-rbac(.*)",
+  "/api/telegram(.*)",
 ]);
 const isDashboardRoute = createRouteMatcher(["/dashboard(.*)"]);
 const isCreateProjectRoute = createRouteMatcher(["/create-project(.*)"]);
 const isOrganizationSetupRoute = createRouteMatcher(["/dashboard/workspaces(.*)", "/dashboard/profile(.*)"]);
-const isApiRoute = createRouteMatcher(["/api/giaphu-erp(.*)"]);
+const isApiRoute = createRouteMatcher(["/api/giaphu-erp(.*)", "/api/telegram(.*)"]);
 
 function buildRedirectUrl(origin: string, request: Request) {
   try {
@@ -87,5 +88,7 @@ export const config = {
     "/api/giaphu-erp/:path*",
     "/api/clerk-rbac",
     "/api/clerk-rbac/:path*",
+    "/api/telegram",
+    "/api/telegram/:path*",
   ],
 };
