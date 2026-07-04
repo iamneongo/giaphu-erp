@@ -13,7 +13,6 @@ type GlobalTelegramSchemaState = typeof globalThis & {
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 const TELEGRAM_DIALOGS_CACHE_TTL_MS = 15_000;
-const TARGET_TELEGRAM_DIALOG_ID = "-1004430318504";
 
 export const TELEGRAM_LOGIN_PENDING_COOKIE_NAME = "gp_telegram_login_pending";
 export const TELEGRAM_LOGIN_PENDING_MAX_AGE = 600;
@@ -457,6 +456,8 @@ export type TelegramDialogDto = {
   isChannel: boolean;
   unreadCount: number;
   avatarUrl: string;
+  topicId?: number;
+  parentDialogId?: string;
   lastMessage: { text: string; date: string; outgoing: boolean } | null;
 };
 
@@ -489,7 +490,7 @@ async function resolveDialog(client: TelegramClient, dialogId: string) {
   return match;
 }
 
-export async function listTelegramDialogs(encryptedSession: string, limit = 25): Promise<TelegramDialogDto[]> {
+export async function listTelegramDialogs(encryptedSession: string, limit = 100): Promise<TelegramDialogDto[]> {
   const cacheKey = `${encryptedSession}:${limit}`;
   const cache = getDialogsCache();
   const cached = cache.get(cacheKey);
@@ -498,17 +499,54 @@ export async function listTelegramDialogs(encryptedSession: string, limit = 25):
   }
 
   return withStoredTelegramClient(encryptedSession, async (client) => {
-    const targetDialog = await resolveDialog(client, TARGET_TELEGRAM_DIALOG_ID);
-    const targetEntity = targetDialog.entity ?? targetDialog.inputEntity;
-    const forumTopics = await client.invoke(
-      new Api.channels.GetForumTopics({
-        channel: targetEntity,
-        offsetDate: 0,
-        offsetId: 0,
-        offsetTopic: 0,
-        limit,
-      }),
-    );
+    const dialogs = await client.getDialogs({ limit });
+    const serialized = dialogs.map((dialog) => ({
+      id: text(dialog.id?.toString?.() ?? dialog.id),
+      title: text(dialog.title ?? senderDisplayName(dialog.entity) ?? "") || "(Khong co ten)",
+      isGroup: Boolean(dialog.isGroup),
+      isChannel: Boolean(dialog.isChannel),
+      unreadCount: Number(dialog.unreadCount ?? 0),
+      avatarUrl: "",
+      lastMessage: dialog.message
+        ? {
+            text: text(dialog.message.message ?? ""),
+            date: dialog.message.date ? new Date(dialog.message.date * 1000).toISOString() : "",
+            outgoing: Boolean(dialog.message.out),
+          }
+        : null,
+    }));
+
+    cache.set(cacheKey, { dialogs: serialized, expiresAt: Date.now() + TELEGRAM_DIALOGS_CACHE_TTL_MS });
+    return serialized;
+  });
+}
+
+export async function listTelegramTopics(
+  encryptedSession: string,
+  dialogId: string,
+  limit = 50,
+): Promise<TelegramDialogDto[]> {
+  return withStoredTelegramClient(encryptedSession, async (client) => {
+    const dialog = await resolveDialog(client, dialogId);
+    const entity = dialog.entity ?? dialog.inputEntity;
+
+    let forumTopics: Api.messages.ForumTopics;
+    try {
+      forumTopics = await client.invoke(
+        new Api.channels.GetForumTopics({
+          channel: entity,
+          offsetDate: 0,
+          offsetId: 0,
+          offsetTopic: 0,
+          limit,
+        }),
+      );
+    } catch (error) {
+      if (isTelegramTopicsUnavailable(error)) {
+        return [];
+      }
+      throw error;
+    }
 
     const messageById = new Map(
       forumTopics.messages
@@ -516,20 +554,20 @@ export async function listTelegramDialogs(encryptedSession: string, limit = 25):
         .map((message) => [Number(message.id), message]),
     );
 
-    const serialized = forumTopics.topics
+    return forumTopics.topics
       .filter((topic): topic is Api.ForumTopic => topic instanceof Api.ForumTopic)
       .filter((topic) => !topic.hidden)
       .map((topic) => {
         const message = messageById.get(Number(topic.topMessage));
         return {
-          id: `${TARGET_TELEGRAM_DIALOG_ID}:${Number(topic.id)}`,
+          id: `${dialogId}:${Number(topic.id)}`,
           title: text(topic.title ?? "") || (Number(topic.id) === 1 ? "General" : "Topic"),
           isGroup: true,
           isChannel: false,
           unreadCount: Number(topic.unreadCount ?? 0),
           avatarUrl: "",
           topicId: Number(topic.id),
-          parentDialogId: TARGET_TELEGRAM_DIALOG_ID,
+          parentDialogId: dialogId,
           lastMessage: message
             ? {
                 text: text(message.message ?? ""),
@@ -539,8 +577,6 @@ export async function listTelegramDialogs(encryptedSession: string, limit = 25):
             : null,
         };
       });
-    cache.set(cacheKey, { dialogs: serialized, expiresAt: Date.now() + TELEGRAM_DIALOGS_CACHE_TTL_MS });
-    return serialized;
   });
 }
 
@@ -607,6 +643,16 @@ function errorCode(error: unknown): string {
 
 export function isSessionPasswordNeeded(error: unknown) {
   return errorCode(error).includes("SESSION_PASSWORD_NEEDED");
+}
+
+function isTelegramTopicsUnavailable(error: unknown) {
+  const code = errorCode(error);
+  return (
+    code.includes("CHANNEL_FORUM_MISSING") ||
+    code.includes("CHANNEL_INVALID") ||
+    code.includes("CHAT_ID_INVALID") ||
+    code.includes("TOPIC_DELETED")
+  );
 }
 
 export function telegramErrorMessage(error: unknown): string {

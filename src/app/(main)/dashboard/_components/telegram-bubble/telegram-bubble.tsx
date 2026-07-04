@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { ConnectForm } from "./connect-form";
 import { DialogList } from "./dialog-list";
 import { ThreadView } from "./thread-view";
+import { TopicList } from "./topic-list";
 import type { TelegramDialogDto } from "./types";
 
 type BubbleState = "loading" | "disconnected" | "connected";
@@ -27,6 +28,9 @@ export function TelegramBubble() {
   const [hasLoadedStatus, setHasLoadedStatus] = useState(false);
   const [state, setState] = useState<BubbleState>("loading");
   const [selectedDialog, setSelectedDialog] = useState<TelegramDialogDto | null>(null);
+  const [selectedTopicParent, setSelectedTopicParent] = useState<TelegramDialogDto | null>(null);
+  const [topics, setTopics] = useState<TelegramDialogDto[] | null>(null);
+  const [openingDialogId, setOpeningDialogId] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -62,7 +66,42 @@ export function TelegramBubble() {
       // best-effort: local state resets regardless
     }
     setSelectedDialog(null);
+    setSelectedTopicParent(null);
+    setTopics(null);
     setState("disconnected");
+  }, []);
+
+  const handleSelectDialog = useCallback(async (dialog: TelegramDialogDto) => {
+    if (!dialog.isGroup && !dialog.isChannel) {
+      setSelectedTopicParent(null);
+      setTopics(null);
+      setSelectedDialog(dialog);
+      return;
+    }
+
+    setOpeningDialogId(dialog.id);
+    try {
+      const params = new URLSearchParams({ dialogId: dialog.id });
+      const res = await fetch(`/api/telegram/topics?${params.toString()}`);
+      const json = await res.json();
+
+      if (json.status === "success" && Array.isArray(json.data?.topics) && json.data.topics.length > 0) {
+        setSelectedDialog(null);
+        setSelectedTopicParent(dialog);
+        setTopics(json.data.topics);
+        return;
+      }
+
+      setSelectedTopicParent(null);
+      setTopics(null);
+      setSelectedDialog(dialog);
+    } catch {
+      setSelectedTopicParent(null);
+      setTopics(null);
+      setSelectedDialog(dialog);
+    } finally {
+      setOpeningDialogId(null);
+    }
   }, []);
 
   if (!mounted) return null;
@@ -72,7 +111,12 @@ export function TelegramBubble() {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) setSelectedDialog(null);
+        if (!next) {
+          setSelectedDialog(null);
+          setSelectedTopicParent(null);
+          setTopics(null);
+          setOpeningDialogId(null);
+        }
       }}
     >
       <PopoverTrigger asChild>
@@ -132,8 +176,22 @@ export function TelegramBubble() {
               <ConnectForm onConnected={handleConnected} />
             ) : selectedDialog ? (
               <ThreadView dialog={selectedDialog} onBack={() => setSelectedDialog(null)} />
+            ) : selectedTopicParent && topics ? (
+              <TopicList
+                parentTitle={selectedTopicParent.title}
+                topics={topics}
+                onBack={() => {
+                  setSelectedTopicParent(null);
+                  setTopics(null);
+                }}
+                onSelect={setSelectedDialog}
+              />
+            ) : openingDialogId ? (
+              <div className="flex h-full items-center justify-center">
+                <Spinner />
+              </div>
             ) : (
-              <DialogList onSelect={setSelectedDialog} />
+              <DialogList onSelect={handleSelectDialog} />
             )}
           </div>
         </div>
