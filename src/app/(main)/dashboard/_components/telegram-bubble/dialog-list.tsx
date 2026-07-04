@@ -6,7 +6,7 @@ import { formatDistanceToNow } from "date-fns/formatDistanceToNow";
 import { vi } from "date-fns/locale";
 import { toast } from "sonner";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
@@ -78,7 +78,6 @@ export function DialogList({ onSelect }: DialogListProps) {
             className="flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
           >
             <Avatar className="shrink-0">
-              {dialog.avatarUrl ? <AvatarImage src={dialog.avatarUrl} alt="" /> : null}
               <AvatarFallback className="bg-primary/10 font-medium text-primary">
                 {getInitials(dialog.title)}
               </AvatarFallback>

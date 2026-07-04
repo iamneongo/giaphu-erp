@@ -8,9 +8,11 @@ type Row = Record<string, unknown>;
 
 type GlobalTelegramSchemaState = typeof globalThis & {
   __giaPhuTelegramSchemaReady?: boolean;
+  __giaPhuTelegramDialogsCache?: Map<string, { expiresAt: number; dialogs: TelegramDialogDto[] }>;
 };
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
+const TELEGRAM_DIALOGS_CACHE_TTL_MS = 15_000;
 
 export const TELEGRAM_LOGIN_PENDING_COOKIE_NAME = "gp_telegram_login_pending";
 export const TELEGRAM_LOGIN_PENDING_MAX_AGE = 600;
@@ -28,6 +30,12 @@ export function readCookieValue(request: Request, name: string): string {
 
 function text(value: unknown) {
   return value == null ? "" : String(value);
+}
+
+function getDialogsCache() {
+  const state = globalThis as GlobalTelegramSchemaState;
+  state.__giaPhuTelegramDialogsCache ??= new Map();
+  return state.__giaPhuTelegramDialogsCache;
 }
 
 function requireOrganizationId(value: unknown) {
@@ -474,9 +482,16 @@ async function resolveDialogEntity(client: TelegramClient, dialogId: string) {
 }
 
 export async function listTelegramDialogs(encryptedSession: string, limit = 25): Promise<TelegramDialogDto[]> {
+  const cacheKey = `${encryptedSession}:${limit}`;
+  const cache = getDialogsCache();
+  const cached = cache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.dialogs;
+  }
+
   return withStoredTelegramClient(encryptedSession, async (client) => {
     const dialogs = await client.getDialogs({ limit });
-    return dialogs.map((dialog) => {
+    const serialized = dialogs.map((dialog) => {
       const id = text(dialog.id?.toString() ?? "");
       return {
         id,
@@ -484,7 +499,8 @@ export async function listTelegramDialogs(encryptedSession: string, limit = 25):
         isGroup: Boolean(dialog.isGroup),
         isChannel: Boolean(dialog.isChannel),
         unreadCount: Number(dialog.unreadCount ?? 0),
-        avatarUrl: id ? `/api/telegram/avatar?dialogId=${encodeURIComponent(id)}` : "",
+        // Avoid N extra avatar requests when the list opens; initials render instantly.
+        avatarUrl: "",
         lastMessage: dialog.message
           ? {
               text: text(dialog.message.message ?? ""),
@@ -494,6 +510,8 @@ export async function listTelegramDialogs(encryptedSession: string, limit = 25):
           : null,
       };
     });
+    cache.set(cacheKey, { dialogs: serialized, expiresAt: Date.now() + TELEGRAM_DIALOGS_CACHE_TTL_MS });
+    return serialized;
   });
 }
 
