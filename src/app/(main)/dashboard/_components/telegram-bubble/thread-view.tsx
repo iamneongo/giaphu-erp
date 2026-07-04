@@ -30,7 +30,11 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
 
     async function load() {
       try {
-        const res = await fetch(`/api/telegram/messages?dialogId=${encodeURIComponent(dialog.id)}`);
+        const params = new URLSearchParams({ dialogId: dialog.parentDialogId ?? dialog.id });
+        if (dialog.topicId) {
+          params.set("topicId", String(dialog.topicId));
+        }
+        const res = await fetch(`/api/telegram/messages?${params.toString()}`);
         const json = await res.json();
         if (cancelled) return;
         if (json.status === "success") {
@@ -52,7 +56,7 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [dialog.id]);
+  }, [dialog.id, dialog.parentDialogId, dialog.topicId]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: messages is a trigger-only dependency, not read in the effect body
   useEffect(() => {
@@ -79,7 +83,11 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
       const res = await fetch("/api/telegram/send-message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dialogId: dialog.id, text: messageText }),
+        body: JSON.stringify({
+          dialogId: dialog.parentDialogId ?? dialog.id,
+          topicId: dialog.topicId,
+          text: messageText,
+        }),
       });
       const json = await res.json();
       if (json.status !== "success") {

@@ -20,6 +20,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const dialogId = searchParams.get("dialogId")?.trim() ?? "";
+  const topicId = Number(searchParams.get("topicId") ?? "");
   if (!dialogId) {
     return NextResponse.json({ status: "error", message: "Thiếu mã cuộc trò chuyện." }, { status: 400 });
   }
@@ -31,7 +32,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const messages = await listTelegramMessages(account.encryptedSession, dialogId, limit);
+    const messages = await listTelegramMessages(
+      account.encryptedSession,
+      dialogId,
+      Number.isFinite(topicId) && topicId > 0 ? topicId : undefined,
+      limit,
+    );
     return NextResponse.json({ status: "success", data: { messages } });
   } catch (error) {
     console.error("Telegram list messages failed", error);

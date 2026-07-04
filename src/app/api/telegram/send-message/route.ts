@@ -19,8 +19,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = (await request.json().catch(() => ({}))) as { dialogId?: string; text?: string };
+  const body = (await request.json().catch(() => ({}))) as { dialogId?: string; topicId?: number; text?: string };
   const dialogId = String(body.dialogId ?? "").trim();
+  const topicId = Number(body.topicId ?? "");
   const messageText = String(body.text ?? "").trim();
 
   if (!dialogId) {
@@ -36,7 +37,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const message = await sendTelegramMessage(account.encryptedSession, dialogId, messageText);
+    const message = await sendTelegramMessage(
+      account.encryptedSession,
+      dialogId,
+      messageText,
+      Number.isFinite(topicId) && topicId > 0 ? topicId : undefined,
+    );
 
     const user = await currentUser();
     await recordGiaPhuActivity({
@@ -47,7 +53,7 @@ export async function POST(request: Request) {
       action: "telegramSendMessage",
       module: "telegram",
       entityId: dialogId,
-      summary: `Gửi tin nhắn Telegram trong cuộc trò chuyện ${dialogId}`,
+      summary: `Gửi tin nhắn Telegram trong cuộc trò chuyện ${dialogId}${Number.isFinite(topicId) && topicId > 0 ? ` / topic ${topicId}` : ""}`,
     }).catch((error) => console.error("Failed to record Gia Phu activity", error));
 
     return NextResponse.json({ status: "success", data: { message } });

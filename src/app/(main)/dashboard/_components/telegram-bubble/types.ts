@@ -5,6 +5,8 @@ export type TelegramDialogDto = {
   isChannel: boolean;
   unreadCount: number;
   avatarUrl: string;
+  topicId?: number;
+  parentDialogId?: string;
   lastMessage: { text: string; date: string; outgoing: boolean } | null;
 };
 

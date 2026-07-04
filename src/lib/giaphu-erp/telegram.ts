@@ -13,6 +13,7 @@ type GlobalTelegramSchemaState = typeof globalThis & {
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 const TELEGRAM_DIALOGS_CACHE_TTL_MS = 15_000;
+const TARGET_TELEGRAM_DIALOG_ID = "-4430318504";
 
 export const TELEGRAM_LOGIN_PENDING_COOKIE_NAME = "gp_telegram_login_pending";
 export const TELEGRAM_LOGIN_PENDING_MAX_AGE = 600;
@@ -475,10 +476,17 @@ function senderDisplayName(sender: unknown): string {
 }
 
 async function resolveDialogEntity(client: TelegramClient, dialogId: string) {
-  const dialogs = await client.getDialogs({ limit: 100 });
+  const dialogs = await client.getDialogs({ limit: 250 });
   const match = dialogs.find((dialog) => dialog.id?.toString() === dialogId);
   if (!match) throw new Error("Không tìm thấy cuộc trò chuyện này.");
   return match.entity ?? match.inputEntity;
+}
+
+async function resolveDialog(client: TelegramClient, dialogId: string) {
+  const dialogs = await client.getDialogs({ limit: 250 });
+  const match = dialogs.find((dialog) => dialog.id?.toString() === dialogId);
+  if (!match) throw new Error("KhÃ´ng tÃ¬m tháº¥y cuá»™c trÃ² chuyá»‡n nÃ y.");
+  return match;
 }
 
 export async function listTelegramDialogs(encryptedSession: string, limit = 25): Promise<TelegramDialogDto[]> {
@@ -490,26 +498,47 @@ export async function listTelegramDialogs(encryptedSession: string, limit = 25):
   }
 
   return withStoredTelegramClient(encryptedSession, async (client) => {
-    const dialogs = await client.getDialogs({ limit });
-    const serialized = dialogs.map((dialog) => {
-      const id = text(dialog.id?.toString() ?? "");
-      return {
-        id,
-        title: text(dialog.title ?? dialog.name ?? ""),
-        isGroup: Boolean(dialog.isGroup),
-        isChannel: Boolean(dialog.isChannel),
-        unreadCount: Number(dialog.unreadCount ?? 0),
-        // Avoid N extra avatar requests when the list opens; initials render instantly.
-        avatarUrl: "",
-        lastMessage: dialog.message
-          ? {
-              text: text(dialog.message.message ?? ""),
-              date: dialog.message.date ? new Date(dialog.message.date * 1000).toISOString() : "",
-              outgoing: Boolean(dialog.message.out),
-            }
-          : null,
-      };
-    });
+    const targetDialog = await resolveDialog(client, TARGET_TELEGRAM_DIALOG_ID);
+    const targetEntity = targetDialog.entity ?? targetDialog.inputEntity;
+    const forumTopics = await client.invoke(
+      new Api.channels.GetForumTopics({
+        channel: targetEntity,
+        offsetDate: 0,
+        offsetId: 0,
+        offsetTopic: 0,
+        limit,
+      }),
+    );
+
+    const messageById = new Map(
+      forumTopics.messages
+        .filter((message): message is Api.Message => message instanceof Api.Message)
+        .map((message) => [Number(message.id), message]),
+    );
+
+    const serialized = forumTopics.topics
+      .filter((topic): topic is Api.ForumTopic => topic instanceof Api.ForumTopic)
+      .filter((topic) => !topic.hidden)
+      .map((topic) => {
+        const message = messageById.get(Number(topic.topMessage));
+        return {
+          id: `${TARGET_TELEGRAM_DIALOG_ID}:${Number(topic.id)}`,
+          title: text(topic.title ?? "") || (Number(topic.id) === 1 ? "General" : "Topic"),
+          isGroup: true,
+          isChannel: false,
+          unreadCount: Number(topic.unreadCount ?? 0),
+          avatarUrl: "",
+          topicId: Number(topic.id),
+          parentDialogId: TARGET_TELEGRAM_DIALOG_ID,
+          lastMessage: message
+            ? {
+                text: text(message.message ?? ""),
+                date: message.date ? new Date(message.date * 1000).toISOString() : "",
+                outgoing: Boolean(message.out),
+              }
+            : null,
+        };
+      });
     cache.set(cacheKey, { dialogs: serialized, expiresAt: Date.now() + TELEGRAM_DIALOGS_CACHE_TTL_MS });
     return serialized;
   });
@@ -529,11 +558,12 @@ export async function downloadDialogAvatar(encryptedSession: string, dialogId: s
 export async function listTelegramMessages(
   encryptedSession: string,
   dialogId: string,
+  topicId?: number,
   limit = 30,
 ): Promise<TelegramMessageDto[]> {
   return withStoredTelegramClient(encryptedSession, async (client) => {
     const entity = await resolveDialogEntity(client, dialogId);
-    const messages = await client.getMessages(entity, { limit });
+    const messages = await client.getMessages(entity, topicId ? { limit, replyTo: topicId } : { limit });
     return messages
       .slice()
       .reverse()
@@ -551,10 +581,11 @@ export async function sendTelegramMessage(
   encryptedSession: string,
   dialogId: string,
   messageText: string,
+  topicId?: number,
 ): Promise<TelegramMessageDto> {
   return withStoredTelegramClient(encryptedSession, async (client) => {
     const entity = await resolveDialogEntity(client, dialogId);
-    const sent = await client.sendMessage(entity, { message: messageText });
+    const sent = await client.sendMessage(entity, topicId ? { message: messageText, topMsgId: topicId } : { message: messageText });
     return {
       id: Number(sent.id),
       text: text(sent.message ?? messageText),
