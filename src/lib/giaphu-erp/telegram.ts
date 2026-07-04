@@ -13,7 +13,7 @@ type GlobalTelegramSchemaState = typeof globalThis & {
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 const TELEGRAM_DIALOGS_CACHE_TTL_MS = 15_000;
-const TARGET_TELEGRAM_DIALOG_ID = "-4430318504";
+const TARGET_TELEGRAM_DIALOG_ID = "-1004430318504";
 
 export const TELEGRAM_LOGIN_PENDING_COOKIE_NAME = "gp_telegram_login_pending";
 export const TELEGRAM_LOGIN_PENDING_MAX_AGE = 600;
