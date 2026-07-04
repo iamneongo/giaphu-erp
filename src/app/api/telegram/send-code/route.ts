@@ -5,10 +5,8 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { recordGiaPhuActivity } from "@/lib/giaphu-erp/db";
 import { isValidPhoneNumber } from "@/lib/giaphu-erp/phone";
 import {
-  encryptPendingLogin,
+  savePendingTelegramLogin,
   initiateTelegramLogin,
-  TELEGRAM_LOGIN_PENDING_COOKIE_NAME,
-  TELEGRAM_LOGIN_PENDING_MAX_AGE,
   telegramErrorMessage,
 } from "@/lib/giaphu-erp/telegram";
 
@@ -36,7 +34,7 @@ export async function POST(request: Request) {
   try {
     const { partialSession, phoneCodeHash } = await initiateTelegramLogin(phoneNumber);
 
-    const pendingToken = encryptPendingLogin({
+    await savePendingTelegramLogin(session.orgId, session.userId, {
       step: "code",
       partialSession,
       phoneNumber,
@@ -47,13 +45,6 @@ export async function POST(request: Request) {
     });
 
     const response = NextResponse.json({ status: "success", data: { step: "code" } });
-    response.cookies.set(TELEGRAM_LOGIN_PENDING_COOKIE_NAME, pendingToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/api/telegram",
-      maxAge: TELEGRAM_LOGIN_PENDING_MAX_AGE,
-    });
 
     const user = await currentUser();
     await recordGiaPhuActivity({

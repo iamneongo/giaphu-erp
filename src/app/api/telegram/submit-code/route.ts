@@ -4,13 +4,11 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 
 import { recordGiaPhuActivity } from "@/lib/giaphu-erp/db";
 import {
+  clearPendingTelegramLogin,
   completeTelegramCodeSignIn,
-  decryptPendingLogin,
-  encryptPendingLogin,
-  readCookieValue,
+  getPendingTelegramLogin,
+  savePendingTelegramLogin,
   saveTelegramAccount,
-  TELEGRAM_LOGIN_PENDING_COOKIE_NAME,
-  TELEGRAM_LOGIN_PENDING_MAX_AGE,
   telegramErrorMessage,
 } from "@/lib/giaphu-erp/telegram";
 
@@ -28,20 +26,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const pendingToken = readCookieValue(request, TELEGRAM_LOGIN_PENDING_COOKIE_NAME);
-  if (!pendingToken) {
+  const pending = await getPendingTelegramLogin(session.orgId, session.userId);
+  if (!pending) {
     return NextResponse.json(
       { status: "error", message: "Phiên đăng nhập Telegram đã hết hạn, vui lòng thử lại." },
-      { status: 400 },
-    );
-  }
-
-  let pending: ReturnType<typeof decryptPendingLogin>;
-  try {
-    pending = decryptPendingLogin(pendingToken);
-  } catch {
-    return NextResponse.json(
-      { status: "error", message: "Phiên đăng nhập Telegram không hợp lệ, vui lòng thử lại." },
       { status: 400 },
     );
   }
@@ -60,19 +48,12 @@ export async function POST(request: Request) {
     const result = await completeTelegramCodeSignIn(pending, code);
 
     if (result.status === "password_needed") {
-      const response = NextResponse.json({ status: "success", data: { step: "password" } });
-      response.cookies.set(
-        TELEGRAM_LOGIN_PENDING_COOKIE_NAME,
-        encryptPendingLogin({ ...pending, step: "password", partialSession: result.partialSession }),
-        {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          path: "/api/telegram",
-          maxAge: TELEGRAM_LOGIN_PENDING_MAX_AGE,
-        },
-      );
-      return response;
+      await savePendingTelegramLogin(session.orgId, session.userId, {
+        ...pending,
+        step: "password",
+        partialSession: result.partialSession,
+      });
+      return NextResponse.json({ status: "success", data: { step: "password" } });
     }
 
     await saveTelegramAccount(session.orgId, session.userId, {
@@ -84,11 +65,12 @@ export async function POST(request: Request) {
       status: "connected",
     });
 
+    await clearPendingTelegramLogin(session.orgId, session.userId);
+
     const response = NextResponse.json({
       status: "success",
       data: { step: "connected", displayName: result.displayName, username: result.username },
     });
-    response.cookies.set(TELEGRAM_LOGIN_PENDING_COOKIE_NAME, "", { path: "/api/telegram", maxAge: 0 });
 
     const user = await currentUser();
     await recordGiaPhuActivity({

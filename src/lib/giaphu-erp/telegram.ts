@@ -104,6 +104,10 @@ export function decryptPendingLogin(token: string): PendingTelegramLogin {
   return JSON.parse(decryptSecret(token)) as PendingTelegramLogin;
 }
 
+function isPendingLoginExpired(pending: PendingTelegramLogin) {
+  return Date.now() - pending.createdAt > TELEGRAM_LOGIN_PENDING_MAX_AGE * 1000;
+}
+
 // --- Schema ---
 
 export async function ensureTelegramSchema() {
@@ -127,6 +131,17 @@ export async function ensureTelegramSchema() {
   )`;
   await sql`create unique index if not exists gp_telegram_accounts_org_user_idx
     on gp_telegram_accounts (organization_id, clerk_user_id)`;
+
+  await sql`create table if not exists gp_telegram_pending_logins (
+    id bigserial primary key,
+    organization_id text not null default '',
+    clerk_user_id text not null,
+    encrypted_payload text not null default '',
+    updated_at timestamptz not null default now(),
+    created_at timestamptz not null default now()
+  )`;
+  await sql`create unique index if not exists gp_telegram_pending_logins_org_user_idx
+    on gp_telegram_pending_logins (organization_id, clerk_user_id)`;
 
   state.__giaPhuTelegramSchemaReady = true;
 }
@@ -226,6 +241,62 @@ export async function clearTelegramAccount(organizationId: unknown, clerkUserId:
   await sql`
     update gp_telegram_accounts
     set encrypted_session = '', status = 'disconnected', connected_at = null, updated_at = now()
+    where organization_id = ${orgId} and clerk_user_id = ${userId}
+  `;
+}
+
+export async function savePendingTelegramLogin(organizationId: unknown, clerkUserId: unknown, pending: PendingTelegramLogin) {
+  await ensureTelegramSchema();
+  const sql = getSql();
+  const orgId = requireOrganizationId(organizationId);
+  const userId = requireClerkUserId(clerkUserId);
+  const encryptedPayload = encryptPendingLogin(pending);
+
+  await sql`
+    insert into gp_telegram_pending_logins (organization_id, clerk_user_id, encrypted_payload, updated_at)
+    values (${orgId}, ${userId}, ${encryptedPayload}, now())
+    on conflict (organization_id, clerk_user_id) do update set
+      encrypted_payload = excluded.encrypted_payload,
+      updated_at = now()
+  `;
+}
+
+export async function getPendingTelegramLogin(
+  organizationId: unknown,
+  clerkUserId: unknown,
+): Promise<PendingTelegramLogin | null> {
+  await ensureTelegramSchema();
+  const sql = getSql();
+  const orgId = requireOrganizationId(organizationId);
+  const userId = requireClerkUserId(clerkUserId);
+  const rows = (await sql`
+    select encrypted_payload from gp_telegram_pending_logins
+    where organization_id = ${orgId} and clerk_user_id = ${userId}
+    limit 1
+  `) as Row[];
+  const row = rows[0];
+  if (!row) return null;
+
+  try {
+    const pending = decryptPendingLogin(text(row.encrypted_payload));
+    if (isPendingLoginExpired(pending)) {
+      await clearPendingTelegramLogin(orgId, userId);
+      return null;
+    }
+    return pending;
+  } catch {
+    await clearPendingTelegramLogin(orgId, userId);
+    return null;
+  }
+}
+
+export async function clearPendingTelegramLogin(organizationId: unknown, clerkUserId: unknown) {
+  await ensureTelegramSchema();
+  const sql = getSql();
+  const orgId = requireOrganizationId(organizationId);
+  const userId = requireClerkUserId(clerkUserId);
+  await sql`
+    delete from gp_telegram_pending_logins
     where organization_id = ${orgId} and clerk_user_id = ${userId}
   `;
 }
