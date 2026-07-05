@@ -27,6 +27,7 @@ export function TelegramBubble() {
   const [expanded, setExpanded] = useState(false);
   const [hasLoadedStatus, setHasLoadedStatus] = useState(false);
   const [state, setState] = useState<BubbleState>("loading");
+  const [unreadCount, setUnreadCount] = useState(0);
   const [selectedDialog, setSelectedDialog] = useState<TelegramDialogDto | null>(null);
   const [selectedTopicParent, setSelectedTopicParent] = useState<TelegramDialogDto | null>(null);
   const [topics, setTopics] = useState<TelegramDialogDto[] | null>(null);
@@ -54,6 +55,42 @@ export function TelegramBubble() {
     }
   }, [open, hasLoadedStatus, loadStatus]);
 
+  useEffect(() => {
+    if (!mounted || state !== "connected") return;
+
+    let cancelled = false;
+    let previousUnreadCount: number | null = null;
+
+    async function loadUnread(showToast: boolean) {
+      try {
+        const res = await fetch("/api/telegram/dialogs");
+        const json = await res.json();
+        if (cancelled || json.status !== "success") return;
+
+        const dialogs = Array.isArray(json.data?.dialogs) ? (json.data.dialogs as TelegramDialogDto[]) : [];
+        const nextUnreadCount = dialogs.reduce((total, dialog) => total + Number(dialog.unreadCount ?? 0), 0);
+
+        if (showToast && previousUnreadCount != null && nextUnreadCount > previousUnreadCount) {
+          const delta = nextUnreadCount - previousUnreadCount;
+          toast.success(delta > 1 ? `Telegram co ${delta} tin nhan moi` : "Telegram co tin nhan moi");
+        }
+
+        previousUnreadCount = nextUnreadCount;
+        setUnreadCount(nextUnreadCount);
+      } catch {
+        // keep current unread badge state on transient polling errors
+      }
+    }
+
+    void loadUnread(false);
+    const interval = setInterval(() => void loadUnread(true), 20000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [mounted, state]);
+
   const handleConnected = useCallback(() => {
     setState("connected");
     toast.success("Đã kết nối Telegram");
@@ -68,6 +105,7 @@ export function TelegramBubble() {
     setSelectedDialog(null);
     setSelectedTopicParent(null);
     setTopics(null);
+    setUnreadCount(0);
     setState("disconnected");
   }, []);
 
@@ -126,6 +164,11 @@ export function TelegramBubble() {
           aria-label="Mở Telegram"
         >
           <SimpleIcon icon={siTelegram} className="size-5 fill-[#26A5E4]" />
+          {state === "connected" && unreadCount > 0 ? (
+            <span className="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-[#26A5E4] px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-[0_0_0_3px_rgba(10,15,24,0.9)]">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          ) : null}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -141,6 +184,11 @@ export function TelegramBubble() {
             <div className="flex items-center gap-2 font-medium text-sm">
               <SimpleIcon icon={siTelegram} className="size-4 fill-[#26A5E4]" />
               Telegram
+              {state === "connected" && unreadCount > 0 ? (
+                <span className="rounded-full bg-[#26A5E4]/18 px-2 py-0.5 text-[11px] text-[#8fd8ff]">
+                  {unreadCount > 99 ? "99+" : unreadCount} moi
+                </span>
+              ) : null}
             </div>
             <div className="flex items-center gap-0.5">
               {state === "connected" ? (
