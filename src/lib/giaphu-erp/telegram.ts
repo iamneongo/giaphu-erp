@@ -13,6 +13,7 @@ type GlobalTelegramSchemaState = typeof globalThis & {
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 const TELEGRAM_DIALOGS_CACHE_TTL_MS = 15_000;
+const TARGET_TELEGRAM_DIALOG_ID = "-1004430318504";
 
 export const TELEGRAM_LOGIN_PENDING_COOKIE_NAME = "gp_telegram_login_pending";
 export const TELEGRAM_LOGIN_PENDING_MAX_AGE = 600;
@@ -30,6 +31,10 @@ export function readCookieValue(request: Request, name: string): string {
 
 function text(value: unknown) {
   return value == null ? "" : String(value);
+}
+
+function isTargetTelegramDialogId(dialogId: string) {
+  return dialogId === TARGET_TELEGRAM_DIALOG_ID;
 }
 
 function getDialogsCache() {
@@ -477,6 +482,9 @@ function senderDisplayName(sender: unknown): string {
 }
 
 async function resolveDialogEntity(client: TelegramClient, dialogId: string) {
+  if (!isTargetTelegramDialogId(dialogId)) {
+    throw new Error("Telegram group nay khong duoc phep hien thi.");
+  }
   const dialogs = await client.getDialogs({ limit: 250 });
   const match = dialogs.find((dialog) => dialog.id?.toString() === dialogId);
   if (!match) throw new Error("Không tìm thấy cuộc trò chuyện này.");
@@ -484,6 +492,9 @@ async function resolveDialogEntity(client: TelegramClient, dialogId: string) {
 }
 
 async function resolveDialog(client: TelegramClient, dialogId: string) {
+  if (!isTargetTelegramDialogId(dialogId)) {
+    throw new Error("Telegram group nay khong duoc phep hien thi.");
+  }
   const dialogs = await client.getDialogs({ limit: 250 });
   const match = dialogs.find((dialog) => dialog.id?.toString() === dialogId);
   if (!match) throw new Error("KhÃ´ng tÃ¬m tháº¥y cuá»™c trÃ² chuyá»‡n nÃ y.");
@@ -500,21 +511,23 @@ export async function listTelegramDialogs(encryptedSession: string, limit = 100)
 
   return withStoredTelegramClient(encryptedSession, async (client) => {
     const dialogs = await client.getDialogs({ limit });
-    const serialized = dialogs.map((dialog) => ({
-      id: text(dialog.id?.toString?.() ?? dialog.id),
-      title: text(dialog.title ?? senderDisplayName(dialog.entity) ?? "") || "(Khong co ten)",
-      isGroup: Boolean(dialog.isGroup),
-      isChannel: Boolean(dialog.isChannel),
-      unreadCount: Number(dialog.unreadCount ?? 0),
-      avatarUrl: "",
-      lastMessage: dialog.message
-        ? {
-            text: text(dialog.message.message ?? ""),
-            date: dialog.message.date ? new Date(dialog.message.date * 1000).toISOString() : "",
-            outgoing: Boolean(dialog.message.out),
-          }
-        : null,
-    }));
+    const serialized = dialogs
+      .filter((dialog) => text(dialog.id?.toString?.() ?? dialog.id) === TARGET_TELEGRAM_DIALOG_ID)
+      .map((dialog) => ({
+        id: text(dialog.id?.toString?.() ?? dialog.id),
+        title: text(dialog.title ?? senderDisplayName(dialog.entity) ?? "") || "(Khong co ten)",
+        isGroup: Boolean(dialog.isGroup),
+        isChannel: Boolean(dialog.isChannel),
+        unreadCount: Number(dialog.unreadCount ?? 0),
+        avatarUrl: "",
+        lastMessage: dialog.message
+          ? {
+              text: text(dialog.message.message ?? ""),
+              date: dialog.message.date ? new Date(dialog.message.date * 1000).toISOString() : "",
+              outgoing: Boolean(dialog.message.out),
+            }
+          : null,
+      }));
 
     cache.set(cacheKey, { dialogs: serialized, expiresAt: Date.now() + TELEGRAM_DIALOGS_CACHE_TTL_MS });
     return serialized;
