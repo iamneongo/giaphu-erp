@@ -106,6 +106,54 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
+  function updateMessageReactions(messageId: number, emoji: string, chosen: boolean) {
+    setMessages((current) =>
+      (current ?? []).map((message) => {
+        if (message.id !== messageId) {
+          return message;
+        }
+
+        const nextReactions = [...(message.reactions ?? [])]
+          .map((reaction) => ({
+            ...reaction,
+            chosen: reaction.emoji === emoji ? false : reaction.chosen,
+          }))
+          .filter((reaction) => reaction.count > 0);
+
+        const reactionIndex = nextReactions.findIndex((reaction) => reaction.emoji === emoji);
+
+        if (chosen) {
+          if (reactionIndex >= 0) {
+            const existing = nextReactions[reactionIndex];
+            nextReactions[reactionIndex] = {
+              ...existing,
+              count: Math.max(0, existing.count - 1),
+              chosen: false,
+            };
+          }
+        } else if (reactionIndex >= 0) {
+          const existing = nextReactions[reactionIndex];
+          nextReactions[reactionIndex] = {
+            ...existing,
+            count: existing.count + 1,
+            chosen: true,
+          };
+        } else {
+          nextReactions.push({
+            emoji,
+            count: 1,
+            chosen: true,
+          });
+        }
+
+        return {
+          ...message,
+          reactions: nextReactions.filter((reaction) => reaction.count > 0),
+        };
+      }),
+    );
+  }
+
   async function handleSend(event: React.FormEvent) {
     event.preventDefault();
     const messageText = reply.trim();
@@ -136,9 +184,10 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
       if (json.status !== "success") {
         throw new Error(json.message || "Gui tin nhan that bai.");
       }
-      await loadMessages(false);
+      void loadMessages(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gui tin nhan that bai.");
+      void loadMessages(false);
     } finally {
       setSending(false);
     }
@@ -172,7 +221,7 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
       if (json.data?.url) {
         window.open(String(json.data.url), "_blank", "noopener,noreferrer");
       }
-      await loadMessages(false);
+      void loadMessages(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Khong bam duoc tuy chon.");
     } finally {
@@ -184,7 +233,11 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
     const actionId = `reaction:${messageId}:${emoji}`;
     if (actingKey) return;
 
+    const snapshot = messages;
+    updateMessageReactions(messageId, emoji, chosen);
     setActingKey(actionId);
+    setActiveReactionMessageId(null);
+
     try {
       const res = await fetch("/api/telegram/react", {
         method: "POST",
@@ -199,9 +252,9 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
       if (json.status !== "success") {
         throw new Error(json.message || "Khong tha reaction duoc.");
       }
-      setActiveReactionMessageId(null);
-      await loadMessages(false);
+      void loadMessages(false);
     } catch (error) {
+      setMessages(snapshot ?? null);
       toast.error(error instanceof Error ? error.message : "Khong tha reaction duoc.");
     } finally {
       setActingKey(null);
@@ -299,7 +352,9 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
                       {activeReactionMessageId === message.id ? (
                         <div className="absolute bottom-full left-0 mb-2 flex gap-1 rounded-full border border-white/10 bg-[#0b1220] p-1 shadow-lg">
                           {TELEGRAM_REACTION_OPTIONS.map((emoji) => {
-                            const chosen = Boolean(message.reactions?.some((reaction) => reaction.emoji === emoji && reaction.chosen));
+                            const chosen = Boolean(
+                              message.reactions?.some((reaction) => reaction.emoji === emoji && reaction.chosen),
+                            );
                             return (
                               <button
                                 key={`${message.id}-picker-${emoji}`}
