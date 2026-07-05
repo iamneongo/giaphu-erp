@@ -16,4 +16,18 @@ export type TelegramMessageDto = {
   date: string;
   outgoing: boolean;
   senderName: string;
+  buttons?: TelegramMessageButtonDto[][];
+  reactions?: TelegramMessageReactionDto[];
+};
+
+export type TelegramMessageButtonDto = {
+  text: string;
+  kind: "callback" | "url" | "switch_inline" | "text" | "unknown";
+  url?: string;
+};
+
+export type TelegramMessageReactionDto = {
+  emoji: string;
+  count: number;
+  chosen: boolean;
 };

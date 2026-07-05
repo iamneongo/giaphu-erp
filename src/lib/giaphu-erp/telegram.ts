@@ -472,6 +472,20 @@ export type TelegramMessageDto = {
   date: string;
   outgoing: boolean;
   senderName: string;
+  buttons?: TelegramMessageButtonDto[][];
+  reactions?: TelegramMessageReactionDto[];
+};
+
+export type TelegramMessageButtonDto = {
+  text: string;
+  kind: "callback" | "url" | "switch_inline" | "text" | "unknown";
+  url?: string;
+};
+
+export type TelegramMessageReactionDto = {
+  emoji: string;
+  count: number;
+  chosen: boolean;
 };
 
 function senderDisplayName(sender: unknown): string {
@@ -479,6 +493,53 @@ function senderDisplayName(sender: unknown): string {
   const entity = sender as { firstName?: string; lastName?: string; title?: string; username?: string };
   const fullName = [entity.firstName, entity.lastName].filter(Boolean).join(" ").trim();
   return fullName || entity.title || entity.username || "";
+}
+
+function serializeMessageButtons(message: Api.Message) {
+  const buttons = "buttons" in message ? message.buttons : undefined;
+  if (!buttons?.length) return undefined;
+
+  return buttons.map((row) =>
+    row.map((button) => {
+      const kind: TelegramMessageButtonDto["kind"] = button.data
+        ? "callback"
+        : button.url
+          ? "url"
+          : button.inlineQuery
+            ? "switch_inline"
+            : button.text
+              ? "text"
+              : "unknown";
+
+      return {
+        text: text(button.text ?? ""),
+        kind,
+        url: text(button.url ?? "") || undefined,
+      };
+    }),
+  );
+}
+
+function serializeMessageReactions(message: Api.Message) {
+  const results = message.reactions?.results;
+  if (!results?.length) return undefined;
+
+  return results.flatMap((reaction) => {
+    if (!(reaction instanceof Api.ReactionCount)) {
+      return [];
+    }
+    if (!(reaction.reaction instanceof Api.ReactionEmoji)) {
+      return [];
+    }
+
+    return [
+      {
+        emoji: text(reaction.reaction.emoticon),
+        count: Number(reaction.count ?? 0),
+        chosen: typeof reaction.chosenOrder === "number",
+      },
+    ];
+  });
 }
 
 async function resolveDialogEntity(client: TelegramClient, dialogId: string) {
@@ -622,6 +683,8 @@ export async function listTelegramMessages(
         date: message.date ? new Date(message.date * 1000).toISOString() : "",
         outgoing: Boolean(message.out),
         senderName: senderDisplayName(message.sender),
+        buttons: message instanceof Api.Message ? serializeMessageButtons(message) : undefined,
+        reactions: message instanceof Api.Message ? serializeMessageReactions(message) : undefined,
       }));
   });
 }
@@ -642,6 +705,47 @@ export async function sendTelegramMessage(
       outgoing: true,
       senderName: "",
     };
+  });
+}
+
+export async function clickTelegramMessageButton(
+  encryptedSession: string,
+  dialogId: string,
+  messageId: number,
+  row: number,
+  column: number,
+) {
+  return withStoredTelegramClient(encryptedSession, async (client) => {
+    const entity = await resolveDialogEntity(client, dialogId);
+    const [message] = await client.getMessages(entity, { ids: [messageId] });
+    if (!(message instanceof Api.Message)) {
+      throw new Error("Khong tim thay tin nhan de thao tac.");
+    }
+
+    const result = await message.click({ i: row, j: column });
+    return {
+      url: typeof result === "string" ? result : "",
+    };
+  });
+}
+
+export async function reactToTelegramMessage(
+  encryptedSession: string,
+  dialogId: string,
+  messageId: number,
+  emoji?: string,
+) {
+  return withStoredTelegramClient(encryptedSession, async (client) => {
+    const entity = await resolveDialogEntity(client, dialogId);
+    await client.invoke(
+      new Api.messages.SendReaction({
+        peer: entity,
+        msgId: messageId,
+        big: false,
+        addToRecent: true,
+        reaction: emoji ? [new Api.ReactionEmoji({ emoticon: emoji })] : [],
+      }),
+    );
   });
 }
 
