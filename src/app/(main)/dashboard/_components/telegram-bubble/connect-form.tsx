@@ -81,14 +81,15 @@ export function ConnectForm({ onConnected }: ConnectFormProps) {
   }
 
   return (
-    <div className="flex h-full flex-col justify-center gap-3 p-4">
-      <p className="text-center text-muted-foreground text-sm">
+    <div className="flex h-full flex-col justify-center gap-4 p-4 text-white">
+      <p className="text-center text-sm text-white/55">
         Đăng nhập tài khoản Telegram cá nhân để xem nhanh tin nhắn ngay trong ERP.
       </p>
 
       {step === "phone" ? (
         <form className="flex flex-col gap-2" onSubmit={handleSendCode}>
           <Input
+            className="h-11 rounded-2xl border-white/10 bg-white/6 px-4 text-white placeholder:text-white/35 focus-visible:border-[#26A5E4] focus-visible:ring-[#26A5E4]/20"
             type="tel"
             placeholder="+84 901 234 567"
             value={phoneNumber}
@@ -96,7 +97,11 @@ export function ConnectForm({ onConnected }: ConnectFormProps) {
             disabled={loading}
             autoFocus
           />
-          <Button type="submit" disabled={loading}>
+          <Button
+            type="submit"
+            className="h-11 rounded-2xl border-0 bg-[#26A5E4] text-white hover:bg-[#1d93cd]"
+            disabled={loading}
+          >
             {loading ? <Spinner /> : "Gửi mã xác thực"}
           </Button>
         </form>
@@ -104,8 +109,9 @@ export function ConnectForm({ onConnected }: ConnectFormProps) {
 
       {step === "code" ? (
         <form className="flex flex-col gap-2" onSubmit={handleSubmitCode}>
-          <p className="text-muted-foreground text-xs">Nhập mã Telegram vừa gửi tới {phoneNumber}.</p>
+          <p className="text-xs text-white/45">Nhập mã Telegram vừa gửi tới {phoneNumber}.</p>
           <Input
+            className="h-11 rounded-2xl border-white/10 bg-white/6 px-4 text-white placeholder:text-white/35 focus-visible:border-[#26A5E4] focus-visible:ring-[#26A5E4]/20"
             inputMode="numeric"
             placeholder="Mã xác thực"
             value={code}
@@ -113,7 +119,11 @@ export function ConnectForm({ onConnected }: ConnectFormProps) {
             disabled={loading}
             autoFocus
           />
-          <Button type="submit" disabled={loading}>
+          <Button
+            type="submit"
+            className="h-11 rounded-2xl border-0 bg-[#26A5E4] text-white hover:bg-[#1d93cd]"
+            disabled={loading}
+          >
             {loading ? <Spinner /> : "Xác nhận"}
           </Button>
         </form>
@@ -121,8 +131,9 @@ export function ConnectForm({ onConnected }: ConnectFormProps) {
 
       {step === "password" ? (
         <form className="flex flex-col gap-2" onSubmit={handleSubmitPassword}>
-          <p className="text-muted-foreground text-xs">Tài khoản có bật xác thực 2 lớp, vui lòng nhập mật khẩu.</p>
+          <p className="text-xs text-white/45">Tài khoản có bật xác thực 2 lớp, vui lòng nhập mật khẩu.</p>
           <Input
+            className="h-11 rounded-2xl border-white/10 bg-white/6 px-4 text-white placeholder:text-white/35 focus-visible:border-[#26A5E4] focus-visible:ring-[#26A5E4]/20"
             type="password"
             placeholder="Mật khẩu"
             value={password}
@@ -130,7 +141,11 @@ export function ConnectForm({ onConnected }: ConnectFormProps) {
             disabled={loading}
             autoFocus
           />
-          <Button type="submit" disabled={loading}>
+          <Button
+            type="submit"
+            className="h-11 rounded-2xl border-0 bg-[#26A5E4] text-white hover:bg-[#1d93cd]"
+            disabled={loading}
+          >
             {loading ? <Spinner /> : "Xác nhận"}
           </Button>
         </form>

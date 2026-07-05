@@ -122,22 +122,22 @@ export function TelegramBubble() {
       <PopoverTrigger asChild>
         <Button
           type="button"
-          className="fixed right-6 bottom-6 z-50 size-12 rounded-full p-0 shadow-lg"
+          className="fixed right-6 bottom-6 z-50 size-12 rounded-full border border-white/15 bg-[#0a0f18] p-0 text-white shadow-[0_18px_40px_rgba(0,0,0,0.45)] hover:bg-[#121826]"
           aria-label="Mở Telegram"
         >
-          <SimpleIcon icon={siTelegram} className="size-5 fill-primary-foreground" />
+          <SimpleIcon icon={siTelegram} className="size-5 fill-[#26A5E4]" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
         sideOffset={12}
         className={cn(
-          "gap-0 overflow-hidden p-0 transition-[width,height] duration-150 ease-out",
+          "gap-0 overflow-hidden border border-white/10 bg-[#0b0f19]/96 p-0 text-white shadow-[0_24px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl transition-[width,height] duration-150 ease-out",
           expanded ? "h-[75vh] w-[26rem] max-w-[92vw]" : "h-[28rem] w-80",
         )}
       >
-        <div className="flex h-full flex-col overflow-hidden rounded-lg">
-          <div className="flex items-center justify-between gap-1 border-b bg-muted/40 px-3 py-2">
+        <div className="flex h-full flex-col overflow-hidden rounded-[inherit] bg-[radial-gradient(circle_at_top,#182033_0%,#0b0f19_55%,#070b12_100%)]">
+          <div className="flex items-center justify-between gap-1 border-b border-white/10 bg-white/5 px-3 py-2">
             <div className="flex items-center gap-2 font-medium text-sm">
               <SimpleIcon icon={siTelegram} className="size-4 fill-[#26A5E4]" />
               Telegram
@@ -148,6 +148,7 @@ export function TelegramBubble() {
                   type="button"
                   variant="ghost"
                   size="icon-sm"
+                  className="text-white/65 hover:bg-white/10 hover:text-white"
                   onClick={handleDisconnect}
                   aria-label="Ngắt kết nối"
                   title="Ngắt kết nối"
@@ -159,6 +160,7 @@ export function TelegramBubble() {
                 type="button"
                 variant="ghost"
                 size="icon-sm"
+                className="text-white/65 hover:bg-white/10 hover:text-white"
                 onClick={() => setExpanded((current) => !current)}
                 aria-label={expanded ? "Thu nhỏ" : "Phóng to"}
                 title={expanded ? "Thu nhỏ" : "Phóng to"}

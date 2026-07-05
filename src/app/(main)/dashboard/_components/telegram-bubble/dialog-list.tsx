@@ -22,20 +22,20 @@ type DialogListProps = {
 function getDialogAvatarTone(dialog: TelegramDialogDto) {
   if (dialog.isChannel) {
     return {
-      shell: "bg-[linear-gradient(145deg,#dff2ff,#c7e7ff)] text-sky-700",
+      shell: "bg-[linear-gradient(145deg,#132033,#0c1524)] text-sky-200",
       badge: "bg-sky-500 text-white",
     };
   }
 
   if (dialog.isGroup) {
     return {
-      shell: "bg-[linear-gradient(145deg,#e7f7ee,#cfeeda)] text-emerald-700",
+      shell: "bg-[linear-gradient(145deg,#162432,#0f1724)] text-emerald-200",
       badge: "bg-emerald-500 text-white",
     };
   }
 
   return {
-    shell: "bg-[linear-gradient(145deg,#dff1ff,#b9dcff)] text-sky-700",
+    shell: "bg-[linear-gradient(145deg,#152334,#0e1624)] text-slate-100",
     badge: "bg-sky-500 text-white",
   };
 }
@@ -69,17 +69,17 @@ function DialogAvatar({ dialog }: { dialog: TelegramDialogDto }) {
   const BadgeIcon = dialog.isChannel ? Megaphone : dialog.isGroup ? Users : User;
 
   return (
-    <Avatar className="size-10 shrink-0 overflow-visible ring-1 ring-black/6 dark:ring-white/10">
+    <Avatar className="size-10 shrink-0 overflow-visible ring-1 ring-white/10">
       <AvatarFallback
         className={cn(
-          "relative rounded-full border border-white/70 text-[13px] font-semibold tracking-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]",
+          "relative rounded-full border border-white/10 text-[13px] font-semibold tracking-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]",
           tone.shell,
         )}
       >
         <span className="truncate px-1 uppercase">{initials}</span>
         <span
           className={cn(
-            "absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full border border-white shadow-sm",
+            "absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full border border-[#0b0f19] shadow-sm",
             tone.badge,
           )}
         >
@@ -133,7 +133,7 @@ export function DialogList({ onSelect }: DialogListProps) {
 
   if (!dialogs || dialogs.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center px-4 text-center text-muted-foreground text-sm">
+      <div className="flex h-full items-center justify-center px-4 text-center text-sm text-white/45">
         Chưa có cuộc trò chuyện nào.
       </div>
     );
@@ -141,13 +141,13 @@ export function DialogList({ onSelect }: DialogListProps) {
 
   return (
     <ScrollArea className="h-full" orientation="vertical">
-      <div className="flex flex-col divide-y">
+      <div className="flex flex-col divide-y divide-white/6">
         {dialogs.map((dialog) => (
           <button
             key={dialog.id}
             type="button"
             onClick={() => onSelect(dialog)}
-            className="flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+            className="flex items-center gap-3 px-3 py-3 text-left text-white transition-colors hover:bg-white/6"
           >
             <DialogAvatar dialog={dialog} />
 
@@ -157,21 +157,21 @@ export function DialogList({ onSelect }: DialogListProps) {
                   {dialog.title || "(Không có tên)"}
                 </span>
                 {dialog.lastMessage?.date ? (
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                  <span className="shrink-0 text-[11px] text-white/40">
                     {formatDistanceToNow(new Date(dialog.lastMessage.date), { addSuffix: true, locale: vi })}
                   </span>
                 ) : null}
               </div>
 
               <div className="flex min-w-0 items-center justify-between gap-2">
-                <span className="min-w-0 flex-1 truncate text-muted-foreground text-xs">
+                <span className="min-w-0 flex-1 truncate text-[12px] text-white/55">
                   {dialog.lastMessage?.outgoing ? "Bạn: " : ""}
                   {dialog.lastMessage?.text || ""}
                 </span>
                 {dialog.unreadCount > 0 ? (
                   <Badge
                     variant="default"
-                    className="h-4.5 min-w-4.5 shrink-0 justify-center rounded-full px-1 text-[10px]"
+                    className="h-5 min-w-5 shrink-0 justify-center rounded-full border-0 bg-[#26A5E4] px-1 text-[10px] text-white"
                   >
                     {dialog.unreadCount > 99 ? "99+" : dialog.unreadCount}
                   </Badge>

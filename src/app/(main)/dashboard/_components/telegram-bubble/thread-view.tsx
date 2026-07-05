@@ -101,9 +101,16 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b px-2 py-1.5">
-        <Button type="button" variant="ghost" size="icon-sm" onClick={onBack} aria-label="Quay lại">
+    <div className="flex h-full flex-col text-white">
+      <div className="flex items-center gap-2 border-b border-white/10 px-2 py-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="text-white/65 hover:bg-white/10 hover:text-white"
+          onClick={onBack}
+          aria-label="Quay lại"
+        >
           <ArrowLeft className="size-4" />
         </Button>
         <span className="min-w-0 flex-1 truncate font-medium text-sm">{dialog.title}</span>
@@ -116,17 +123,19 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
           </div>
         ) : (
           <ScrollArea className="h-full" orientation="vertical">
-            <div className="flex flex-col gap-2 p-3">
+            <div className="flex flex-col gap-2.5 p-3">
               {(messages ?? []).map((message) => (
                 <div
                   key={message.id}
                   className={cn(
-                    "max-w-[85%] rounded-lg px-2.5 py-1.5 text-sm",
-                    message.outgoing ? "self-end bg-primary text-primary-foreground" : "self-start bg-muted",
+                    "max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm",
+                    message.outgoing
+                      ? "self-end rounded-br-md bg-[#26A5E4] text-white"
+                      : "self-start rounded-bl-md border border-white/8 bg-white/6 text-white",
                   )}
                 >
                   {!message.outgoing && message.senderName ? (
-                    <div className="mb-0.5 font-medium text-xs opacity-70">{message.senderName}</div>
+                    <div className="mb-0.5 font-medium text-[11px] text-white/55">{message.senderName}</div>
                   ) : null}
                   <div className="whitespace-pre-wrap break-words">{message.text}</div>
                 </div>
@@ -137,14 +146,21 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
         )}
       </div>
 
-      <form className="flex items-center gap-1.5 border-t p-2" onSubmit={handleSend}>
+      <form className="flex items-center gap-2 border-t border-white/10 bg-white/4 p-2" onSubmit={handleSend}>
         <Input
+          className="h-10 rounded-full border-white/10 bg-white/6 px-4 text-white placeholder:text-white/35 focus-visible:border-[#26A5E4] focus-visible:ring-[#26A5E4]/20"
           placeholder="Nhập trả lời..."
           value={reply}
           onChange={(event) => setReply(event.target.value)}
           disabled={sending}
         />
-        <Button type="submit" size="icon" disabled={sending || !reply.trim()} aria-label="Gửi">
+        <Button
+          type="submit"
+          size="icon"
+          className="rounded-full border-0 bg-[#26A5E4] text-white hover:bg-[#1d93cd]"
+          disabled={sending || !reply.trim()}
+          aria-label="Gửi"
+        >
           {sending ? <Spinner /> : <Send className="size-4" />}
         </Button>
       </form>
