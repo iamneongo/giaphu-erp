@@ -472,8 +472,14 @@ export type TelegramMessageDto = {
   date: string;
   outgoing: boolean;
   senderName: string;
+  media?: TelegramMessageMediaDto | null;
   buttons?: TelegramMessageButtonDto[][];
   reactions?: TelegramMessageReactionDto[];
+};
+
+export type TelegramMessageMediaDto = {
+  kind: "image";
+  url: string;
 };
 
 export type TelegramMessageButtonDto = {
@@ -540,6 +546,28 @@ function serializeMessageReactions(message: Api.Message) {
       },
     ];
   });
+}
+
+function isImageDocument(document: Api.Document | undefined) {
+  return Boolean(document?.mimeType && document.mimeType.startsWith("image/"));
+}
+
+function serializeMessageMedia(dialogId: string, message: Api.Message): TelegramMessageMediaDto | null {
+  if (message.photo) {
+    return {
+      kind: "image",
+      url: `/api/telegram/message-media?dialogId=${encodeURIComponent(dialogId)}&messageId=${message.id}`,
+    };
+  }
+
+  if (isImageDocument(message.document)) {
+    return {
+      kind: "image",
+      url: `/api/telegram/message-media?dialogId=${encodeURIComponent(dialogId)}&messageId=${message.id}`,
+    };
+  }
+
+  return null;
 }
 
 async function resolveDialogEntity(client: TelegramClient, dialogId: string) {
@@ -683,6 +711,7 @@ export async function listTelegramMessages(
         date: message.date ? new Date(message.date * 1000).toISOString() : "",
         outgoing: Boolean(message.out),
         senderName: senderDisplayName(message.sender),
+        media: message instanceof Api.Message ? serializeMessageMedia(dialogId, message) : null,
         buttons: message instanceof Api.Message ? serializeMessageButtons(message) : undefined,
         reactions: message instanceof Api.Message ? serializeMessageReactions(message) : undefined,
       }));
@@ -746,6 +775,34 @@ export async function reactToTelegramMessage(
         reaction: emoji ? [new Api.ReactionEmoji({ emoticon: emoji })] : [],
       }),
     );
+  });
+}
+
+export async function downloadTelegramMessageMedia(
+  encryptedSession: string,
+  dialogId: string,
+  messageId: number,
+): Promise<{ buffer: Buffer; contentType: string } | null> {
+  return withStoredTelegramClient(encryptedSession, async (client) => {
+    const entity = await resolveDialogEntity(client, dialogId);
+    const [message] = await client.getMessages(entity, { ids: [messageId] });
+    if (!(message instanceof Api.Message)) {
+      return null;
+    }
+
+    const downloaded = await client.downloadMedia(message, {});
+    if (!downloaded || typeof downloaded === "string" || downloaded.length === 0) {
+      return null;
+    }
+
+    const contentType = isImageDocument(message.document)
+      ? text(message.document?.mimeType) || "application/octet-stream"
+      : "image/jpeg";
+
+    return {
+      buffer: downloaded,
+      contentType,
+    };
   });
 }
 

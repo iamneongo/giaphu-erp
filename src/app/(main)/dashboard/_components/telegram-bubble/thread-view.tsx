@@ -298,6 +298,14 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
                   {!message.outgoing && message.senderName ? (
                     <div className="mb-0.5 font-medium text-[11px] text-white/55">{message.senderName}</div>
                   ) : null}
+                  {message.media?.kind === "image" ? (
+                    <img
+                      src={message.media.url}
+                      alt="Telegram media"
+                      className="mb-2 max-h-72 w-full rounded-xl border border-white/10 object-cover"
+                      loading="lazy"
+                    />
+                  ) : null}
                   <div className="whitespace-pre-wrap break-words">{message.text}</div>
 
                   {message.buttons?.length ? (
