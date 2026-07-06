@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { ArrowLeft, Send, SmilePlus } from "lucide-react";
+import { ArrowLeft, Minus, Plus, Send, SmilePlus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
@@ -20,6 +21,9 @@ type ThreadViewProps = {
 };
 
 const TELEGRAM_REACTION_OPTIONS = ["👍", "❤️", "🔥", "🎉", "😄", "😢"];
+const TELEGRAM_MEDIA_MIN_ZOOM = 1;
+const TELEGRAM_MEDIA_MAX_ZOOM = 3;
+const TELEGRAM_MEDIA_ZOOM_STEP = 0.25;
 
 export function ThreadView({ dialog, onBack, onRead }: ThreadViewProps) {
   const [messages, setMessages] = useState<TelegramMessageDto[] | null>(null);
@@ -29,6 +33,8 @@ export function ThreadView({ dialog, onBack, onRead }: ThreadViewProps) {
   const [activeReactionMessageId, setActiveReactionMessageId] = useState<number | null>(null);
   const [actingKey, setActingKey] = useState<string | null>(null);
   const [lastMarkedReadId, setLastMarkedReadId] = useState(0);
+  const [expandedMedia, setExpandedMedia] = useState<{ mediaUrls: string[]; activeIndex: number } | null>(null);
+  const [expandedMediaZoom, setExpandedMediaZoom] = useState(1);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function loadMessages(showError = true) {
@@ -276,166 +282,310 @@ export function ThreadView({ dialog, onBack, onRead }: ThreadViewProps) {
     }
   }
 
+  function handleOpenMedia(mediaUrls: string[], activeIndex: number) {
+    setExpandedMedia({ mediaUrls, activeIndex });
+    setExpandedMediaZoom(1);
+  }
+
+  function handleZoomIn() {
+    setExpandedMediaZoom((current) => Math.min(TELEGRAM_MEDIA_MAX_ZOOM, current + TELEGRAM_MEDIA_ZOOM_STEP));
+  }
+
+  function handleZoomOut() {
+    setExpandedMediaZoom((current) => Math.max(TELEGRAM_MEDIA_MIN_ZOOM, current - TELEGRAM_MEDIA_ZOOM_STEP));
+  }
+
+  function handleResetZoom() {
+    setExpandedMediaZoom(1);
+  }
+
+  function handleExpandedMediaOpenChange(open: boolean) {
+    if (!open) {
+      setExpandedMedia(null);
+      setExpandedMediaZoom(1);
+    }
+  }
+
+  function handleExpandedMediaStep(direction: -1 | 1) {
+    setExpandedMedia((current) => {
+      if (!current) return current;
+      const nextIndex = current.activeIndex + direction;
+      if (nextIndex < 0 || nextIndex >= current.mediaUrls.length) {
+        return current;
+      }
+      setExpandedMediaZoom(1);
+      return {
+        ...current,
+        activeIndex: nextIndex,
+      };
+    });
+  }
+
   return (
-    <div className="flex h-full flex-col text-white">
-      <div className="flex items-center gap-2 border-b border-white/10 px-2 py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="text-white/65 hover:bg-white/10 hover:text-white"
-          onClick={onBack}
-          aria-label="Quay lai"
-        >
-          <ArrowLeft className="size-4" />
-        </Button>
-        <span className="min-w-0 flex-1 truncate font-medium text-sm">{dialog.title}</span>
-      </div>
+    <>
+      <div className="flex h-full flex-col text-white">
+        <div className="flex items-center gap-2 border-b border-white/10 px-2 py-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="text-white/65 hover:bg-white/10 hover:text-white"
+            onClick={onBack}
+            aria-label="Quay lai"
+          >
+            <ArrowLeft className="size-4" />
+          </Button>
+          <span className="min-w-0 flex-1 truncate font-medium text-sm">{dialog.title}</span>
+        </div>
 
-      <div className="min-h-0 flex-1">
-        {loading && !messages ? (
-          <div className="flex h-full items-center justify-center">
-            <Spinner />
-          </div>
-        ) : (
-          <ScrollArea className="h-full" orientation="vertical">
-            <div className="flex flex-col gap-2.5 p-3">
-              {(messages ?? []).map((message) => (
-                <div
-                  key={message.id}
-                  className={cn(
-                    "max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm",
-                    message.outgoing
-                      ? "self-end rounded-br-md bg-[#26A5E4] text-white"
-                      : "self-start rounded-bl-md border border-white/8 bg-white/6 text-white",
-                  )}
-                >
-                  {!message.outgoing && message.senderName ? (
-                    <div className="mb-0.5 font-medium text-[11px] text-white/55">{message.senderName}</div>
-                  ) : null}
-                  {message.media?.length ? (
-                    <div
-                      className={cn(
-                        "mb-2 grid gap-1.5",
-                        message.media.length === 1 ? "grid-cols-1" : "grid-cols-2",
-                      )}
-                    >
-                      {message.media.map((media, mediaIndex) => (
-                        <img
-                          key={`${message.id}-media-${mediaIndex}-${media.url}`}
-                          src={media.url}
-                          alt="Telegram media"
-                          className={cn(
-                            "w-full rounded-xl border border-white/10 object-cover",
-                            message.media?.length === 1 ? "max-h-72" : "aspect-square max-h-44",
-                          )}
-                          loading="lazy"
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="whitespace-pre-wrap break-words">{message.text}</div>
-
-                  {message.buttons?.length ? (
-                    <div className="mt-2 flex flex-col gap-1.5">
-                      {message.buttons.map((row, rowIndex) => (
-                        <div key={`${message.id}-row-${rowIndex}`} className="flex flex-wrap gap-1.5">
-                          {row.map((button, columnIndex) => (
-                            <button
-                              key={`${message.id}-${rowIndex}-${columnIndex}-${button.text}`}
-                              type="button"
-                              className="rounded-full border border-[#26A5E4]/35 bg-[#26A5E4]/14 px-3 py-1 text-left text-[12px] text-[#8fd8ff] transition-colors hover:bg-[#26A5E4]/22"
-                              disabled={Boolean(actingKey)}
-                              onClick={() => void handleButtonClick(message.id, rowIndex, columnIndex, button)}
-                            >
-                              {button.text}
-                            </button>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {message.reactions?.map((reaction) => (
-                      <button
-                        key={`${message.id}-${reaction.emoji}`}
-                        type="button"
+        <div className="min-h-0 flex-1">
+          {loading && !messages ? (
+            <div className="flex h-full items-center justify-center">
+              <Spinner />
+            </div>
+          ) : (
+            <ScrollArea className="h-full" orientation="vertical">
+              <div className="flex flex-col gap-2.5 p-3">
+                {(messages ?? []).map((message) => (
+                  <div
+                    key={message.id}
+                    className={cn(
+                      "max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm",
+                      message.outgoing
+                        ? "self-end rounded-br-md bg-[#26A5E4] text-white"
+                        : "self-start rounded-bl-md border border-white/8 bg-white/6 text-white",
+                    )}
+                  >
+                    {!message.outgoing && message.senderName ? (
+                      <div className="mb-0.5 font-medium text-[11px] text-white/55">{message.senderName}</div>
+                    ) : null}
+                    {message.media?.length ? (
+                      <div
                         className={cn(
-                          "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
-                          reaction.chosen
-                            ? "border-[#26A5E4]/50 bg-[#26A5E4]/18 text-[#b7e8ff]"
-                            : "border-white/10 bg-white/6 text-white/75 hover:bg-white/10",
+                          "mb-2 grid gap-1.5",
+                          message.media.length === 1 ? "grid-cols-1" : "grid-cols-2",
                         )}
-                        disabled={Boolean(actingKey)}
-                        onClick={() => void handleReaction(message.id, reaction.emoji, reaction.chosen)}
                       >
-                        {reaction.emoji} {reaction.count}
-                      </button>
-                    ))}
+                        {message.media.map((media, mediaIndex) => (
+                          <button
+                            key={`${message.id}-media-${mediaIndex}-${media.url}`}
+                            type="button"
+                            className="overflow-hidden rounded-xl border border-white/10"
+                            onClick={() => handleOpenMedia(message.media?.map((item) => item.url) ?? [], mediaIndex)}
+                          >
+                            <img
+                              src={media.url}
+                              alt="Telegram media"
+                              className={cn(
+                                "w-full cursor-zoom-in object-cover transition-transform duration-150 hover:scale-[1.02]",
+                                message.media?.length === 1 ? "max-h-72" : "aspect-square max-h-44",
+                              )}
+                              loading="lazy"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="whitespace-pre-wrap break-words">{message.text}</div>
 
-                    <div className="relative">
-                      <button
-                        type="button"
-                        className="rounded-full border border-white/10 bg-white/6 p-1.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-                        onClick={() =>
-                          setActiveReactionMessageId((current) => (current === message.id ? null : message.id))
-                        }
-                      >
-                        <SmilePlus className="size-3.5" />
-                      </button>
-
-                      {activeReactionMessageId === message.id ? (
-                        <div className="absolute bottom-full left-0 mb-2 flex gap-1 rounded-full border border-white/10 bg-[#0b1220] p-1 shadow-lg">
-                          {TELEGRAM_REACTION_OPTIONS.map((emoji) => {
-                            const chosen = Boolean(
-                              message.reactions?.some((reaction) => reaction.emoji === emoji && reaction.chosen),
-                            );
-                            return (
+                    {message.buttons?.length ? (
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        {message.buttons.map((row, rowIndex) => (
+                          <div key={`${message.id}-row-${rowIndex}`} className="flex flex-wrap gap-1.5">
+                            {row.map((button, columnIndex) => (
                               <button
-                                key={`${message.id}-picker-${emoji}`}
+                                key={`${message.id}-${rowIndex}-${columnIndex}-${button.text}`}
                                 type="button"
-                                className={cn(
-                                  "rounded-full px-2 py-1 text-sm transition-colors hover:bg-white/10",
-                                  chosen ? "bg-[#26A5E4]/18" : "",
-                                )}
+                                className="rounded-full border border-[#26A5E4]/35 bg-[#26A5E4]/14 px-3 py-1 text-left text-[12px] text-[#8fd8ff] transition-colors hover:bg-[#26A5E4]/22"
                                 disabled={Boolean(actingKey)}
-                                onClick={() => void handleReaction(message.id, emoji, chosen)}
+                                onClick={() => void handleButtonClick(message.id, rowIndex, columnIndex, button)}
                               >
-                                {emoji}
+                                {button.text}
                               </button>
-                            );
-                          })}
-                        </div>
-                      ) : null}
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {message.reactions?.map((reaction) => (
+                        <button
+                          key={`${message.id}-${reaction.emoji}`}
+                          type="button"
+                          className={cn(
+                            "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+                            reaction.chosen
+                              ? "border-[#26A5E4]/50 bg-[#26A5E4]/18 text-[#b7e8ff]"
+                              : "border-white/10 bg-white/6 text-white/75 hover:bg-white/10",
+                          )}
+                          disabled={Boolean(actingKey)}
+                          onClick={() => void handleReaction(message.id, reaction.emoji, reaction.chosen)}
+                        >
+                          {reaction.emoji} {reaction.count}
+                        </button>
+                      ))}
+
+                      <div className="relative">
+                        <button
+                          type="button"
+                          className="rounded-full border border-white/10 bg-white/6 p-1.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                          onClick={() =>
+                            setActiveReactionMessageId((current) => (current === message.id ? null : message.id))
+                          }
+                        >
+                          <SmilePlus className="size-3.5" />
+                        </button>
+
+                        {activeReactionMessageId === message.id ? (
+                          <div className="absolute bottom-full left-0 mb-2 flex gap-1 rounded-full border border-white/10 bg-[#0b1220] p-1 shadow-lg">
+                            {TELEGRAM_REACTION_OPTIONS.map((emoji) => {
+                              const chosen = Boolean(
+                                message.reactions?.some((reaction) => reaction.emoji === emoji && reaction.chosen),
+                              );
+                              return (
+                                <button
+                                  key={`${message.id}-picker-${emoji}`}
+                                  type="button"
+                                  className={cn(
+                                    "rounded-full px-2 py-1 text-sm transition-colors hover:bg-white/10",
+                                    chosen ? "bg-[#26A5E4]/18" : "",
+                                  )}
+                                  disabled={Boolean(actingKey)}
+                                  onClick={() => void handleReaction(message.id, emoji, chosen)}
+                                >
+                                  {emoji}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              <div ref={bottomRef} />
-            </div>
-          </ScrollArea>
-        )}
+                ))}
+                <div ref={bottomRef} />
+              </div>
+            </ScrollArea>
+          )}
+        </div>
+
+        <form className="flex items-center gap-2 border-t border-white/10 bg-white/4 p-2" onSubmit={handleSend}>
+          <Input
+            className="h-10 rounded-full border-white/10 bg-white/6 px-4 text-white placeholder:text-white/35 focus-visible:border-[#26A5E4] focus-visible:ring-[#26A5E4]/20"
+            placeholder="Nhap tra loi..."
+            value={reply}
+            onChange={(event) => setReply(event.target.value)}
+            disabled={sending}
+          />
+          <Button
+            type="submit"
+            size="icon"
+            className="rounded-full border-0 bg-[#26A5E4] text-white hover:bg-[#1d93cd]"
+            disabled={sending || !reply.trim()}
+            aria-label="Gui"
+          >
+            {sending ? <Spinner /> : <Send className="size-4" />}
+          </Button>
+        </form>
       </div>
 
-      <form className="flex items-center gap-2 border-t border-white/10 bg-white/4 p-2" onSubmit={handleSend}>
-        <Input
-          className="h-10 rounded-full border-white/10 bg-white/6 px-4 text-white placeholder:text-white/35 focus-visible:border-[#26A5E4] focus-visible:ring-[#26A5E4]/20"
-          placeholder="Nhap tra loi..."
-          value={reply}
-          onChange={(event) => setReply(event.target.value)}
-          disabled={sending}
-        />
-        <Button
-          type="submit"
-          size="icon"
-          className="rounded-full border-0 bg-[#26A5E4] text-white hover:bg-[#1d93cd]"
-          disabled={sending || !reply.trim()}
-          aria-label="Gui"
+      <Dialog open={Boolean(expandedMedia)} onOpenChange={handleExpandedMediaOpenChange}>
+        <DialogContent
+          className="max-h-[calc(100svh-2rem)] w-[min(100vw-1rem,72rem)] border-white/10 bg-[#05070d]/96 p-0 text-white sm:max-w-6xl"
+          size="auto"
+          showCloseButton={false}
         >
-          {sending ? <Spinner /> : <Send className="size-4" />}
-        </Button>
-      </form>
-    </div>
+          {expandedMedia ? (
+            <div className="flex max-h-[calc(100svh-2rem)] flex-col overflow-hidden">
+              <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+                <div className="text-sm text-white/65">
+                  {expandedMedia.activeIndex + 1}/{expandedMedia.mediaUrls.length}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-white/70 hover:bg-white/10 hover:text-white"
+                    onClick={handleZoomOut}
+                    disabled={expandedMediaZoom <= TELEGRAM_MEDIA_MIN_ZOOM}
+                    aria-label="Zoom out"
+                  >
+                    <Minus className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-8 rounded-full px-3 text-xs text-white/70 hover:bg-white/10 hover:text-white"
+                    onClick={handleResetZoom}
+                  >
+                    {Math.round(expandedMediaZoom * 100)}%
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-white/70 hover:bg-white/10 hover:text-white"
+                    onClick={handleZoomIn}
+                    disabled={expandedMediaZoom >= TELEGRAM_MEDIA_MAX_ZOOM}
+                    aria-label="Zoom in"
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-white/70 hover:bg-white/10 hover:text-white"
+                    onClick={() => handleExpandedMediaOpenChange(false)}
+                    aria-label="Dong anh"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[radial-gradient(circle_at_top,#101726_0%,#05070d_70%)] p-4">
+                {expandedMedia.mediaUrls.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/35 text-white hover:bg-black/50 disabled:opacity-30"
+                    onClick={() => handleExpandedMediaStep(-1)}
+                    disabled={expandedMedia.activeIndex === 0}
+                    aria-label="Anh truoc"
+                  >
+                    <ArrowLeft className="size-4" />
+                  </Button>
+                ) : null}
+
+                <img
+                  src={expandedMedia.mediaUrls[expandedMedia.activeIndex]}
+                  alt="Telegram media expanded"
+                  className="max-h-full max-w-full rounded-xl object-contain transition-transform duration-150"
+                  style={{ transform: `scale(${expandedMediaZoom})` }}
+                />
+
+                {expandedMedia.mediaUrls.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/35 text-white hover:bg-black/50 disabled:opacity-30"
+                    onClick={() => handleExpandedMediaStep(1)}
+                    disabled={expandedMedia.activeIndex === expandedMedia.mediaUrls.length - 1}
+                    aria-label="Anh tiep theo"
+                  >
+                    <ArrowLeft className="size-4 rotate-180" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
