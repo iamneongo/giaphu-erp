@@ -472,7 +472,7 @@ export type TelegramMessageDto = {
   date: string;
   outgoing: boolean;
   senderName: string;
-  media?: TelegramMessageMediaDto | null;
+  media?: TelegramMessageMediaDto[];
   buttons?: TelegramMessageButtonDto[][];
   reactions?: TelegramMessageReactionDto[];
 };
@@ -568,6 +568,58 @@ function serializeMessageMedia(dialogId: string, message: Api.Message): Telegram
   }
 
   return null;
+}
+
+function serializeTelegramMessage(dialogId: string, message: Api.TypeMessage): TelegramMessageDto {
+  const fullMessage = message instanceof Api.Message ? message : null;
+  const singleMedia = fullMessage ? serializeMessageMedia(dialogId, fullMessage) : null;
+  const messageDate = "date" in message && typeof message.date === "number" ? message.date : 0;
+
+  return {
+    id: Number(message.id),
+    text: text(fullMessage?.message ?? ""),
+    date: messageDate ? new Date(messageDate * 1000).toISOString() : "",
+    outgoing: Boolean(fullMessage?.out),
+    senderName: senderDisplayName(fullMessage?.sender),
+    media: singleMedia ? [singleMedia] : [],
+    buttons: fullMessage ? serializeMessageButtons(fullMessage) : undefined,
+    reactions: fullMessage ? serializeMessageReactions(fullMessage) : undefined,
+  };
+}
+
+function mergeTelegramAlbumMessages(messages: TelegramMessageDto[], rawMessages: Api.TypeMessage[]) {
+  const merged: TelegramMessageDto[] = [];
+  const groupedAlbumIndexes = new Map<string, number>();
+
+  for (let index = 0; index < messages.length; index += 1) {
+    const current = messages[index];
+    const rawMessage = rawMessages[index];
+    const groupedId =
+      rawMessage instanceof Api.Message && rawMessage.groupedId != null ? text(rawMessage.groupedId) : "";
+
+    if (!groupedId) {
+      merged.push(current);
+      continue;
+    }
+
+    const existingIndex = groupedAlbumIndexes.get(groupedId);
+    if (existingIndex == null) {
+      groupedAlbumIndexes.set(groupedId, merged.length);
+      merged.push(current);
+      continue;
+    }
+
+    const existing = merged[existingIndex];
+    merged[existingIndex] = {
+      ...existing,
+      text: existing.text || current.text,
+      media: [...(existing.media ?? []), ...(current.media ?? [])],
+      buttons: existing.buttons?.length ? existing.buttons : current.buttons,
+      reactions: existing.reactions?.length ? existing.reactions : current.reactions,
+    };
+  }
+
+  return merged;
 }
 
 async function resolveDialogEntity(client: TelegramClient, dialogId: string) {
@@ -702,19 +754,10 @@ export async function listTelegramMessages(
   return withStoredTelegramClient(encryptedSession, async (client) => {
     const entity = await resolveDialogEntity(client, dialogId);
     const messages = await client.getMessages(entity, topicId ? { limit, replyTo: topicId } : { limit });
-    return messages
-      .slice()
-      .reverse()
-      .map((message) => ({
-        id: Number(message.id),
-        text: text(message.message ?? ""),
-        date: message.date ? new Date(message.date * 1000).toISOString() : "",
-        outgoing: Boolean(message.out),
-        senderName: senderDisplayName(message.sender),
-        media: message instanceof Api.Message ? serializeMessageMedia(dialogId, message) : null,
-        buttons: message instanceof Api.Message ? serializeMessageButtons(message) : undefined,
-        reactions: message instanceof Api.Message ? serializeMessageReactions(message) : undefined,
-      }));
+    const orderedMessages = messages.slice().reverse();
+    const serializedMessages = orderedMessages.map((message) => serializeTelegramMessage(dialogId, message));
+
+    return mergeTelegramAlbumMessages(serializedMessages, orderedMessages);
   });
 }
 

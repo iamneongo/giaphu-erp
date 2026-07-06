@@ -313,13 +313,26 @@ export function ThreadView({ dialog, onBack, onRead }: ThreadViewProps) {
                   {!message.outgoing && message.senderName ? (
                     <div className="mb-0.5 font-medium text-[11px] text-white/55">{message.senderName}</div>
                   ) : null}
-                  {message.media?.kind === "image" ? (
-                    <img
-                      src={message.media.url}
-                      alt="Telegram media"
-                      className="mb-2 max-h-72 w-full rounded-xl border border-white/10 object-cover"
-                      loading="lazy"
-                    />
+                  {message.media?.length ? (
+                    <div
+                      className={cn(
+                        "mb-2 grid gap-1.5",
+                        message.media.length === 1 ? "grid-cols-1" : "grid-cols-2",
+                      )}
+                    >
+                      {message.media.map((media, mediaIndex) => (
+                        <img
+                          key={`${message.id}-media-${mediaIndex}-${media.url}`}
+                          src={media.url}
+                          alt="Telegram media"
+                          className={cn(
+                            "w-full rounded-xl border border-white/10 object-cover",
+                            message.media?.length === 1 ? "max-h-72" : "aspect-square max-h-44",
+                          )}
+                          loading="lazy"
+                        />
+                      ))}
+                    </div>
                   ) : null}
                   <div className="whitespace-pre-wrap break-words">{message.text}</div>
 

@@ -16,7 +16,7 @@ export type TelegramMessageDto = {
   date: string;
   outgoing: boolean;
   senderName: string;
-  media?: TelegramMessageMediaDto | null;
+  media?: TelegramMessageMediaDto[];
   buttons?: TelegramMessageButtonDto[][];
   reactions?: TelegramMessageReactionDto[];
 };
