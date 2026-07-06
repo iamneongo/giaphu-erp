@@ -94,25 +94,34 @@ export function DialogList({ onSelect }: DialogListProps) {
   const [dialogs, setDialogs] = useState<TelegramDialogDto[] | null>(null);
   const [loading, setLoading] = useState(true);
 
+  async function loadDialogs(showError = true) {
+    try {
+      const res = await fetch("/api/telegram/dialogs");
+      const json = await res.json();
+      if (json.status === "success") {
+        setDialogs(json.data.dialogs);
+      } else {
+        if (showError) {
+          toast.error(json.message || "Khong tai duoc danh sach tro chuyen.");
+        }
+        setDialogs((current) => current ?? []);
+      }
+    } catch {
+      if (showError) {
+        toast.error("Khong tai duoc danh sach tro chuyen.");
+      }
+      setDialogs((current) => current ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      try {
-        const res = await fetch("/api/telegram/dialogs");
-        const json = await res.json();
-        if (cancelled) return;
-        if (json.status === "success") {
-          setDialogs(json.data.dialogs);
-        } else {
-          toast.error(json.message || "Không tải được danh sách trò chuyện.");
-          setDialogs((current) => current ?? []);
-        }
-      } catch {
-        if (!cancelled) setDialogs((current) => current ?? []);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      if (cancelled) return;
+      await loadDialogs(false);
     }
 
     void load();
@@ -120,6 +129,17 @@ export function DialogList({ onSelect }: DialogListProps) {
     return () => {
       cancelled = true;
       clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleReadStateChanged() {
+      void loadDialogs(false);
+    }
+
+    window.addEventListener("telegram-read-state-changed", handleReadStateChanged);
+    return () => {
+      window.removeEventListener("telegram-read-state-changed", handleReadStateChanged);
     };
   }, []);
 
@@ -134,28 +154,45 @@ export function DialogList({ onSelect }: DialogListProps) {
   if (!dialogs || dialogs.length === 0) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-sm text-white/45">
-        Chưa có cuộc trò chuyện nào.
+        Chua co cuoc tro chuyen nao.
       </div>
     );
   }
 
+  const sortedDialogs = [...dialogs].sort((left, right) => {
+    const unreadDelta = Number(right.unreadCount > 0) - Number(left.unreadCount > 0);
+    if (unreadDelta !== 0) return unreadDelta;
+    return right.unreadCount - left.unreadCount;
+  });
+
   return (
     <ScrollArea className="h-full" orientation="vertical">
       <div className="flex flex-col divide-y divide-white/6">
-        {dialogs.map((dialog) => (
+        {sortedDialogs.map((dialog) => (
           <button
             key={dialog.id}
             type="button"
             onClick={() => onSelect(dialog)}
-            className="flex items-center gap-3 px-3 py-3 text-left text-white transition-colors hover:bg-white/6"
+            className={
+              dialog.unreadCount > 0
+                ? "flex items-center gap-3 border-l-2 border-[#26A5E4] bg-[#26A5E4]/8 px-3 py-3 text-left text-white transition-colors hover:bg-[#26A5E4]/14"
+                : "flex items-center gap-3 px-3 py-3 text-left text-white transition-colors hover:bg-white/6"
+            }
           >
             <DialogAvatar dialog={dialog} />
 
             <div className="min-w-0 flex-1 overflow-hidden">
               <div className="flex min-w-0 items-center justify-between gap-2">
-                <span className="min-w-0 flex-1 truncate font-medium text-sm">
-                  {dialog.title || "(Không có tên)"}
-                </span>
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate font-medium text-sm">
+                    {dialog.title || "(Khong co ten)"}
+                  </span>
+                  {dialog.unreadCount > 0 ? (
+                    <span className="shrink-0 rounded-full bg-[#26A5E4]/18 px-1.5 py-0.5 text-[10px] font-medium text-[#8fd8ff]">
+                      Moi
+                    </span>
+                  ) : null}
+                </div>
                 {dialog.lastMessage?.date ? (
                   <span className="shrink-0 text-[11px] text-white/40">
                     {formatDistanceToNow(new Date(dialog.lastMessage.date), { addSuffix: true, locale: vi })}
@@ -165,7 +202,7 @@ export function DialogList({ onSelect }: DialogListProps) {
 
               <div className="flex min-w-0 items-center justify-between gap-2">
                 <span className="min-w-0 flex-1 truncate text-[12px] text-white/55">
-                  {dialog.lastMessage?.outgoing ? "Bạn: " : ""}
+                  {dialog.lastMessage?.outgoing ? "Ban: " : ""}
                   {dialog.lastMessage?.text || ""}
                 </span>
                 {dialog.unreadCount > 0 ? (

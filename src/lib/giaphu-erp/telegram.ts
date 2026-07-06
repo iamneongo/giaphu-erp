@@ -778,6 +778,34 @@ export async function reactToTelegramMessage(
   });
 }
 
+export async function markTelegramThreadRead(
+  encryptedSession: string,
+  dialogId: string,
+  readMaxId: number,
+  topicId?: number,
+) {
+  return withStoredTelegramClient(encryptedSession, async (client) => {
+    const entity = await resolveDialogEntity(client, dialogId);
+
+    if (topicId && Number.isFinite(topicId) && topicId > 0) {
+      try {
+        await client.invoke(
+          new Api.messages.ReadDiscussion({
+            peer: entity,
+            msgId: topicId,
+            readMaxId,
+          }),
+        );
+        return;
+      } catch (error) {
+        console.error("Telegram read discussion failed, falling back to markAsRead", error);
+      }
+    }
+
+    await client.markAsRead(entity, readMaxId);
+  });
+}
+
 export async function downloadTelegramMessageMedia(
   encryptedSession: string,
   dialogId: string,

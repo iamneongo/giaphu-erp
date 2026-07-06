@@ -55,17 +55,12 @@ export function TelegramBubble() {
     }
   }, [open, hasLoadedStatus, loadStatus]);
 
-  useEffect(() => {
-    if (!mounted || state !== "connected") return;
-
-    let cancelled = false;
-    let previousUnreadCount: number | null = null;
-
-    async function loadUnread(showToast: boolean) {
+  const refreshUnread = useCallback(
+    async (showToast: boolean, previousUnreadCount: number | null) => {
       try {
         const res = await fetch("/api/telegram/dialogs");
         const json = await res.json();
-        if (cancelled || json.status !== "success") return;
+        if (json.status !== "success") return previousUnreadCount;
 
         const dialogs = Array.isArray(json.data?.dialogs) ? (json.data.dialogs as TelegramDialogDto[]) : [];
         const nextUnreadCount = dialogs.reduce((total, dialog) => total + Number(dialog.unreadCount ?? 0), 0);
@@ -75,25 +70,48 @@ export function TelegramBubble() {
           toast.success(delta > 1 ? `Telegram co ${delta} tin nhan moi` : "Telegram co tin nhan moi");
         }
 
-        previousUnreadCount = nextUnreadCount;
         setUnreadCount(nextUnreadCount);
+        return nextUnreadCount;
       } catch {
-        // keep current unread badge state on transient polling errors
+        return previousUnreadCount;
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!mounted || state !== "connected") return;
+
+    let cancelled = false;
+    let previousUnreadCount: number | null = null;
+
+    async function loadUnread(showToast: boolean) {
+      const nextUnreadCount = await refreshUnread(showToast, previousUnreadCount);
+      if (!cancelled) {
+        previousUnreadCount = nextUnreadCount;
       }
     }
 
     void loadUnread(false);
     const interval = setInterval(() => void loadUnread(true), 20000);
 
+    function handleReadStateChanged() {
+      previousUnreadCount = unreadCount;
+      void loadUnread(false);
+    }
+
+    window.addEventListener("telegram-read-state-changed", handleReadStateChanged);
+
     return () => {
       cancelled = true;
       clearInterval(interval);
+      window.removeEventListener("telegram-read-state-changed", handleReadStateChanged);
     };
-  }, [mounted, state]);
+  }, [mounted, refreshUnread, state, unreadCount]);
 
   const handleConnected = useCallback(() => {
     setState("connected");
-    toast.success("Đã kết nối Telegram");
+    toast.success("Da ket noi Telegram");
   }, []);
 
   const handleDisconnect = useCallback(async () => {
@@ -142,6 +160,29 @@ export function TelegramBubble() {
     }
   }, []);
 
+  const handleThreadRead = useCallback((dialog: TelegramDialogDto) => {
+    setUnreadCount((current) => Math.max(0, current - Math.max(1, dialog.unreadCount || 0)));
+
+    setSelectedDialog((current) => (current?.id === dialog.id ? { ...current, unreadCount: 0 } : current));
+
+    setTopics((current) => {
+      if (!current) return current;
+
+      const nextTopics = current.map((topic) =>
+        topic.id === dialog.id || (dialog.topicId && topic.topicId === dialog.topicId)
+          ? { ...topic, unreadCount: 0 }
+          : topic,
+      );
+
+      const remainingUnread = nextTopics.reduce((total, topic) => total + Number(topic.unreadCount ?? 0), 0);
+      setSelectedTopicParent((parent) =>
+        parent ? { ...parent, unreadCount: remainingUnread, lastMessage: dialog.lastMessage ?? parent.lastMessage } : parent,
+      );
+
+      return nextTopics;
+    });
+  }, []);
+
   if (!mounted) return null;
 
   return createPortal(
@@ -161,7 +202,7 @@ export function TelegramBubble() {
         <Button
           type="button"
           className="fixed right-6 bottom-6 z-50 size-12 rounded-full border border-white/15 bg-[#0a0f18] p-0 text-white shadow-[0_18px_40px_rgba(0,0,0,0.45)] hover:bg-[#121826]"
-          aria-label="Mở Telegram"
+          aria-label="Mo Telegram"
         >
           <SimpleIcon icon={siTelegram} className="size-5 fill-[#26A5E4]" />
           {state === "connected" && unreadCount > 0 ? (
@@ -198,8 +239,8 @@ export function TelegramBubble() {
                   size="icon-sm"
                   className="text-white/65 hover:bg-white/10 hover:text-white"
                   onClick={handleDisconnect}
-                  aria-label="Ngắt kết nối"
-                  title="Ngắt kết nối"
+                  aria-label="Ngat ket noi"
+                  title="Ngat ket noi"
                 >
                   <LogOut className="size-4" />
                 </Button>
@@ -210,8 +251,8 @@ export function TelegramBubble() {
                 size="icon-sm"
                 className="text-white/65 hover:bg-white/10 hover:text-white"
                 onClick={() => setExpanded((current) => !current)}
-                aria-label={expanded ? "Thu nhỏ" : "Phóng to"}
-                title={expanded ? "Thu nhỏ" : "Phóng to"}
+                aria-label={expanded ? "Thu nho" : "Phong to"}
+                title={expanded ? "Thu nho" : "Phong to"}
               >
                 {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
               </Button>
@@ -225,7 +266,11 @@ export function TelegramBubble() {
             ) : state === "disconnected" ? (
               <ConnectForm onConnected={handleConnected} />
             ) : selectedDialog ? (
-              <ThreadView dialog={selectedDialog} onBack={() => setSelectedDialog(null)} />
+              <ThreadView
+                dialog={selectedDialog}
+                onBack={() => setSelectedDialog(null)}
+                onRead={handleThreadRead}
+              />
             ) : selectedTopicParent && topics ? (
               <TopicList
                 parentTitle={selectedTopicParent.title}

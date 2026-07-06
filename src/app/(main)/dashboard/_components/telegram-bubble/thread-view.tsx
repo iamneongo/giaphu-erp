@@ -16,17 +16,19 @@ import type { TelegramDialogDto, TelegramMessageButtonDto, TelegramMessageDto } 
 type ThreadViewProps = {
   dialog: TelegramDialogDto;
   onBack: () => void;
+  onRead?: (dialog: TelegramDialogDto) => void;
 };
 
 const TELEGRAM_REACTION_OPTIONS = ["👍", "❤️", "🔥", "🎉", "😄", "😢"];
 
-export function ThreadView({ dialog, onBack }: ThreadViewProps) {
+export function ThreadView({ dialog, onBack, onRead }: ThreadViewProps) {
   const [messages, setMessages] = useState<TelegramMessageDto[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [activeReactionMessageId, setActiveReactionMessageId] = useState<number | null>(null);
   const [actingKey, setActingKey] = useState<string | null>(null);
+  const [lastMarkedReadId, setLastMarkedReadId] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function loadMessages(showError = true) {
@@ -61,38 +63,12 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
 
     async function run(showError = true) {
       if (cancelled) return;
-
-      const params = new URLSearchParams({ dialogId: dialog.parentDialogId ?? dialog.id });
-      if (dialog.topicId) {
-        params.set("topicId", String(dialog.topicId));
-      }
-
-      try {
-        const res = await fetch(`/api/telegram/messages?${params.toString()}`);
-        const json = await res.json();
-        if (cancelled) return;
-        if (json.status === "success") {
-          setMessages(json.data.messages);
-        } else {
-          if (showError) {
-            toast.error(json.message || "Khong tai duoc tin nhan.");
-          }
-          setMessages((current) => current ?? []);
-        }
-      } catch {
-        if (!cancelled) {
-          if (showError) {
-            toast.error("Khong tai duoc tin nhan.");
-          }
-          setMessages((current) => current ?? []);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+      await loadMessages(showError);
     }
 
+    setMessages(null);
+    setLoading(true);
+    setLastMarkedReadId(0);
     void run();
     const interval = setInterval(() => void run(false), 15000);
     return () => {
@@ -105,6 +81,45 @@ export function ThreadView({ dialog, onBack }: ThreadViewProps) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
+
+  useEffect(() => {
+    const latestMessageId = (messages ?? []).at(-1)?.id ?? 0;
+    if (!latestMessageId || latestMessageId <= 0 || latestMessageId === lastMarkedReadId) return;
+
+    let cancelled = false;
+
+    async function markRead() {
+      try {
+        const res = await fetch("/api/telegram/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dialogId: dialog.parentDialogId ?? dialog.id,
+            topicId: dialog.topicId,
+            readMaxId: latestMessageId,
+          }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || json?.status !== "success") {
+          throw new Error(json?.message || "Khong danh dau da doc duoc.");
+        }
+
+        if (!cancelled) {
+          setLastMarkedReadId(latestMessageId);
+          onRead?.(dialog);
+          window.dispatchEvent(new CustomEvent("telegram-read-state-changed"));
+        }
+      } catch {
+        // best-effort mark as read
+      }
+    }
+
+    void markRead();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dialog, lastMarkedReadId, messages, onRead]);
 
   function updateMessageReactions(messageId: number, emoji: string, chosen: boolean) {
     setMessages((current) =>
